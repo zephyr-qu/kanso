@@ -63,7 +63,11 @@ export default function NameDialog(props: {
 						</div>
 						<DialogFooter>
 							<DialogClose render={<Button variant="ghost">取消</Button>} />
-							<Button type="submit" loading={submitting} disabled={!name.trim()}>
+							<Button
+								type="submit"
+								loading={submitting}
+								disabled={!name.trim()}
+							>
 								{props.submitLabel}
 							</Button>
 						</DialogFooter>

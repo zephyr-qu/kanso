@@ -2,11 +2,21 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUpRightIcon, PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
+import {
+	ArrowUpRightIcon,
+	PencilIcon,
+	PlusIcon,
+	TrashIcon,
+} from "lucide-react";
 import ConfirmDialog from "@/components/confirm-dialog";
 import NameDialog from "@/components/name-dialog";
 import { Button } from "@/components/ui/button";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import {
+	Empty,
+	EmptyDescription,
+	EmptyHeader,
+	EmptyTitle,
+} from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
 import type { Project } from "@/types/project";
@@ -18,7 +28,11 @@ export default function WorkspacePage() {
 	const [renaming, setRenaming] = useState<Project | null>(null);
 	const [deleting, setDeleting] = useState<Project | null>(null);
 
-	const { data: projects, isLoading, isError } = useQuery({
+	const {
+		data: projects,
+		isLoading,
+		isError,
+	} = useQuery({
 		queryKey: ["projects", workspaceId],
 		queryFn: () => api<Project[]>(`/api/workspaces/${workspaceId}/projects`),
 		enabled: workspaceId !== "",
@@ -38,12 +52,16 @@ export default function WorkspacePage() {
 
 	const renameMutation = useMutation({
 		mutationFn: ({ id, name }: { id: string; name: string }) =>
-			api<Project>(`/api/projects/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+			api<Project>(`/api/projects/${id}`, {
+				method: "PATCH",
+				body: JSON.stringify({ name }),
+			}),
 		onSuccess: invalidateProjects,
 	});
 
 	const deleteMutation = useMutation({
-		mutationFn: (id: string) => api<void>(`/api/projects/${id}`, { method: "DELETE" }),
+		mutationFn: (id: string) =>
+			api<void>(`/api/projects/${id}`, { method: "DELETE" }),
 		onSuccess: invalidateProjects,
 	});
 
@@ -61,7 +79,9 @@ export default function WorkspacePage() {
 					<Spinner />
 				</div>
 			) : isError ? (
-				<p className="py-16 text-center text-sm text-destructive">加载项目失败</p>
+				<p className="py-16 text-center text-sm text-destructive">
+					加载项目失败
+				</p>
 			) : projects && projects.length > 0 ? (
 				<ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
 					{projects.map((project) => (
@@ -107,7 +127,9 @@ export default function WorkspacePage() {
 				<Empty>
 					<EmptyHeader>
 						<EmptyTitle>还没有项目</EmptyTitle>
-						<EmptyDescription>点击右上角"新建项目"，系统会自动创建默认列（待办/进行中/已完成）。</EmptyDescription>
+						<EmptyDescription>
+							点击右上角"新建项目"，系统会自动创建默认列（待办/进行中/已完成）。
+						</EmptyDescription>
 					</EmptyHeader>
 				</Empty>
 			)}
@@ -132,7 +154,8 @@ export default function WorkspacePage() {
 				submitLabel="保存"
 				initialValue={renaming?.name ?? ""}
 				onSubmit={async (name) => {
-					if (renaming) await renameMutation.mutateAsync({ id: renaming.id, name });
+					if (renaming)
+						await renameMutation.mutateAsync({ id: renaming.id, name });
 				}}
 			/>
 			<ConfirmDialog

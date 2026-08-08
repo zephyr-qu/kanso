@@ -4,17 +4,13 @@
 
 package gen
 
-import (
-	"database/sql"
-)
-
 type Activity struct {
-	ID           string         `json:"id"`
-	ResourceType string         `json:"resource_type"`
-	ResourceID   string         `json:"resource_id"`
-	Action       string         `json:"action"`
-	Data         sql.NullString `json:"data"`
-	CreatedAt    string         `json:"created_at"`
+	ID           string  `json:"id"`
+	ResourceType string  `json:"resource_type"`
+	ResourceID   string  `json:"resource_id"`
+	Action       string  `json:"action"`
+	Data         *string `json:"data"`
+	CreatedAt    string  `json:"created_at"`
 }
 
 type Column struct {
@@ -49,14 +45,14 @@ type Project struct {
 }
 
 type Task struct {
-	ID          string         `json:"id"`
-	ProjectID   string         `json:"project_id"`
-	ColumnID    string         `json:"column_id"`
-	Title       string         `json:"title"`
-	Description sql.NullString `json:"description"`
-	Position    int64          `json:"position"`
-	CreatedAt   string         `json:"created_at"`
-	UpdatedAt   string         `json:"updated_at"`
+	ID          string  `json:"id"`
+	ProjectID   string  `json:"project_id"`
+	ColumnID    string  `json:"column_id"`
+	Title       string  `json:"title"`
+	Description *string `json:"description"`
+	Position    int64   `json:"position"`
+	CreatedAt   string  `json:"created_at"`
+	UpdatedAt   string  `json:"updated_at"`
 }
 
 type TaskLabel struct {

@@ -44,6 +44,9 @@ func NewRouter(cfg config.Config, svc *service.Service) http.Handler {
 		pr.Post("/api/projects/{id}/columns", a.createColumn)
 		pr.Patch("/api/columns/{id}", a.updateColumn)
 		pr.Delete("/api/columns/{id}", a.deleteColumn)
+		pr.Post("/api/columns/{id}/tasks", a.createTask)
+		pr.Patch("/api/tasks/{id}", a.updateTask)
+		pr.Delete("/api/tasks/{id}", a.deleteTask)
 	})
 
 	return r

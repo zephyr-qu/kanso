@@ -1,5 +1,5 @@
-// 看板页：横向列布局 + 列拖拽排序（dnd-kit）+ 列创建/重命名/删除。
-// 任务卡片渲染与拖拽在 ticket 05/06 接入；本页先固定列管理与聚合消费。
+// 看板页：横向列布局 + 列拖拽排序（dnd-kit）+ 列/任务 CRUD。
+// 任务跨列/同列拖拽在 ticket 06 接入。
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -17,23 +17,84 @@ import {
 	useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVerticalIcon, PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
+import {
+	GripVerticalIcon,
+	PencilIcon,
+	PlusIcon,
+	TrashIcon,
+} from "lucide-react";
 import { Link, useParams } from "react-router";
 import ConfirmDialog from "@/components/confirm-dialog";
 import NameDialog from "@/components/name-dialog";
 import { Button } from "@/components/ui/button";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import {
+	Empty,
+	EmptyDescription,
+	EmptyHeader,
+	EmptyTitle,
+} from "@/components/ui/empty";
+import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
 import type { Board, BoardColumn, Column } from "@/types/board";
+import type { Task } from "@/types/task";
+
+// 列内"添加任务"的内联表单（回车创建）。
+function AddTaskForm(props: { onAdd: (title: string) => void }) {
+	const [adding, setAdding] = useState(false);
+	const [title, setTitle] = useState("");
+
+	if (!adding) {
+		return (
+			<Button
+				variant="ghost"
+				className="w-full justify-start text-xs text-muted-foreground"
+				onClick={() => setAdding(true)}
+			>
+				<PlusIcon /> 添加任务
+			</Button>
+		);
+	}
+	return (
+		<form
+			onSubmit={(e) => {
+				e.preventDefault();
+				if (!title.trim()) return;
+				props.onAdd(title.trim());
+				setTitle("");
+				setAdding(false);
+			}}
+		>
+			<Input
+				autoFocus
+				value={title}
+				onChange={(e) => setTitle(e.target.value)}
+				onBlur={() => setAdding(false)}
+				placeholder="任务标题，回车创建"
+				className="h-8 text-sm"
+			/>
+		</form>
+	);
+}
 
 function SortableColumn(props: {
 	column: BoardColumn;
 	onRename: (column: BoardColumn) => void;
 	onDelete: (column: BoardColumn) => void;
+	onAddTask: (columnId: string, title: string) => void;
+	onEditTask: (task: Task) => void;
+	onDeleteTask: (task: Task) => void;
 }) {
-	const { column, onRename, onDelete } = props;
-	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+	const { column, onRename, onDelete, onAddTask, onEditTask, onDeleteTask } =
+		props;
+	const {
+		attributes,
+		listeners,
+		setNodeRef,
+		transform,
+		transition,
+		isDragging,
+	} = useSortable({
 		id: column.id,
 	});
 	const style = {
@@ -55,8 +116,12 @@ function SortableColumn(props: {
 				className="flex cursor-grab items-center gap-1 border-b px-3 py-2 active:cursor-grabbing"
 			>
 				<GripVerticalIcon className="size-4 text-muted-foreground/60" />
-				<span className="min-w-0 flex-1 truncate text-sm font-medium">{column.name}</span>
-				<span className="text-xs text-muted-foreground">{column.tasks.length}</span>
+				<span className="min-w-0 flex-1 truncate text-sm font-medium">
+					{column.name}
+				</span>
+				<span className="text-xs text-muted-foreground">
+					{column.tasks.length}
+				</span>
 				<div className="flex" onPointerDown={(e) => e.stopPropagation()}>
 					<Button
 						variant="ghost"
@@ -85,11 +150,35 @@ function SortableColumn(props: {
 					</p>
 				) : (
 					column.tasks.map((task) => (
-						<div key={task.id} className="rounded-md border bg-card p-3 text-sm">
-							{task.title}
+						<div
+							key={task.id}
+							className="group relative rounded-md border bg-card p-3 text-sm"
+						>
+							<p className="break-words pr-6">{task.title}</p>
+							<div className="absolute right-1 top-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+								<Button
+									variant="ghost"
+									size="icon"
+									className="size-6"
+									aria-label={`编辑任务 ${task.title}`}
+									onClick={() => onEditTask(task)}
+								>
+									<PencilIcon />
+								</Button>
+								<Button
+									variant="ghost"
+									size="icon"
+									className="size-6 text-destructive"
+									aria-label={`删除任务 ${task.title}`}
+									onClick={() => onDeleteTask(task)}
+								>
+									<TrashIcon />
+								</Button>
+							</div>
 						</div>
 					))
 				)}
+				<AddTaskForm onAdd={(title) => onAddTask(column.id, title)} />
 			</div>
 		</div>
 	);
@@ -101,14 +190,21 @@ export default function BoardPage() {
 	const [createOpen, setCreateOpen] = useState(false);
 	const [renaming, setRenaming] = useState<BoardColumn | null>(null);
 	const [deleting, setDeleting] = useState<BoardColumn | null>(null);
+	const [editingTask, setEditingTask] = useState<Task | null>(null);
+	const [deletingTask, setDeletingTask] = useState<Task | null>(null);
 
-	const { data: board, isLoading, isError } = useQuery({
+	const {
+		data: board,
+		isLoading,
+		isError,
+	} = useQuery({
 		queryKey: ["board", projectId],
 		queryFn: () => api<Board>(`/api/projects/${projectId}`),
 		enabled: projectId !== "",
 	});
 
-	const invalidateBoard = () => queryClient.invalidateQueries({ queryKey: ["board", projectId] });
+	const invalidateBoard = () =>
+		queryClient.invalidateQueries({ queryKey: ["board", projectId] });
 
 	const createColumnMutation = useMutation({
 		mutationFn: (name: string) =>
@@ -121,22 +217,55 @@ export default function BoardPage() {
 
 	const renameColumnMutation = useMutation({
 		mutationFn: ({ id, name }: { id: string; name: string }) =>
-			api<Column>(`/api/columns/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+			api<Column>(`/api/columns/${id}`, {
+				method: "PATCH",
+				body: JSON.stringify({ name }),
+			}),
 		onSuccess: invalidateBoard,
 	});
 
 	const deleteColumnMutation = useMutation({
-		mutationFn: (id: string) => api<void>(`/api/columns/${id}`, { method: "DELETE" }),
+		mutationFn: (id: string) =>
+			api<void>(`/api/columns/${id}`, { method: "DELETE" }),
 		onSuccess: invalidateBoard,
 	});
 
 	const moveColumnMutation = useMutation({
 		mutationFn: ({ id, position }: { id: string; position: number }) =>
-			api<void>(`/api/columns/${id}`, { method: "PATCH", body: JSON.stringify({ position }) }),
+			api<void>(`/api/columns/${id}`, {
+				method: "PATCH",
+				body: JSON.stringify({ position }),
+			}),
 		onSuccess: invalidateBoard,
 	});
 
-	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+	const createTaskMutation = useMutation({
+		mutationFn: ({ columnId, title }: { columnId: string; title: string }) =>
+			api<Task>(`/api/columns/${columnId}/tasks`, {
+				method: "POST",
+				body: JSON.stringify({ title }),
+			}),
+		onSuccess: invalidateBoard,
+	});
+
+	const updateTaskMutation = useMutation({
+		mutationFn: ({ id, title }: { id: string; title: string }) =>
+			api<Task>(`/api/tasks/${id}`, {
+				method: "PATCH",
+				body: JSON.stringify({ title }),
+			}),
+		onSuccess: invalidateBoard,
+	});
+
+	const deleteTaskMutation = useMutation({
+		mutationFn: (id: string) =>
+			api<void>(`/api/tasks/${id}`, { method: "DELETE" }),
+		onSuccess: invalidateBoard,
+	});
+
+	const sensors = useSensors(
+		useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+	);
 
 	function handleDragEnd(event: DragEndEvent) {
 		const { active, over } = event;
@@ -146,7 +275,9 @@ export default function BoardPage() {
 		if (oldIndex < 0 || newIndex < 0) return;
 		// 乐观更新：立即反映，服务端 reindex 后以 invalidate 收敛。
 		queryClient.setQueryData<Board>(["board", projectId], (old) =>
-			old ? { ...old, columns: arrayMove(old.columns, oldIndex, newIndex) } : old,
+			old
+				? { ...old, columns: arrayMove(old.columns, oldIndex, newIndex) }
+				: old,
 		);
 		moveColumnMutation.mutate({ id: String(active.id), position: newIndex });
 	}
@@ -161,7 +292,9 @@ export default function BoardPage() {
 					>
 						← 项目列表
 					</Link>
-					<h1 className="truncate text-lg font-semibold">{board?.project.name ?? "看板"}</h1>
+					<h1 className="truncate text-lg font-semibold">
+						{board?.project.name ?? "看板"}
+					</h1>
 				</div>
 				<Button onClick={() => setCreateOpen(true)}>
 					<PlusIcon /> 新建列
@@ -173,11 +306,20 @@ export default function BoardPage() {
 					<Spinner />
 				</div>
 			) : isError ? (
-				<p className="py-16 text-center text-sm text-destructive">加载看板失败</p>
+				<p className="py-16 text-center text-sm text-destructive">
+					加载看板失败
+				</p>
 			) : board && board.columns.length > 0 ? (
 				<div className="flex-1 overflow-auto p-4">
-					<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-						<SortableContext items={board.columns.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
+					<DndContext
+						sensors={sensors}
+						collisionDetection={closestCenter}
+						onDragEnd={handleDragEnd}
+					>
+						<SortableContext
+							items={board.columns.map((c) => c.id)}
+							strategy={horizontalListSortingStrategy}
+						>
 							<div className="flex items-start gap-3">
 								{board.columns.map((column) => (
 									<SortableColumn
@@ -185,6 +327,11 @@ export default function BoardPage() {
 										column={column}
 										onRename={setRenaming}
 										onDelete={setDeleting}
+										onAddTask={(columnId, title) =>
+											createTaskMutation.mutate({ columnId, title })
+										}
+										onEditTask={setEditingTask}
+										onDeleteTask={setDeletingTask}
 									/>
 								))}
 							</div>
@@ -195,7 +342,9 @@ export default function BoardPage() {
 				<Empty>
 					<EmptyHeader>
 						<EmptyTitle>看板还没有列</EmptyTitle>
-						<EmptyDescription>点击右上角"新建列"开始组织你的工作流。</EmptyDescription>
+						<EmptyDescription>
+							点击右上角"新建列"开始组织你的工作流。
+						</EmptyDescription>
 					</EmptyHeader>
 				</Empty>
 			)}
@@ -220,7 +369,8 @@ export default function BoardPage() {
 				submitLabel="保存"
 				initialValue={renaming?.name ?? ""}
 				onSubmit={async (name) => {
-					if (renaming) await renameColumnMutation.mutateAsync({ id: renaming.id, name });
+					if (renaming)
+						await renameColumnMutation.mutateAsync({ id: renaming.id, name });
 				}}
 			/>
 			<ConfirmDialog
@@ -232,6 +382,35 @@ export default function BoardPage() {
 				description={`确定删除列"${deleting?.name ?? ""}"吗？其下任务将一并删除，此操作不可撤销。`}
 				onConfirm={async () => {
 					if (deleting) await deleteColumnMutation.mutateAsync(deleting.id);
+				}}
+			/>
+			<NameDialog
+				open={editingTask !== null}
+				onOpenChange={(open) => {
+					if (!open) setEditingTask(null);
+				}}
+				title="编辑任务"
+				description="修改任务标题。"
+				submitLabel="保存"
+				initialValue={editingTask?.title ?? ""}
+				onSubmit={async (name) => {
+					if (editingTask)
+						await updateTaskMutation.mutateAsync({
+							id: editingTask.id,
+							title: name,
+						});
+				}}
+			/>
+			<ConfirmDialog
+				open={deletingTask !== null}
+				onOpenChange={(open) => {
+					if (!open) setDeletingTask(null);
+				}}
+				title="删除任务"
+				description={`确定删除任务"${deletingTask?.title ?? ""}"吗？此操作不可撤销。`}
+				onConfirm={async () => {
+					if (deletingTask)
+						await deleteTaskMutation.mutateAsync(deletingTask.id);
 				}}
 			/>
 		</div>

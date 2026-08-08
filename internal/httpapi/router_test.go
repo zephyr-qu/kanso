@@ -350,3 +350,71 @@ func TestColumnReorder(t *testing.T) {
 		t.Fatalf("移动后顺序应为 %v，实际 %v", want, names)
 	}
 }
+
+// TestTaskLifecycle 覆盖任务创建（position 分配）/更新/删除。
+func TestTaskLifecycle(t *testing.T) {
+	e := newTestEnv(t)
+	projectID := createProject(t, e, "任务管理")
+
+	// 取第一列。
+	_, body := e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	columns := decode[map[string]any](t, body)["columns"].([]any)
+	columnID := columns[0].(map[string]any)["id"].(string)
+
+	// 空标题 → 400。
+	if res, _ := e.do(t, http.MethodPost, "/api/columns/"+columnID+"/tasks", `{"title":""}`); res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("空标题应 400，实际 %d", res.StatusCode)
+	}
+
+	// 创建两个任务，position 依次为 0、1。
+	res, body := e.do(t, http.MethodPost, "/api/columns/"+columnID+"/tasks", `{"title":"任务一"}`)
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("创建任务应 201，实际 %d", res.StatusCode)
+	}
+	task1 := decode[map[string]any](t, body)
+	if task1["position"].(float64) != 0 {
+		t.Fatalf("首个任务 position 应为 0，实际 %v", task1["position"])
+	}
+	res, body = e.do(t, http.MethodPost, "/api/columns/"+columnID+"/tasks", `{"title":"任务二"}`)
+	task2 := decode[map[string]any](t, body)
+	if task2["position"].(float64) != 1 {
+		t.Fatalf("第二个任务 position 应为 1，实际 %v", task2["position"])
+	}
+	res, body = e.do(t, http.MethodPost, "/api/columns/"+columnID+"/tasks", `{"title":"任务三"}`)
+	task3 := decode[map[string]any](t, body)
+	if task3["position"].(float64) != 2 {
+		t.Fatalf("第三个任务 position 应为 2，实际 %v", task3["position"])
+	}
+
+	// 删除中间任务（position 1）留洞后，新任务 position 应取 MAX+1=3（不冲突）。
+	if res, _ := e.do(t, http.MethodDelete, "/api/tasks/"+task2["id"].(string), ""); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("删除任务应 204，实际 %d", res.StatusCode)
+	}
+	res, body = e.do(t, http.MethodPost, "/api/columns/"+columnID+"/tasks", `{"title":"任务四"}`)
+	if got := decode[map[string]any](t, body)["position"].(float64); got != 3 {
+		t.Fatalf("留洞后新任务 position 应为 3，实际 %v", got)
+	}
+
+	// 更新标题与描述。
+	res, body = e.do(t, http.MethodPatch, "/api/tasks/"+task1["id"].(string), `{"title":"改名","description":"描述内容"}`)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("更新任务应 200，实际 %d", res.StatusCode)
+	}
+	updated := decode[map[string]any](t, body)
+	if updated["title"] != "改名" || updated["description"] != "描述内容" {
+		t.Fatalf("更新结果错误: %v", updated)
+	}
+
+	// 看板聚合应反映任务（删掉任务二后剩 任务一/任务三/任务四 共 3 个）。
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	columns = decode[map[string]any](t, body)["columns"].([]any)
+	tasks := columns[0].(map[string]any)["tasks"].([]any)
+	if len(tasks) != 3 {
+		t.Fatalf("看板应含 3 个任务，实际 %d", len(tasks))
+	}
+
+	// 删除不存在 → 404。
+	if res, _ := e.do(t, http.MethodDelete, "/api/tasks/nonexistent", ""); res.StatusCode != http.StatusNotFound {
+		t.Fatalf("删除不存在任务应 404，实际 %d", res.StatusCode)
+	}
+}

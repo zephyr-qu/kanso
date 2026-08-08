@@ -9,6 +9,116 @@ import (
 	"context"
 )
 
+const createTask = `-- name: CreateTask :one
+INSERT INTO task (id, project_id, column_id, title, description, position, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, project_id, column_id, title, description, position, created_at, updated_at
+`
+
+type CreateTaskParams struct {
+	ID          string  `json:"id"`
+	ProjectID   string  `json:"project_id"`
+	ColumnID    string  `json:"column_id"`
+	Title       string  `json:"title"`
+	Description *string `json:"description"`
+	Position    int64   `json:"position"`
+	CreatedAt   string  `json:"created_at"`
+	UpdatedAt   string  `json:"updated_at"`
+}
+
+func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error) {
+	row := q.db.QueryRowContext(ctx, createTask,
+		arg.ID,
+		arg.ProjectID,
+		arg.ColumnID,
+		arg.Title,
+		arg.Description,
+		arg.Position,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.ColumnID,
+		&i.Title,
+		&i.Description,
+		&i.Position,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const deleteTask = `-- name: DeleteTask :execrows
+DELETE FROM task WHERE id = ?
+`
+
+func (q *Queries) DeleteTask(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteTask, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const getTask = `-- name: GetTask :one
+SELECT id, project_id, column_id, title, description, position, created_at, updated_at FROM task WHERE id = ?
+`
+
+func (q *Queries) GetTask(ctx context.Context, id string) (Task, error) {
+	row := q.db.QueryRowContext(ctx, getTask, id)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.ColumnID,
+		&i.Title,
+		&i.Description,
+		&i.Position,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const listTasksByColumn = `-- name: ListTasksByColumn :many
+SELECT id, project_id, column_id, title, description, position, created_at, updated_at FROM task WHERE column_id = ? ORDER BY position, created_at
+`
+
+func (q *Queries) ListTasksByColumn(ctx context.Context, columnID string) ([]Task, error) {
+	rows, err := q.db.QueryContext(ctx, listTasksByColumn, columnID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Task
+	for rows.Next() {
+		var i Task
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.ColumnID,
+			&i.Title,
+			&i.Description,
+			&i.Position,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTasksByProject = `-- name: ListTasksByProject :many
 SELECT id, project_id, column_id, title, description, position, created_at, updated_at FROM task WHERE project_id = ? ORDER BY position, created_at
 `
@@ -43,4 +153,47 @@ func (q *Queries) ListTasksByProject(ctx context.Context, projectID string) ([]T
 		return nil, err
 	}
 	return items, nil
+}
+
+const maxTaskPositionByColumn = `-- name: MaxTaskPositionByColumn :one
+SELECT COALESCE(MAX(position), -1) + 1 FROM task WHERE column_id = ?
+`
+
+func (q *Queries) MaxTaskPositionByColumn(ctx context.Context, columnID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, maxTaskPositionByColumn, columnID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const updateTask = `-- name: UpdateTask :one
+UPDATE task SET title = ?, description = ?, updated_at = ? WHERE id = ? RETURNING id, project_id, column_id, title, description, position, created_at, updated_at
+`
+
+type UpdateTaskParams struct {
+	Title       string  `json:"title"`
+	Description *string `json:"description"`
+	UpdatedAt   string  `json:"updated_at"`
+	ID          string  `json:"id"`
+}
+
+func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, error) {
+	row := q.db.QueryRowContext(ctx, updateTask,
+		arg.Title,
+		arg.Description,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.ColumnID,
+		&i.Title,
+		&i.Description,
+		&i.Position,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
