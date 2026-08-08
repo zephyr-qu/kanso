@@ -10,17 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useRealtime } from "@/hooks/use-realtime";
 import { api } from "@/lib/api";
 import { queryKeys } from "@/hooks/query-keys";
+import { ACTION_LABELS } from "@/lib/events";
 import type { Comment, TaskDetail } from "@/types/task-detail";
 import type { Task } from "@/types/task";
-
-const ACTION_LABELS: Record<string, string> = {
-	"task.created": "创建了任务",
-	"task.updated": "更新了任务",
-	"task.moved": "移动了任务",
-	"label.attached": "贴了标签",
-	"label.detached": "移除了标签",
-	"comment.created": "发表了评论",
-};
 
 function formatTime(iso: string): string {
 	const date = new Date(iso);

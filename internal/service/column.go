@@ -133,7 +133,9 @@ func (s *Service) CreateColumn(ctx context.Context, projectID, name string) (gen
 	if err != nil {
 		return gen.Column{}, fmt.Errorf("创建列失败: %w", err)
 	}
-	s.emit(projectID, "column.created", column.ID)
+	if err := s.dispatch(ctx, Event{Action: EventColumnCreated, ProjectID: projectID, EntityID: column.ID}); err != nil {
+		return gen.Column{}, err
+	}
 	return column, nil
 }
 
@@ -146,7 +148,9 @@ func (s *Service) RenameColumn(ctx context.Context, columnID, name string) (gen.
 	if err != nil {
 		return gen.Column{}, mapNoRows(err)
 	}
-	s.emit(column.ProjectID, "column.updated", column.ID)
+	if err := s.dispatch(ctx, Event{Action: EventColumnUpdated, ProjectID: column.ProjectID, EntityID: column.ID}); err != nil {
+		return gen.Column{}, err
+	}
 	return column, nil
 }
 
@@ -168,8 +172,7 @@ func (s *Service) DeleteColumn(ctx context.Context, columnID string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
-	s.emit(column.ProjectID, "column.deleted", columnID)
-	return nil
+	return s.dispatch(ctx, Event{Action: EventColumnDeleted, ProjectID: column.ProjectID, EntityID: columnID})
 }
 
 // MoveColumn 把列移动到目标位置（0 起），整列列表重排（reindex）。
@@ -219,6 +222,5 @@ func (s *Service) MoveColumn(ctx context.Context, columnID string, targetPositio
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("提交事务失败: %w", err)
 	}
-	s.emit(column.ProjectID, "column.moved", columnID)
-	return nil
+	return s.dispatch(ctx, Event{Action: EventColumnMoved, ProjectID: column.ProjectID, EntityID: columnID})
 }

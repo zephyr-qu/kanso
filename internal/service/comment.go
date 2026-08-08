@@ -51,10 +51,15 @@ func (s *Service) CreateComment(ctx context.Context, taskID, content string) (ge
 	if err != nil {
 		return gen.Comment{}, fmt.Errorf("发表评论失败: %w", err)
 	}
-	if err := s.recordActivity(ctx, taskID, "comment.created", nil); err != nil {
+	if err := s.dispatch(ctx, Event{
+		Action:         EventCommentCreated,
+		ProjectID:      task.ProjectID,
+		EntityID:       comment.ID,
+		ActivityTaskID: taskID,
+		RecordActivity: true,
+	}); err != nil {
 		return gen.Comment{}, err
 	}
-	s.emit(task.ProjectID, "comment.created", comment.ID)
 	return comment, nil
 }
 
@@ -73,7 +78,7 @@ func (s *Service) DeleteComment(ctx context.Context, commentID string) error {
 	}
 	task, err := gen.New(s.db).GetTask(ctx, comment.TaskID)
 	if err == nil {
-		s.emit(task.ProjectID, "comment.deleted", commentID)
+		_ = s.dispatch(ctx, Event{Action: EventCommentDeleted, ProjectID: task.ProjectID, EntityID: commentID})
 	}
 	return nil
 }

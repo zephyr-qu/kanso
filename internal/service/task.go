@@ -42,10 +42,15 @@ func (s *Service) CreateTask(ctx context.Context, columnID, title, description s
 	if err != nil {
 		return gen.Task{}, "", fmt.Errorf("创建任务失败: %w", err)
 	}
-	if err := s.recordActivity(ctx, task.ID, "task.created", map[string]string{"title": title}); err != nil {
+	if err := s.dispatch(ctx, Event{
+		Action:         EventTaskCreated,
+		ProjectID:      column.ProjectID,
+		EntityID:       task.ID,
+		Data:           map[string]string{"title": title},
+		RecordActivity: true,
+	}); err != nil {
 		return gen.Task{}, "", err
 	}
-	s.emit(column.ProjectID, "task.created", task.ID)
 	return task, column.ProjectID, nil
 }
 
@@ -70,10 +75,15 @@ func (s *Service) UpdateTask(ctx context.Context, taskID string, title, descript
 	if err != nil {
 		return gen.Task{}, fmt.Errorf("更新任务失败: %w", err)
 	}
-	if err := s.recordActivity(ctx, task.ID, "task.updated", map[string]string{"title": task.Title}); err != nil {
+	if err := s.dispatch(ctx, Event{
+		Action:         EventTaskUpdated,
+		ProjectID:      task.ProjectID,
+		EntityID:       task.ID,
+		Data:           map[string]string{"title": task.Title},
+		RecordActivity: true,
+	}); err != nil {
 		return gen.Task{}, err
 	}
-	s.emit(task.ProjectID, "task.updated", task.ID)
 	return task, nil
 }
 
@@ -95,8 +105,11 @@ func (s *Service) DeleteTask(ctx context.Context, taskID string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
-	s.emit(task.ProjectID, "task.deleted", taskID)
-	return nil
+	return s.dispatch(ctx, Event{
+		Action:    EventTaskDeleted,
+		ProjectID: task.ProjectID,
+		EntityID:  taskID,
+	})
 }
 
 // MoveTask 把任务移动到目标列的目标位置（0 起），源/目标列分别 reindex。
@@ -163,14 +176,16 @@ func (s *Service) MoveTask(ctx context.Context, taskID string, targetColumnID *s
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("提交事务失败: %w", err)
 	}
-	if err := s.recordActivity(ctx, taskID, "task.moved", map[string]string{
-		"from": sourceColumnID,
-		"to":   destColumnID,
-	}); err != nil {
-		return err
-	}
-	s.emit(task.ProjectID, "task.moved", taskID)
-	return nil
+	return s.dispatch(ctx, Event{
+		Action:         EventTaskMoved,
+		ProjectID:      task.ProjectID,
+		EntityID:       taskID,
+		Data: map[string]string{
+			"from": sourceColumnID,
+			"to":   destColumnID,
+		},
+		RecordActivity: true,
+	})
 }
 
 // removeTask 从列表中移除指定任务。

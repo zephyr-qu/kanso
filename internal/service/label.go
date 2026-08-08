@@ -37,7 +37,9 @@ func (s *Service) CreateLabel(ctx context.Context, workspaceID, name, color stri
 	if err != nil {
 		return gen.Label{}, fmt.Errorf("创建标签失败: %w", err)
 	}
-	s.emitAll("label.created", workspaceID, label.ID)
+	if err := s.dispatch(ctx, Event{Action: EventLabelCreated, WorkspaceID: workspaceID, EntityID: label.ID}); err != nil {
+		return gen.Label{}, err
+	}
 	return label, nil
 }
 
@@ -61,7 +63,9 @@ func (s *Service) UpdateLabel(ctx context.Context, labelID string, name, color *
 	if err != nil {
 		return gen.Label{}, fmt.Errorf("更新标签失败: %w", err)
 	}
-	s.emitAll("label.updated", label.WorkspaceID, label.ID)
+	if err := s.dispatch(ctx, Event{Action: EventLabelUpdated, WorkspaceID: label.WorkspaceID, EntityID: label.ID}); err != nil {
+		return gen.Label{}, err
+	}
 	return label, nil
 }
 
@@ -78,8 +82,7 @@ func (s *Service) DeleteLabel(ctx context.Context, labelID string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
-	s.emitAll("label.deleted", label.WorkspaceID, labelID)
-	return nil
+	return s.dispatch(ctx, Event{Action: EventLabelDeleted, WorkspaceID: label.WorkspaceID, EntityID: labelID})
 }
 
 // AttachLabel 给任务贴标签（幂等）；任务或标签不存在时返回 ErrNotFound。
@@ -96,8 +99,13 @@ func (s *Service) AttachLabel(ctx context.Context, taskID, labelID string) error
 	if err := q.AttachLabel(ctx, gen.AttachLabelParams{TaskID: taskID, LabelID: labelID}); err != nil {
 		return fmt.Errorf("贴标签失败: %w", err)
 	}
-	s.emit(task.ProjectID, "label.attached", taskID)
-	return s.recordActivity(ctx, taskID, "label.attached", map[string]string{"label": label.Name})
+	return s.dispatch(ctx, Event{
+		Action:         EventLabelAttached,
+		ProjectID:      task.ProjectID,
+		EntityID:       taskID,
+		Data:           map[string]string{"label": label.Name},
+		RecordActivity: true,
+	})
 }
 
 // DetachLabel 从任务移除标签（幂等）。
@@ -109,6 +117,11 @@ func (s *Service) DetachLabel(ctx context.Context, taskID, labelID string) error
 	if err := gen.New(s.db).DetachLabel(ctx, gen.DetachLabelParams{TaskID: taskID, LabelID: labelID}); err != nil {
 		return fmt.Errorf("移除标签失败: %w", err)
 	}
-	s.emit(task.ProjectID, "label.detached", taskID)
-	return s.recordActivity(ctx, taskID, "label.detached", map[string]string{"labelID": labelID})
+	return s.dispatch(ctx, Event{
+		Action:         EventLabelDetached,
+		ProjectID:      task.ProjectID,
+		EntityID:       taskID,
+		Data:           map[string]string{"labelID": labelID},
+		RecordActivity: true,
+	})
 }
