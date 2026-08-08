@@ -17,9 +17,9 @@ RETURNING id, task_id, content, created_at
 
 type CreateCommentParams struct {
 	ID        string `json:"id"`
-	TaskID    string `json:"task_id"`
+	TaskID    string `json:"taskId"`
 	Content   string `json:"content"`
-	CreatedAt string `json:"created_at"`
+	CreatedAt string `json:"createdAt"`
 }
 
 func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (Comment, error) {

@@ -28,10 +28,10 @@ RETURNING id, project_id, name, position, created_at
 
 type CreateColumnParams struct {
 	ID        string `json:"id"`
-	ProjectID string `json:"project_id"`
+	ProjectID string `json:"projectId"`
 	Name      string `json:"name"`
 	Position  int64  `json:"position"`
-	CreatedAt string `json:"created_at"`
+	CreatedAt string `json:"createdAt"`
 }
 
 func (q *Queries) CreateColumn(ctx context.Context, arg CreateColumnParams) (Column, error) {

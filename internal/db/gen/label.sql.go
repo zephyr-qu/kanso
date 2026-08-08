@@ -14,8 +14,8 @@ INSERT OR IGNORE INTO task_label (task_id, label_id) VALUES (?, ?)
 `
 
 type AttachLabelParams struct {
-	TaskID  string `json:"task_id"`
-	LabelID string `json:"label_id"`
+	TaskID  string `json:"taskId"`
+	LabelID string `json:"labelId"`
 }
 
 func (q *Queries) AttachLabel(ctx context.Context, arg AttachLabelParams) error {
@@ -31,10 +31,10 @@ RETURNING id, workspace_id, name, color, created_at
 
 type CreateLabelParams struct {
 	ID          string `json:"id"`
-	WorkspaceID string `json:"workspace_id"`
+	WorkspaceID string `json:"workspaceId"`
 	Name        string `json:"name"`
 	Color       string `json:"color"`
-	CreatedAt   string `json:"created_at"`
+	CreatedAt   string `json:"createdAt"`
 }
 
 func (q *Queries) CreateLabel(ctx context.Context, arg CreateLabelParams) (Label, error) {
@@ -73,8 +73,8 @@ DELETE FROM task_label WHERE task_id = ? AND label_id = ?
 `
 
 type DetachLabelParams struct {
-	TaskID  string `json:"task_id"`
-	LabelID string `json:"label_id"`
+	TaskID  string `json:"taskId"`
+	LabelID string `json:"labelId"`
 }
 
 func (q *Queries) DetachLabel(ctx context.Context, arg DetachLabelParams) error {
@@ -139,12 +139,12 @@ WHERE tl.task_id IN (SELECT id FROM task WHERE project_id = ?)
 `
 
 type ListTaskLabelsByProjectRow struct {
-	TaskID      string `json:"task_id"`
+	TaskID      string `json:"taskId"`
 	ID          string `json:"id"`
-	WorkspaceID string `json:"workspace_id"`
+	WorkspaceID string `json:"workspaceId"`
 	Name        string `json:"name"`
 	Color       string `json:"color"`
-	CreatedAt   string `json:"created_at"`
+	CreatedAt   string `json:"createdAt"`
 }
 
 func (q *Queries) ListTaskLabelsByProject(ctx context.Context, projectID string) ([]ListTaskLabelsByProjectRow, error) {

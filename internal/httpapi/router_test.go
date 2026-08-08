@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -227,9 +228,57 @@ func TestProjectSeedsDefaultColumns(t *testing.T) {
 	}
 }
 
+// TestProjectJSONContract 锁定项目/工作区接口的 camelCase 键合约（前端类型见 web/src/types/*）。
+// 回归：web/src/pages/workspace.tsx 中 project.createdAt.slice(0, 10) 因后端返回 created_at
+// 而崩溃（Cannot read properties of undefined (reading 'slice')）。
+func TestProjectJSONContract(t *testing.T) {
+	e := newTestEnv(t)
+
+	// 工作区列表应为 camelCase（前端 Workspace 类型）。
+	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
+	workspaces := decode[[]map[string]any](t, body)
+	if len(workspaces) == 0 {
+		t.Fatal("应至少有一个默认工作区")
+	}
+	ws := workspaces[0]
+	for _, key := range []string{"id", "name", "createdAt"} {
+		if _, ok := ws[key]; !ok {
+			t.Fatalf("工作区 JSON 缺少 %q（应为 camelCase），实际键: %v", key, jsonKeys(ws))
+		}
+	}
+	workspaceID := ws["id"].(string)
+
+	// 项目列表：workspace 页在 project.createdAt.slice(0, 10) 处依赖 createdAt。
+	createProject(t, e, "合约项目")
+	res, body := e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/projects", "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("项目列表应 200，实际 %d", res.StatusCode)
+	}
+	projects := decode[[]map[string]any](t, body)
+	if len(projects) != 1 {
+		t.Fatalf("应恰有 1 个项目，实际 %d", len(projects))
+	}
+	p := projects[0]
+	for _, key := range []string{"id", "workspaceId", "name", "position", "createdAt"} {
+		if _, ok := p[key]; !ok {
+			t.Fatalf("项目 JSON 缺少 %q（应为 camelCase），实际键: %v", key, jsonKeys(p))
+		}
+	}
+}
+
+// jsonKeys 返回 map 键的排序列表（用于断言失败时的诊断输出）。
+func jsonKeys(m map[string]any) []string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	sort.Strings(ks)
+	return ks
+}
 // TestWorkspaceDeleteCascadesProjects 验证删除工作区级联删除项目（读回无残留）。
 func TestWorkspaceDeleteCascadesProjects(t *testing.T) {
 	e := newTestEnv(t)
+
 	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
 	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
 

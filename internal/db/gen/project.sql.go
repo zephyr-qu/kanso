@@ -28,10 +28,10 @@ RETURNING id, workspace_id, name, position, created_at
 
 type CreateProjectParams struct {
 	ID          string `json:"id"`
-	WorkspaceID string `json:"workspace_id"`
+	WorkspaceID string `json:"workspaceId"`
 	Name        string `json:"name"`
 	Position    int64  `json:"position"`
-	CreatedAt   string `json:"created_at"`
+	CreatedAt   string `json:"createdAt"`
 }
 
 func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error) {

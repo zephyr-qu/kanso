@@ -6,62 +6,62 @@ package gen
 
 type Activity struct {
 	ID           string  `json:"id"`
-	ResourceType string  `json:"resource_type"`
-	ResourceID   string  `json:"resource_id"`
+	ResourceType string  `json:"resourceType"`
+	ResourceID   string  `json:"resourceId"`
 	Action       string  `json:"action"`
 	Data         *string `json:"data"`
-	CreatedAt    string  `json:"created_at"`
+	CreatedAt    string  `json:"createdAt"`
 }
 
 type Column struct {
 	ID        string `json:"id"`
-	ProjectID string `json:"project_id"`
+	ProjectID string `json:"projectId"`
 	Name      string `json:"name"`
 	Position  int64  `json:"position"`
-	CreatedAt string `json:"created_at"`
+	CreatedAt string `json:"createdAt"`
 }
 
 type Comment struct {
 	ID        string `json:"id"`
-	TaskID    string `json:"task_id"`
+	TaskID    string `json:"taskId"`
 	Content   string `json:"content"`
-	CreatedAt string `json:"created_at"`
+	CreatedAt string `json:"createdAt"`
 }
 
 type Label struct {
 	ID          string `json:"id"`
-	WorkspaceID string `json:"workspace_id"`
+	WorkspaceID string `json:"workspaceId"`
 	Name        string `json:"name"`
 	Color       string `json:"color"`
-	CreatedAt   string `json:"created_at"`
+	CreatedAt   string `json:"createdAt"`
 }
 
 type Project struct {
 	ID          string `json:"id"`
-	WorkspaceID string `json:"workspace_id"`
+	WorkspaceID string `json:"workspaceId"`
 	Name        string `json:"name"`
 	Position    int64  `json:"position"`
-	CreatedAt   string `json:"created_at"`
+	CreatedAt   string `json:"createdAt"`
 }
 
 type Task struct {
 	ID          string  `json:"id"`
-	ProjectID   string  `json:"project_id"`
-	ColumnID    string  `json:"column_id"`
+	ProjectID   string  `json:"projectId"`
+	ColumnID    string  `json:"columnId"`
 	Title       string  `json:"title"`
 	Description *string `json:"description"`
 	Position    int64   `json:"position"`
-	CreatedAt   string  `json:"created_at"`
-	UpdatedAt   string  `json:"updated_at"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
 }
 
 type TaskLabel struct {
-	TaskID  string `json:"task_id"`
-	LabelID string `json:"label_id"`
+	TaskID  string `json:"taskId"`
+	LabelID string `json:"labelId"`
 }
 
 type Workspace struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
-	CreatedAt string `json:"created_at"`
+	CreatedAt string `json:"createdAt"`
 }

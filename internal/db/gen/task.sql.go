@@ -17,13 +17,13 @@ RETURNING id, project_id, column_id, title, description, position, created_at, u
 
 type CreateTaskParams struct {
 	ID          string  `json:"id"`
-	ProjectID   string  `json:"project_id"`
-	ColumnID    string  `json:"column_id"`
+	ProjectID   string  `json:"projectId"`
+	ColumnID    string  `json:"columnId"`
 	Title       string  `json:"title"`
 	Description *string `json:"description"`
 	Position    int64   `json:"position"`
-	CreatedAt   string  `json:"created_at"`
-	UpdatedAt   string  `json:"updated_at"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error) {
@@ -171,9 +171,9 @@ UPDATE task SET column_id = ?, position = ?, updated_at = ? WHERE id = ?
 `
 
 type SetTaskPositionParams struct {
-	ColumnID  string `json:"column_id"`
+	ColumnID  string `json:"columnId"`
 	Position  int64  `json:"position"`
-	UpdatedAt string `json:"updated_at"`
+	UpdatedAt string `json:"updatedAt"`
 	ID        string `json:"id"`
 }
 
@@ -194,7 +194,7 @@ UPDATE task SET title = ?, description = ?, updated_at = ? WHERE id = ? RETURNIN
 type UpdateTaskParams struct {
 	Title       string  `json:"title"`
 	Description *string `json:"description"`
-	UpdatedAt   string  `json:"updated_at"`
+	UpdatedAt   string  `json:"updatedAt"`
 	ID          string  `json:"id"`
 }
 

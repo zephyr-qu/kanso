@@ -17,11 +17,11 @@ RETURNING id, resource_type, resource_id, "action", data, created_at
 
 type CreateActivityParams struct {
 	ID           string  `json:"id"`
-	ResourceType string  `json:"resource_type"`
-	ResourceID   string  `json:"resource_id"`
+	ResourceType string  `json:"resourceType"`
+	ResourceID   string  `json:"resourceId"`
 	Action       string  `json:"action"`
 	Data         *string `json:"data"`
-	CreatedAt    string  `json:"created_at"`
+	CreatedAt    string  `json:"createdAt"`
 }
 
 func (q *Queries) CreateActivity(ctx context.Context, arg CreateActivityParams) (Activity, error) {
@@ -86,8 +86,8 @@ SELECT id, resource_type, resource_id, "action", data, created_at FROM activity 
 `
 
 type ListActivitiesByResourceParams struct {
-	ResourceType string `json:"resource_type"`
-	ResourceID   string `json:"resource_id"`
+	ResourceType string `json:"resourceType"`
+	ResourceID   string `json:"resourceId"`
 }
 
 func (q *Queries) ListActivitiesByResource(ctx context.Context, arg ListActivitiesByResourceParams) ([]Activity, error) {
