@@ -20,6 +20,8 @@ SELECT tl.task_id, l.* FROM task_label tl
 JOIN label l ON l.id = tl.label_id
 WHERE tl.task_id IN (SELECT id FROM task WHERE project_id = ?);
 
+-- name: ListTaskLabelsByTask :many
+SELECT l.* FROM task_label tl JOIN label l ON l.id = tl.label_id WHERE tl.task_id = ? ORDER BY l.created_at;
 -- name: AttachLabel :exec
 INSERT OR IGNORE INTO task_label (task_id, label_id) VALUES (?, ?);
 

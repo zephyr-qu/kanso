@@ -53,6 +53,9 @@ func NewRouter(cfg config.Config, svc *service.Service) http.Handler {
 		pr.Delete("/api/labels/{id}", a.deleteLabel)
 		pr.Post("/api/tasks/{taskId}/labels/{labelId}", a.attachLabel)
 		pr.Delete("/api/tasks/{taskId}/labels/{labelId}", a.detachLabel)
+		pr.Get("/api/tasks/{id}", a.getTaskDetail)
+		pr.Post("/api/tasks/{id}/comments", a.createComment)
+		pr.Delete("/api/comments/{id}", a.deleteComment)
 	})
 
 	return r

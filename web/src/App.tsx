@@ -13,6 +13,7 @@ import { UNAUTHORIZED_EVENT } from "@/lib/api";
 import BoardPage from "@/pages/board";
 import LoginPage from "@/pages/login";
 import RedirectHome from "@/pages/redirect-home";
+import TaskDetailPage from "@/pages/task-detail";
 import WorkspacePage from "@/pages/workspace";
 import { useAuthStore } from "@/store/auth";
 
@@ -43,6 +44,10 @@ const router = createBrowserRouter([
 					{ index: true, element: <RedirectHome /> },
 					{ path: "w/:workspaceId", element: <WorkspacePage /> },
 					{ path: "w/:workspaceId/p/:projectId", element: <BoardPage /> },
+					{
+						path: "w/:workspaceId/p/:projectId/t/:taskId",
+						element: <TaskDetailPage />,
+					},
 				],
 			},
 		],

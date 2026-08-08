@@ -177,6 +177,39 @@ func (q *Queries) ListTaskLabelsByProject(ctx context.Context, projectID string)
 	return items, nil
 }
 
+const listTaskLabelsByTask = `-- name: ListTaskLabelsByTask :many
+SELECT l.id, l.workspace_id, l.name, l.color, l.created_at FROM task_label tl JOIN label l ON l.id = tl.label_id WHERE tl.task_id = ? ORDER BY l.created_at
+`
+
+func (q *Queries) ListTaskLabelsByTask(ctx context.Context, taskID string) ([]Label, error) {
+	rows, err := q.db.QueryContext(ctx, listTaskLabelsByTask, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Label
+	for rows.Next() {
+		var i Label
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Name,
+			&i.Color,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateLabel = `-- name: UpdateLabel :one
 UPDATE label SET name = ?, color = ? WHERE id = ? RETURNING id, workspace_id, name, color, created_at
 `

@@ -77,13 +77,20 @@ func (s *Service) AttachLabel(ctx context.Context, taskID, labelID string) error
 	if _, err := q.GetTask(ctx, taskID); err != nil {
 		return mapNoRows(err)
 	}
-	if _, err := q.GetLabel(ctx, labelID); err != nil {
+	label, err := q.GetLabel(ctx, labelID)
+	if err != nil {
 		return mapNoRows(err)
 	}
-	return q.AttachLabel(ctx, gen.AttachLabelParams{TaskID: taskID, LabelID: labelID})
+	if err := q.AttachLabel(ctx, gen.AttachLabelParams{TaskID: taskID, LabelID: labelID}); err != nil {
+		return fmt.Errorf("贴标签失败: %w", err)
+	}
+	return s.recordActivity(ctx, taskID, "label.attached", map[string]string{"label": label.Name})
 }
 
 // DetachLabel 从任务移除标签（幂等）。
 func (s *Service) DetachLabel(ctx context.Context, taskID, labelID string) error {
-	return gen.New(s.db).DetachLabel(ctx, gen.DetachLabelParams{TaskID: taskID, LabelID: labelID})
+	if err := gen.New(s.db).DetachLabel(ctx, gen.DetachLabelParams{TaskID: taskID, LabelID: labelID}); err != nil {
+		return fmt.Errorf("移除标签失败: %w", err)
+	}
+	return s.recordActivity(ctx, taskID, "label.detached", map[string]string{"labelID": labelID})
 }

@@ -25,7 +25,7 @@ import {
 	TagIcon,
 	TrashIcon,
 } from "lucide-react";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import ConfirmDialog from "@/components/confirm-dialog";
 import LabelManagerDialog from "@/components/label-manager";
 import NameDialog from "@/components/name-dialog";
@@ -86,11 +86,12 @@ function AddTaskForm(props: { onAdd: (title: string) => void }) {
 function SortableTaskCard(props: {
 	task: Task;
 	labels: Label[];
+	onOpen: (task: Task) => void;
 	onEdit: (task: Task) => void;
 	onDelete: (task: Task) => void;
 	onToggleLabel: (task: Task, label: Label) => void;
 }) {
-	const { task, labels, onEdit, onDelete, onToggleLabel } = props;
+	const { task, labels, onOpen, onEdit, onDelete, onToggleLabel } = props;
 	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
 		id: task.id,
 	});
@@ -109,6 +110,7 @@ function SortableTaskCard(props: {
 			className={`group relative cursor-grab rounded-md border bg-card p-3 text-sm active:cursor-grabbing ${
 				isDragging ? "z-10 opacity-60" : ""
 			}`}
+			onClick={() => onOpen(task)}
 		>
 			{taskLabels.length > 0 ? (
 				<div className="mb-1.5 flex flex-wrap gap-1">
@@ -127,6 +129,7 @@ function SortableTaskCard(props: {
 			<div
 				className="absolute right-1 top-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
 				onPointerDown={(e) => e.stopPropagation()}
+				onClick={(e) => e.stopPropagation()}
 			>
 				<Popover>
 					<PopoverTrigger
@@ -203,6 +206,7 @@ function SortableColumn(props: {
 	onRename: (column: BoardColumn) => void;
 	onDelete: (column: BoardColumn) => void;
 	onAddTask: (columnId: string, title: string) => void;
+	onOpenTask: (task: Task) => void;
 	onEditTask: (task: Task) => void;
 	onDeleteTask: (task: Task) => void;
 	onToggleLabel: (task: Task, label: Label) => void;
@@ -213,6 +217,7 @@ function SortableColumn(props: {
 		onRename,
 		onDelete,
 		onAddTask,
+		onOpenTask,
 		onEditTask,
 		onDeleteTask,
 		onToggleLabel,
@@ -288,6 +293,7 @@ function SortableColumn(props: {
 								key={task.id}
 								task={task}
 								labels={labels}
+								onOpen={onOpenTask}
 								onEdit={onEditTask}
 								onDelete={onDeleteTask}
 								onToggleLabel={onToggleLabel}
@@ -303,6 +309,7 @@ function SortableColumn(props: {
 
 export default function BoardPage() {
 	const { projectId = "" } = useParams();
+	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const [createOpen, setCreateOpen] = useState(false);
 	const [renaming, setRenaming] = useState<BoardColumn | null>(null);
@@ -547,6 +554,9 @@ export default function BoardPage() {
 										onDelete={setDeleting}
 										onAddTask={(columnId, title) =>
 											createTaskMutation.mutate({ columnId, title })
+										}
+										onOpenTask={(task) =>
+											navigate(`/w/${board?.project.workspaceId ?? ""}/p/${projectId}/t/${task.id}`)
 										}
 										onEditTask={setEditingTask}
 										onDeleteTask={setDeletingTask}

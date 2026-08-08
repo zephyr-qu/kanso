@@ -42,6 +42,9 @@ func (s *Service) CreateTask(ctx context.Context, columnID, title, description s
 	if err != nil {
 		return gen.Task{}, "", fmt.Errorf("创建任务失败: %w", err)
 	}
+	if err := s.recordActivity(ctx, task.ID, "task.created", map[string]string{"title": title}); err != nil {
+		return gen.Task{}, "", err
+	}
 	return task, column.ProjectID, nil
 }
 
@@ -65,6 +68,9 @@ func (s *Service) UpdateTask(ctx context.Context, taskID string, title, descript
 	})
 	if err != nil {
 		return gen.Task{}, fmt.Errorf("更新任务失败: %w", err)
+	}
+	if err := s.recordActivity(ctx, task.ID, "task.updated", map[string]string{"title": task.Title}); err != nil {
+		return gen.Task{}, err
 	}
 	return task, nil
 }
@@ -142,7 +148,13 @@ func (s *Service) MoveTask(ctx context.Context, taskID string, targetColumnID *s
 			return err
 		}
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交事务失败: %w", err)
+	}
+	return s.recordActivity(ctx, taskID, "task.moved", map[string]string{
+		"from": sourceColumnID,
+		"to":   destColumnID,
+	})
 }
 
 // removeTask 从列表中移除指定任务。

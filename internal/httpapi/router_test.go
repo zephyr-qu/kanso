@@ -591,3 +591,131 @@ func TestTaskLabels(t *testing.T) {
 		t.Fatalf("删除标签后任务徽章应消失，实际 %d", got)
 	}
 }
+
+// TestTaskDetail 校验任务详情聚合形状（task + labels + comments + activity 数组）。
+func TestTaskDetail(t *testing.T) {
+	e := newTestEnv(t)
+	projectID := createProject(t, e, "任务详情")
+	_, body := e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	columnID := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["id"].(string)
+	res, body := e.do(t, http.MethodPost, "/api/columns/"+columnID+"/tasks", `{"title":"详情任务"}`)
+	taskID := decode[map[string]any](t, body)["id"].(string)
+
+	res, body = e.do(t, http.MethodGet, "/api/tasks/"+taskID, "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("任务详情应 200，实际 %d", res.StatusCode)
+	}
+	detail := decode[map[string]any](t, body)
+	if detail["task"].(map[string]any)["title"] != "详情任务" {
+		t.Fatalf("详情任务名错误: %v", detail["task"])
+	}
+	for _, key := range []string{"labels", "comments", "activity"} {
+		if arr, _ := detail[key].([]any); arr == nil {
+			t.Fatalf("%s 应为数组而非 null", key)
+		}
+	}
+}
+
+// TestCommentsAndActivity 覆盖评论 CRUD 与评论即活动。
+func TestCommentsAndActivity(t *testing.T) {
+	e := newTestEnv(t)
+	projectID := createProject(t, e, "评论活动")
+	_, body := e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	columnID := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["id"].(string)
+	e.do(t, http.MethodPost, "/api/columns/"+columnID+"/tasks", `{"title":"评论目标"}`)
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	taskID := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["tasks"].([]any)[0].(map[string]any)["id"].(string)
+
+	// 空评论 → 400。
+	if res, _ := e.do(t, http.MethodPost, "/api/tasks/"+taskID+"/comments", `{"content":""}`); res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("空评论应 400，实际 %d", res.StatusCode)
+	}
+
+	// 发表评论。
+	res, body := e.do(t, http.MethodPost, "/api/tasks/"+taskID+"/comments", `{"content":"第一条评论"}`)
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("发表评论应 201，实际 %d", res.StatusCode)
+	}
+	comment := decode[map[string]any](t, body)
+
+	// 详情聚合含评论与活动（task.created + comment.created）。
+	_, body = e.do(t, http.MethodGet, "/api/tasks/"+taskID, "")
+	detail := decode[map[string]any](t, body)
+	comments := detail["comments"].([]any)
+	if len(comments) != 1 || comments[0].(map[string]any)["content"] != "第一条评论" {
+		t.Fatalf("详情评论错误: %v", comments)
+	}
+	actions := make([]string, 0)
+	for _, a := range detail["activity"].([]any) {
+		actions = append(actions, a.(map[string]any)["action"].(string))
+	}
+	hasAction := func(want string) bool {
+		for _, a := range actions {
+			if a == want {
+				return true
+			}
+		}
+		return false
+	}
+	if !hasAction("task.created") || !hasAction("comment.created") {
+		t.Fatalf("活动流应含 task.created 与 comment.created，实际 %v", actions)
+	}
+
+	// 删除评论。
+	if res, _ := e.do(t, http.MethodDelete, "/api/comments/"+comment["id"].(string), ""); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("删除评论应 204，实际 %d", res.StatusCode)
+	}
+	_, body = e.do(t, http.MethodGet, "/api/tasks/"+taskID, "")
+	if got := len(decode[map[string]any](t, body)["comments"].([]any)); got != 0 {
+		t.Fatalf("删除后应无评论，实际 %d", got)
+	}
+}
+
+// TestActivityTracksWrites 校验写操作（移动/贴标签/改名）自动记录活动。
+func TestActivityTracksWrites(t *testing.T) {
+	e := newTestEnv(t)
+	projectID := createProject(t, e, "活动追踪")
+
+	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
+	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
+	e.do(t, http.MethodPost, "/api/workspaces/"+workspaceID+"/labels", `{"name":"标记"}`)
+
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	columns := decode[map[string]any](t, body)["columns"].([]any)
+	col1 := columns[0].(map[string]any)["id"].(string)
+	col2 := columns[1].(map[string]any)["id"].(string)
+	e.do(t, http.MethodPost, "/api/columns/"+col1+"/tasks", `{"title":"任务X"}`)
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	taskID := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["tasks"].([]any)[0].(map[string]any)["id"].(string)
+
+	// 改名。
+	e.do(t, http.MethodPatch, "/api/tasks/"+taskID, `{"title":"新名字"}`)
+	// 移动。
+	e.do(t, http.MethodPatch, "/api/tasks/"+taskID, `{"columnId":"`+col2+`","position":0}`)
+	// 贴标签。
+	_, body = e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/labels", "")
+	labelID := decode[[]map[string]any](t, body)[0]["id"].(string)
+	e.do(t, http.MethodPost, "/api/tasks/"+taskID+"/labels/"+labelID, "")
+
+	// 活动流应含 task.updated / task.moved / label.attached，且按时间倒序。
+	_, body = e.do(t, http.MethodGet, "/api/tasks/"+taskID, "")
+	activity := decode[map[string]any](t, body)["activity"].([]any)
+	hasAction := func(want string) bool {
+		for _, a := range activity {
+			if a.(map[string]any)["action"].(string) == want {
+				return true
+			}
+		}
+		return false
+	}
+	for _, want := range []string{"task.updated", "task.moved", "label.attached"} {
+		if !hasAction(want) {
+			t.Fatalf("活动流应含 %s，实际 %v", want, activity)
+		}
+	}
+	// 倒序：最后一条应是 label.attached。
+	last := activity[0].(map[string]any)["action"].(string)
+	if last != "label.attached" {
+		t.Fatalf("活动流应按时间倒序，最新应为 label.attached，实际 %s", last)
+	}
+}
