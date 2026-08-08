@@ -13,3 +13,4 @@ web/dist/
 
 # 环境
 .env
+.pi-subagents/
