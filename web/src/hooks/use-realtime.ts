@@ -26,6 +26,11 @@ export function useRealtime(projectId: string | undefined) {
 			const scheme = location.protocol === "https:" ? "wss" : "ws";
 			const url = `${scheme}://${location.host}/api/ws?project=${encodeURIComponent(projectId)}&key=${encodeURIComponent(key)}`;
 			ws = new WebSocket(url);
+
+			ws.onopen = () => {
+				// 每次（重）连接成功即拉取最新数据（spec：断线重连后重新拉取）。
+				invalidate();
+			};
 			ws.onmessage = (event) => {
 				try {
 					const msg = JSON.parse(String(event.data)) as { type?: string };

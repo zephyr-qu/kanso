@@ -152,11 +152,16 @@ func (s *Service) RenameColumn(ctx context.Context, columnID, name string) (gen.
 
 // DeleteColumn 删除列（其下任务由外键级联删除）；不存在时返回 ErrNotFound。
 func (s *Service) DeleteColumn(ctx context.Context, columnID string) error {
-	column, err := gen.New(s.db).GetColumn(ctx, columnID)
+	q := gen.New(s.db)
+	column, err := q.GetColumn(ctx, columnID)
 	if err != nil {
 		return mapNoRows(err)
 	}
-	n, err := gen.New(s.db).DeleteColumn(ctx, columnID)
+	// 先清列内任务的活动（activity 无外键，需显式清理）。
+	if err := q.DeleteActivitiesByColumn(ctx, columnID); err != nil {
+		return fmt.Errorf("删除列活动失败: %w", err)
+	}
+	n, err := q.DeleteColumn(ctx, columnID)
 	if err != nil {
 		return fmt.Errorf("删除列失败: %w", err)
 	}

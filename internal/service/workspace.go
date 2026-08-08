@@ -78,7 +78,12 @@ func (s *Service) RenameWorkspace(ctx context.Context, workspaceID, name string)
 
 // DeleteWorkspace 删除工作区，其下项目/列/任务等由外键级联删除；不存在时返回 ErrNotFound。
 func (s *Service) DeleteWorkspace(ctx context.Context, workspaceID string) error {
-	n, err := gen.New(s.db).DeleteWorkspace(ctx, workspaceID)
+	q := gen.New(s.db)
+	// 先清工作区下任务的活动（activity 无外键，需显式清理）。
+	if err := q.DeleteActivitiesByWorkspace(ctx, workspaceID); err != nil {
+		return fmt.Errorf("删除工作区活动失败: %w", err)
+	}
+	n, err := q.DeleteWorkspace(ctx, workspaceID)
 	if err != nil {
 		return fmt.Errorf("删除工作区失败: %w", err)
 	}

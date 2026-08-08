@@ -45,6 +45,42 @@ func (q *Queries) CreateActivity(ctx context.Context, arg CreateActivityParams) 
 	return i, err
 }
 
+const deleteActivitiesByColumn = `-- name: DeleteActivitiesByColumn :exec
+DELETE FROM activity WHERE resource_type = 'task' AND resource_id IN (SELECT id FROM task WHERE column_id = ?)
+`
+
+func (q *Queries) DeleteActivitiesByColumn(ctx context.Context, columnID string) error {
+	_, err := q.db.ExecContext(ctx, deleteActivitiesByColumn, columnID)
+	return err
+}
+
+const deleteActivitiesByProject = `-- name: DeleteActivitiesByProject :exec
+DELETE FROM activity WHERE resource_type = 'task' AND resource_id IN (SELECT id FROM task WHERE project_id = ?)
+`
+
+func (q *Queries) DeleteActivitiesByProject(ctx context.Context, projectID string) error {
+	_, err := q.db.ExecContext(ctx, deleteActivitiesByProject, projectID)
+	return err
+}
+
+const deleteActivitiesByWorkspace = `-- name: DeleteActivitiesByWorkspace :exec
+DELETE FROM activity WHERE resource_type = 'task' AND resource_id IN (SELECT id FROM task WHERE project_id IN (SELECT id FROM project WHERE workspace_id = ?))
+`
+
+func (q *Queries) DeleteActivitiesByWorkspace(ctx context.Context, workspaceID string) error {
+	_, err := q.db.ExecContext(ctx, deleteActivitiesByWorkspace, workspaceID)
+	return err
+}
+
+const deleteActivityByTask = `-- name: DeleteActivityByTask :exec
+DELETE FROM activity WHERE resource_type = 'task' AND resource_id = ?
+`
+
+func (q *Queries) DeleteActivityByTask(ctx context.Context, resourceID string) error {
+	_, err := q.db.ExecContext(ctx, deleteActivityByTask, resourceID)
+	return err
+}
+
 const listActivitiesByResource = `-- name: ListActivitiesByResource :many
 SELECT id, resource_type, resource_id, "action", data, created_at FROM activity WHERE resource_type = ? AND resource_id = ? ORDER BY created_at DESC
 `

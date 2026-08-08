@@ -237,7 +237,7 @@ export default function TaskDetailPage() {
 							<li key={c.id} className="group rounded-md border bg-card p-3">
 								<div className="flex items-center justify-between">
 									<span className="text-xs text-muted-foreground">
-										{formatTime(c.createdAt)}
+										Admin · {formatTime(c.createdAt)}
 									</span>
 									<Button
 										variant="ghost"

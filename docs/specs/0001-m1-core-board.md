@@ -138,3 +138,10 @@ M1 交付完整可用的核心看板 MVP：
 - 主仓库当前零提交；建议以"spec 落盘"为首次提交点，后续每个里程碑独立提交。
 - 实时性依赖单实例内存广播（ADR-0005）；未来若有多实例需求需另行 ADR 引入 Redis 或改用轮询。
 - 拖拽的乐观更新与 WS invalidate 可能短暂不一致（乐观值 vs 服务端 reindex 值），以服务端广播为准收敛，前端不做冲突解决。
+
+### 实现偏差（code-review 后记录，均经评审确认可接受）
+
+- **任务顺序批量提交端点未实现**：合约中"另设任务顺序批量提交端点供整列重排"未落地。前端每次拖拽以单个 `PATCH /api/tasks/:id`（含 column_id + position）完成，服务端全量 reindex——行为等价，批量端点仅是效率优化，MVP 不必要。
+- **`GET /api/tasks/:id/activity` 未单独实现**：活动流由 `GET /api/tasks/:id` 详情聚合（task + labels + comments + activity）一并返回，前端详情页单次拉取。独立端点与聚合端点重复，保留聚合。
+- **WS 密钥经查询参数而非 Bearer 头**：浏览器 WebSocket 无法自定义请求头，握手密钥以 `?key=` 传入（其余端点仍走 Authorization 头）。密钥出现在 URL 中，内网自用可接受。
+- **WS Origin 放行所有 http(s)**：内网 LAN（192.168.x.x 等）访问需放行非 localhost 源；origin 检查仅是 CSRF 缓释，真正的鉴权是握手密钥。

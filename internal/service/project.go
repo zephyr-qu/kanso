@@ -87,7 +87,12 @@ func (s *Service) RenameProject(ctx context.Context, projectID, name string) (ge
 
 // DeleteProject 删除项目，其下列/任务/评论/活动由外键级联删除；不存在时返回 ErrNotFound。
 func (s *Service) DeleteProject(ctx context.Context, projectID string) error {
-	n, err := gen.New(s.db).DeleteProject(ctx, projectID)
+	q := gen.New(s.db)
+	// 先清项目下任务的活动（activity 无外键，需显式清理）。
+	if err := q.DeleteActivitiesByProject(ctx, projectID); err != nil {
+		return fmt.Errorf("删除项目活动失败: %w", err)
+	}
+	n, err := q.DeleteProject(ctx, projectID)
 	if err != nil {
 		return fmt.Errorf("删除项目失败: %w", err)
 	}

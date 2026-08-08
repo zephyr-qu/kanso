@@ -233,7 +233,11 @@ func TestWorkspaceDeleteCascadesProjects(t *testing.T) {
 	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
 	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
 
-	e.do(t, http.MethodPost, "/api/workspaces/"+workspaceID+"/projects", `{"name":"将被级联"}`)
+	// 建项目 + 任务（产生 task.created 活动）。
+	projectID := createProject(t, e, "将被级联")
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	columnID := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["id"].(string)
+	e.do(t, http.MethodPost, "/api/columns/"+columnID+"/tasks", `{"title":"级联任务"}`)
 
 	if res, _ := e.do(t, http.MethodDelete, "/api/workspaces/"+workspaceID, ""); res.StatusCode != http.StatusNoContent {
 		t.Fatalf("删除工作区应 204，实际 %d", res.StatusCode)
@@ -253,6 +257,15 @@ func TestWorkspaceDeleteCascadesProjects(t *testing.T) {
 	}
 	if columnCount != 0 {
 		t.Fatalf("级联后应无残留列，实际 %d", columnCount)
+	}
+
+	// spec 必测：删工作区后活动也应消失（无孤儿记录）。
+	var activityCount int
+	if err := e.db.QueryRow(`SELECT COUNT(*) FROM activity`).Scan(&activityCount); err != nil {
+		t.Fatalf("统计活动失败: %v", err)
+	}
+	if activityCount != 0 {
+		t.Fatalf("级联后应无残留活动，实际 %d", activityCount)
 	}
 }
 

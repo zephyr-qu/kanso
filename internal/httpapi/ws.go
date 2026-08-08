@@ -27,7 +27,7 @@ func (a *API) handleWS(hub *realtime.Hub) http.HandlerFunc {
 		}
 
 		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			OriginPatterns: []string{"http://localhost:*", "http://127.0.0.1:*"},
+			OriginPatterns: []string{"http://*", "https://*"},
 		})
 		if err != nil {
 			return

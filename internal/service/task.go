@@ -83,7 +83,12 @@ func (s *Service) DeleteTask(ctx context.Context, taskID string) error {
 	if err != nil {
 		return mapNoRows(err)
 	}
-	n, err := gen.New(s.db).DeleteTask(ctx, taskID)
+	q := gen.New(s.db)
+	// 先删活动（activity 无外键，需显式清理，spec：不保留孤儿记录）。
+	if err := q.DeleteActivityByTask(ctx, taskID); err != nil {
+		return fmt.Errorf("删除任务活动失败: %w", err)
+	}
+	n, err := q.DeleteTask(ctx, taskID)
 	if err != nil {
 		return fmt.Errorf("删除任务失败: %w", err)
 	}
