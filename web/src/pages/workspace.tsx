@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
+import { queryKeys } from "@/hooks/query-keys";
 import type { Project } from "@/types/project";
 
 export default function WorkspacePage() {
@@ -33,13 +34,13 @@ export default function WorkspacePage() {
 		isLoading,
 		isError,
 	} = useQuery({
-		queryKey: ["projects", workspaceId],
+		queryKey: queryKeys.projects(workspaceId),
 		queryFn: () => api<Project[]>(`/api/workspaces/${workspaceId}/projects`),
 		enabled: workspaceId !== "",
 	});
 
 	const invalidateProjects = () =>
-		queryClient.invalidateQueries({ queryKey: ["projects", workspaceId] });
+		queryClient.invalidateQueries({ queryKey: queryKeys.projects(workspaceId) });
 
 	const createMutation = useMutation({
 		mutationFn: (name: string) =>

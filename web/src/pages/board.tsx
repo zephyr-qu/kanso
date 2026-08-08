@@ -1,7 +1,5 @@
-// 看板页：横向列布局 + 列拖拽排序（dnd-kit）+ 列/任务 CRUD。
-// 任务跨列/同列拖拽在 ticket 06 接入。
+// 看板页：编排与渲染。数据/缓存/乐观更新逻辑都在领域 hooks 里（架构候选 1）。
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	DndContext,
 	PointerSensor,
@@ -12,23 +10,14 @@ import {
 } from "@dnd-kit/core";
 import {
 	SortableContext,
-	arrayMove,
 	horizontalListSortingStrategy,
-	useSortable,
-	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import {
-	GripVerticalIcon,
-	PencilIcon,
-	PlusIcon,
-	TagIcon,
-	TrashIcon,
-} from "lucide-react";
+import { PlusIcon, TagIcon } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router";
 import ConfirmDialog from "@/components/confirm-dialog";
 import LabelManagerDialog from "@/components/label-manager";
 import NameDialog from "@/components/name-dialog";
+import SortableColumn from "@/components/board/sortable-column";
 import { Button } from "@/components/ui/button";
 import {
 	Empty,
@@ -36,398 +25,30 @@ import {
 	EmptyHeader,
 	EmptyTitle,
 } from "@/components/ui/empty";
-import { Input } from "@/components/ui/input";
-import { Popover, PopoverPopup, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
+import { useBoardData } from "@/hooks/use-board-data";
+import { useLabelMutations } from "@/hooks/use-label-mutations";
 import { useRealtime } from "@/hooks/use-realtime";
-import { api } from "@/lib/api";
-import type { Board, BoardColumn, Column } from "@/types/board";
-import type { Label } from "@/types/label";
+import { useTaskMutations } from "@/hooks/use-task-mutations";
+import type { BoardColumn } from "@/types/board";
 import type { Task } from "@/types/task";
-
-// 列内"添加任务"的内联表单（回车创建）。
-function AddTaskForm(props: { onAdd: (title: string) => void }) {
-	const [adding, setAdding] = useState(false);
-	const [title, setTitle] = useState("");
-
-	if (!adding) {
-		return (
-			<Button
-				variant="ghost"
-				className="w-full justify-start text-xs text-muted-foreground"
-				onClick={() => setAdding(true)}
-			>
-				<PlusIcon /> 添加任务
-			</Button>
-		);
-	}
-	return (
-		<form
-			onSubmit={(e) => {
-				e.preventDefault();
-				if (!title.trim()) return;
-				props.onAdd(title.trim());
-				setTitle("");
-				setAdding(false);
-			}}
-		>
-			<Input
-				autoFocus
-				value={title}
-				onChange={(e) => setTitle(e.target.value)}
-				onBlur={() => setAdding(false)}
-				placeholder="任务标题，回车创建"
-				className="h-8 text-sm"
-			/>
-		</form>
-	);
-}
-
-// 可拖拽的任务卡片（含编辑/删除操作，按钮不触发拖拽）。
-function SortableTaskCard(props: {
-	task: Task;
-	labels: Label[];
-	onOpen: (task: Task) => void;
-	onEdit: (task: Task) => void;
-	onDelete: (task: Task) => void;
-	onToggleLabel: (task: Task, label: Label) => void;
-}) {
-	const { task, labels, onOpen, onEdit, onDelete, onToggleLabel } = props;
-	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-		id: task.id,
-	});
-	const style = {
-		transform: CSS.Transform.toString(transform),
-		transition,
-	};
-	const taskLabels = task.labels ?? [];
-
-	return (
-		<div
-			ref={setNodeRef}
-			style={style}
-			{...attributes}
-			{...listeners}
-			className={`fuda group relative cursor-grab p-3 text-sm active:cursor-grabbing ${
-				isDragging ? "z-10 opacity-60" : ""
-			}`}
-			onClick={() => onOpen(task)}
-		>
-			{taskLabels.length > 0 ? (
-				<div className="mb-1.5 flex flex-wrap gap-1">
-					{taskLabels.map((label) => (
-						<span
-							key={label.id}
-							className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium text-white"
-							style={{ backgroundColor: label.color }}
-						>
-							{label.name}
-						</span>
-					))}
-				</div>
-			) : null}
-			<p className="break-words pr-14">{task.title}</p>
-			<div
-				className="absolute right-1 top-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
-				onPointerDown={(e) => e.stopPropagation()}
-				onClick={(e) => e.stopPropagation()}
-			>
-				<Popover>
-					<PopoverTrigger
-						render={
-								<Button
-									variant="ghost"
-									size="icon"
-									className="size-6"
-									aria-label={`标签 ${task.title}`}
-								>
-									<TagIcon />
-								</Button>
-							}
-						/>
-					<PopoverPopup className="w-52 p-2">
-						<PopoverTitle className="px-1 pb-1 text-xs font-medium text-muted-foreground">
-							标签
-						</PopoverTitle>
-						{labels.length === 0 ? (
-							<p className="px-1 py-2 text-xs text-muted-foreground">
-								暂无标签，可先在看板右上角创建
-							</p>
-						) : (
-							<ul className="space-y-0.5">
-								{labels.map((label) => {
-									const attached = taskLabels.some((l) => l.id === label.id);
-									return (
-										<li key={label.id}>
-											<button
-												type="button"
-												className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-xs hover:bg-muted"
-												onClick={() => onToggleLabel(task, label)}
-											>
-												<span
-													className="size-2.5 shrink-0 rounded-full"
-													style={{ backgroundColor: label.color }}
-												/>
-												<span className="flex-1">{label.name}</span>
-												{attached ? <span className="text-primary">✓</span> : null}
-											</button>
-										</li>
-									);
-								})}
-							</ul>
-						)}
-					</PopoverPopup>
-				</Popover>
-				<Button
-					variant="ghost"
-					size="icon"
-					className="size-6"
-					aria-label={`编辑任务 ${task.title}`}
-					onClick={() => onEdit(task)}
-				>
-					<PencilIcon />
-				</Button>
-				<Button
-					variant="ghost"
-					size="icon"
-					className="size-6 text-destructive"
-					aria-label={`删除任务 ${task.title}`}
-					onClick={() => onDelete(task)}
-				>
-					<TrashIcon />
-				</Button>
-			</div>
-		</div>
-	);
-}
-
-function SortableColumn(props: {
-	column: BoardColumn;
-	labels: Label[];
-	onRename: (column: BoardColumn) => void;
-	onDelete: (column: BoardColumn) => void;
-	onAddTask: (columnId: string, title: string) => void;
-	onOpenTask: (task: Task) => void;
-	onEditTask: (task: Task) => void;
-	onDeleteTask: (task: Task) => void;
-	onToggleLabel: (task: Task, label: Label) => void;
-}) {
-	const {
-		column,
-		labels,
-		onRename,
-		onDelete,
-		onAddTask,
-		onOpenTask,
-		onEditTask,
-		onDeleteTask,
-		onToggleLabel,
-	} = props;
-	const {
-		attributes,
-		listeners,
-		setNodeRef,
-		transform,
-		transition,
-		isDragging,
-	} = useSortable({
-		id: column.id,
-	});
-	const style = {
-		transform: CSS.Transform.toString(transform),
-		transition,
-	};
-
-	return (
-		<div
-			ref={setNodeRef}
-			style={style}
-			className={`flex w-72 shrink-0 flex-col rounded-[3px] border bg-card/35 ${
-				isDragging ? "z-10 opacity-60" : ""
-			}`}
-		>
-			<div
-				{...attributes}
-				{...listeners}
-				className="flex cursor-grab items-center gap-1.5 border-b px-3 py-2.5 active:cursor-grabbing"
-			>
-				<GripVerticalIcon className="size-4 text-muted-foreground/50" />
-				<span className="font-display min-w-0 flex-1 truncate text-[15px] font-semibold">
-					{column.name}
-				</span>
-				<span className="font-mono-num font-mono text-xs text-muted-foreground">
-					{column.tasks.length}
-				</span>
-				<div className="flex" onPointerDown={(e) => e.stopPropagation()}>
-					<Button
-						variant="ghost"
-						size="icon"
-						className="size-7"
-						aria-label={`重命名列 ${column.name}`}
-						onClick={() => onRename(column)}
-					>
-						<PencilIcon />
-					</Button>
-					<Button
-						variant="ghost"
-						size="icon"
-						className="size-7 text-destructive"
-						aria-label={`删除列 ${column.name}`}
-						onClick={() => onDelete(column)}
-					>
-						<TrashIcon />
-					</Button>
-				</div>
-			</div>
-			<div className="flex flex-1 flex-col gap-2 p-2">
-						{column.tasks.length === 0 ? (
-							<p className="rounded-[3px] border border-dashed p-3 text-center text-xs text-muted-foreground">
-								空列
-							</p>
-				) : (
-					<SortableContext
-						items={column.tasks.map((t) => t.id)}
-						strategy={verticalListSortingStrategy}
-					>
-						{column.tasks.map((task) => (
-							<SortableTaskCard
-								key={task.id}
-								task={task}
-								labels={labels}
-								onOpen={onOpenTask}
-								onEdit={onEditTask}
-								onDelete={onDeleteTask}
-								onToggleLabel={onToggleLabel}
-							/>
-						))}
-					</SortableContext>
-				)}
-				<AddTaskForm onAdd={(title) => onAddTask(column.id, title)} />
-			</div>
-		</div>
-	);
-}
 
 export default function BoardPage() {
 	const { projectId = "" } = useParams();
 	const navigate = useNavigate();
-	const queryClient = useQueryClient();
 	const [createOpen, setCreateOpen] = useState(false);
 	const [renaming, setRenaming] = useState<BoardColumn | null>(null);
 	const [deleting, setDeleting] = useState<BoardColumn | null>(null);
 	const [editingTask, setEditingTask] = useState<Task | null>(null);
 	const [deletingTask, setDeletingTask] = useState<Task | null>(null);
+	const [labelManagerOpen, setLabelManagerOpen] = useState(false);
 
-	const { data: board, isLoading, isError } = useQuery({
-		queryKey: ["board", projectId],
-		queryFn: () => api<Board>(`/api/projects/${projectId}`),
-		enabled: projectId !== "",
-	});
+	const { board, isLoading, isError, columnOps } = useBoardData(projectId);
+	const taskOps = useTaskMutations(projectId);
+	const labelOps = useLabelMutations(projectId);
 
 	// 实时：其他窗口的写操作经 WS 推送后 invalidate 本页查询。
 	useRealtime(projectId);
-
-	const invalidateBoard = () =>
-		queryClient.invalidateQueries({ queryKey: ["board", projectId] });
-
-	const createColumnMutation = useMutation({
-		mutationFn: (name: string) =>
-			api<Column>(`/api/projects/${projectId}/columns`, {
-				method: "POST",
-				body: JSON.stringify({ name }),
-			}),
-		onSuccess: invalidateBoard,
-	});
-
-	const renameColumnMutation = useMutation({
-		mutationFn: ({ id, name }: { id: string; name: string }) =>
-			api<Column>(`/api/columns/${id}`, {
-				method: "PATCH",
-				body: JSON.stringify({ name }),
-			}),
-		onSuccess: invalidateBoard,
-	});
-
-	const deleteColumnMutation = useMutation({
-		mutationFn: (id: string) =>
-			api<void>(`/api/columns/${id}`, { method: "DELETE" }),
-		onSuccess: invalidateBoard,
-	});
-
-	const moveColumnMutation = useMutation({
-		mutationFn: ({ id, position }: { id: string; position: number }) =>
-			api<void>(`/api/columns/${id}`, {
-				method: "PATCH",
-				body: JSON.stringify({ position }),
-			}),
-		onSuccess: invalidateBoard,
-	});
-
-	const createTaskMutation = useMutation({
-		mutationFn: ({ columnId, title }: { columnId: string; title: string }) =>
-			api<Task>(`/api/columns/${columnId}/tasks`, {
-				method: "POST",
-				body: JSON.stringify({ title }),
-			}),
-		onSuccess: invalidateBoard,
-	});
-
-	const updateTaskMutation = useMutation({
-		mutationFn: ({ id, title }: { id: string; title: string }) =>
-			api<Task>(`/api/tasks/${id}`, {
-				method: "PATCH",
-				body: JSON.stringify({ title }),
-			}),
-		onSuccess: invalidateBoard,
-	});
-
-	const deleteTaskMutation = useMutation({
-		mutationFn: (id: string) =>
-			api<void>(`/api/tasks/${id}`, { method: "DELETE" }),
-		onSuccess: invalidateBoard,
-	});
-
-	const moveTaskMutation = useMutation({
-		mutationFn: ({ id, columnId, position }: { id: string; columnId: string; position: number }) =>
-			api<void>(`/api/tasks/${id}`, {
-				method: "PATCH",
-				body: JSON.stringify({ columnId, position }),
-			}),
-		// 失败回滚：重新拉取服务端真值；成功后以 invalidate 收敛 reindex。
-		onError: invalidateBoard,
-		onSuccess: invalidateBoard,
-	});
-
-	const [labelManagerOpen, setLabelManagerOpen] = useState(false);
-
-	const createLabelMutation = useMutation({
-		mutationFn: ({ name, color }: { name: string; color: string }) =>
-			api<Label>(`/api/workspaces/${board?.project.workspaceId ?? ""}/labels`, {
-				method: "POST",
-				body: JSON.stringify({ name, color }),
-			}),
-		onSuccess: invalidateBoard,
-	});
-
-	const renameLabelMutation = useMutation({
-		mutationFn: ({ id, name }: { id: string; name: string }) =>
-			api<Label>(`/api/labels/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
-		onSuccess: invalidateBoard,
-	});
-
-	const deleteLabelMutation = useMutation({
-		mutationFn: (id: string) => api<void>(`/api/labels/${id}`, { method: "DELETE" }),
-		onSuccess: invalidateBoard,
-	});
-
-	function toggleLabel(task: Task, label: Label) {
-		const attached = (task.labels ?? []).some((l) => l.id === label.id);
-		const url = `/api/tasks/${task.id}/labels/${label.id}`;
-		const method = attached ? "DELETE" : "POST";
-		api<void>(url, { method })
-			.then(invalidateBoard)
-			.catch(invalidateBoard);
-	}
 
 	const sensors = useSensors(
 		useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -439,33 +60,21 @@ export default function BoardPage() {
 		const activeId = String(active.id);
 		const overId = String(over.id);
 
-		// 列拖拽（active 是列 ID）。
+		// 列拖拽。
 		const oldColIndex = board.columns.findIndex((c) => c.id === activeId);
 		if (oldColIndex >= 0) {
 			const newColIndex = board.columns.findIndex((c) => c.id === overId);
 			if (newColIndex < 0) return;
-			// 乐观更新：立即反映，服务端 reindex 后以 invalidate 收敛。
-			queryClient.setQueryData<Board>(["board", projectId], (old) =>
-				old ? { ...old, columns: arrayMove(old.columns, oldColIndex, newColIndex) } : old,
-			);
-			moveColumnMutation.mutate({ id: activeId, position: newColIndex });
+			columnOps.moveColumn.mutate({ id: activeId, position: newColIndex });
 			return;
 		}
 
-		// 任务拖拽：定位源列与目标列/位置。
-		let sourceColumn: BoardColumn | undefined;
-		let dragged: Task | undefined;
-		for (const column of board.columns) {
-			const task = column.tasks.find((t) => t.id === activeId);
-			if (task) {
-				sourceColumn = column;
-				dragged = task;
-				break;
-			}
-		}
-		if (!sourceColumn || !dragged) return;
+		// 任务拖拽：定位源列与目标列/位置（数组重排逻辑在 hook 内，这里只做事件映射）。
+		const dragged = board.columns
+			.flatMap((c) => c.tasks)
+			.find((t) => t.id === activeId);
+		if (!dragged) return;
 
-		// 目标：over 是列（空列区域）或任务。
 		let targetColumn = board.columns.find((c) => c.id === overId);
 		let targetIndex = targetColumn ? targetColumn.tasks.length : 0;
 		if (!targetColumn) {
@@ -480,21 +89,15 @@ export default function BoardPage() {
 		}
 		if (!targetColumn) return;
 		// 同列且位置没变则跳过。
-		if (sourceColumn.id === targetColumn.id && sourceColumn.tasks.indexOf(dragged) === targetIndex) return;
+		const sourceColumn = board.columns.find((c) => c.id === dragged.columnId);
+		if (
+			sourceColumn?.id === targetColumn.id &&
+			sourceColumn.tasks.indexOf(dragged) === targetIndex
+		) {
+			return;
+		}
 
-		// 乐观更新：从源列移除、插入目标列。
-		const newColumns = board.columns.map((c) => ({ ...c, tasks: [...c.tasks] }));
-		const src = newColumns.find((c) => c.id === sourceColumn.id)!;
-		src.tasks = src.tasks.filter((t) => t.id !== dragged.id);
-		const dst = newColumns.find((c) => c.id === targetColumn.id)!;
-		dst.tasks.splice(Math.min(targetIndex, dst.tasks.length), 0, {
-			...dragged,
-			columnId: targetColumn.id,
-		});
-		queryClient.setQueryData<Board>(["board", projectId], (old) =>
-			old ? { ...old, columns: newColumns } : old,
-		);
-		moveTaskMutation.mutate({
+		taskOps.moveTask.mutate({
 			id: dragged.id,
 			columnId: targetColumn.id,
 			position: targetIndex,
@@ -554,14 +157,18 @@ export default function BoardPage() {
 										onRename={setRenaming}
 										onDelete={setDeleting}
 										onAddTask={(columnId, title) =>
-											createTaskMutation.mutate({ columnId, title })
+											taskOps.createTask.mutate({ columnId, title })
 										}
 										onOpenTask={(task) =>
-											navigate(`/w/${board?.project.workspaceId ?? ""}/p/${projectId}/t/${task.id}`)
+											navigate(
+												`/w/${board?.project.workspaceId ?? ""}/p/${projectId}/t/${task.id}`,
+											)
 										}
 										onEditTask={setEditingTask}
 										onDeleteTask={setDeletingTask}
-										onToggleLabel={toggleLabel}
+										onToggleLabel={(task, label) =>
+											labelOps.toggleLabel.mutate({ task, label })
+										}
 									/>
 								))}
 							</div>
@@ -586,7 +193,7 @@ export default function BoardPage() {
 				description="新列将追加到看板末尾。"
 				submitLabel="创建"
 				onSubmit={async (name) => {
-					await createColumnMutation.mutateAsync(name);
+					await columnOps.createColumn.mutateAsync(name);
 				}}
 			/>
 			<NameDialog
@@ -600,7 +207,7 @@ export default function BoardPage() {
 				initialValue={renaming?.name ?? ""}
 				onSubmit={async (name) => {
 					if (renaming)
-						await renameColumnMutation.mutateAsync({ id: renaming.id, name });
+						await columnOps.renameColumn.mutateAsync({ id: renaming.id, name });
 				}}
 			/>
 			<ConfirmDialog
@@ -611,7 +218,7 @@ export default function BoardPage() {
 				title="删除列"
 				description={`确定删除列"${deleting?.name ?? ""}"吗？其下任务将一并删除，此操作不可撤销。`}
 				onConfirm={async () => {
-					if (deleting) await deleteColumnMutation.mutateAsync(deleting.id);
+					if (deleting) await columnOps.deleteColumn.mutateAsync(deleting.id);
 				}}
 			/>
 			<NameDialog
@@ -625,7 +232,7 @@ export default function BoardPage() {
 				initialValue={editingTask?.title ?? ""}
 				onSubmit={async (name) => {
 					if (editingTask)
-						await updateTaskMutation.mutateAsync({
+						await taskOps.updateTask.mutateAsync({
 							id: editingTask.id,
 							title: name,
 						});
@@ -638,25 +245,25 @@ export default function BoardPage() {
 				}}
 				title="删除任务"
 				description={`确定删除任务"${deletingTask?.title ?? ""}"吗？此操作不可撤销。`}
-					onConfirm={async () => {
-						if (deletingTask)
-							await deleteTaskMutation.mutateAsync(deletingTask.id);
-					}}
-				/>
-				<LabelManagerDialog
-					open={labelManagerOpen}
-					onOpenChange={setLabelManagerOpen}
-					labels={board?.labels ?? []}
-					onCreate={async (name, color) => {
-						await createLabelMutation.mutateAsync({ name, color });
-					}}
-					onRename={async (id, name) => {
-						await renameLabelMutation.mutateAsync({ id, name });
-					}}
-					onDelete={async (id) => {
-						await deleteLabelMutation.mutateAsync(id);
-					}}
-				/>
-			</div>
+				onConfirm={async () => {
+					if (deletingTask)
+						await taskOps.deleteTask.mutateAsync(deletingTask.id);
+				}}
+			/>
+			<LabelManagerDialog
+				open={labelManagerOpen}
+				onOpenChange={setLabelManagerOpen}
+				labels={board?.labels ?? []}
+				onCreate={async (name, color) => {
+					await labelOps.createLabel.mutateAsync({ name, color });
+				}}
+				onRename={async (id, name) => {
+					await labelOps.renameLabel.mutateAsync({ id, name });
+				}}
+				onDelete={async (id) => {
+					await labelOps.deleteLabel.mutateAsync(id);
+				}}
+			/>
+		</div>
 	);
 }

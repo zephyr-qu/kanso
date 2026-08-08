@@ -3,11 +3,12 @@ import { Navigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
+import { queryKeys } from "@/hooks/query-keys";
 import type { Workspace } from "@/types/workspace";
 
 export default function RedirectHome() {
 	const { data, isLoading, isError } = useQuery({
-		queryKey: ["workspaces"],
+		queryKey: queryKeys.workspaces(),
 		queryFn: () => api<Workspace[]>("/api/workspaces"),
 	});
 

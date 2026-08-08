@@ -9,6 +9,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useRealtime } from "@/hooks/use-realtime";
 import { api } from "@/lib/api";
+import { queryKeys } from "@/hooks/query-keys";
 import type { Comment, TaskDetail } from "@/types/task-detail";
 import type { Task } from "@/types/task";
 
@@ -42,7 +43,7 @@ export default function TaskDetailPage() {
 	const [comment, setComment] = useState("");
 
 	const { data, isLoading, isError } = useQuery({
-		queryKey: ["task", taskId],
+		queryKey: queryKeys.task(taskId),
 		queryFn: () => api<TaskDetail>(`/api/tasks/${taskId}`),
 		enabled: taskId !== "",
 	});
@@ -51,7 +52,7 @@ export default function TaskDetailPage() {
 	useRealtime(projectId);
 
 	const invalidateTask = () =>
-		queryClient.invalidateQueries({ queryKey: ["task", taskId] });
+		queryClient.invalidateQueries({ queryKey: queryKeys.task(taskId) });
 
 	const updateTaskMutation = useMutation({
 		mutationFn: (patch: Partial<Pick<Task, "title" | "description">>) =>

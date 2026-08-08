@@ -2,6 +2,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getAccessKey } from "@/lib/api";
+import { invalidateBoardScope } from "@/hooks/query-keys";
 
 export function useRealtime(projectId: string | undefined) {
 	const queryClient = useQueryClient();
@@ -16,9 +17,8 @@ export function useRealtime(projectId: string | undefined) {
 		let retry: ReturnType<typeof setTimeout> | null = null;
 
 		const invalidate = () => {
-			// 项目事件可能影响看板与任一任务详情，统一失效（内网自用，查询便宜）。
-			queryClient.invalidateQueries({ queryKey: ["board", projectId] });
-			queryClient.invalidateQueries({ queryKey: ["task"] });
+			// 项目事件可能影响看板与任一任务详情，统一失效（失效映射见 query-keys.ts）。
+			invalidateBoardScope(queryClient, projectId);
 		};
 
 		const connect = () => {
