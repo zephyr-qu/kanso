@@ -66,10 +66,14 @@ func (s *Service) CreateWorkspace(ctx context.Context, name string) (gen.Workspa
 
 // RenameWorkspace 重命名工作区；不存在时返回 ErrNotFound。
 func (s *Service) RenameWorkspace(ctx context.Context, workspaceID, name string) (gen.Workspace, error) {
-	return gen.New(s.db).UpdateWorkspaceName(ctx, gen.UpdateWorkspaceNameParams{
+	workspace, err := gen.New(s.db).UpdateWorkspaceName(ctx, gen.UpdateWorkspaceNameParams{
 		ID:   workspaceID,
 		Name: name,
 	})
+	if err != nil {
+		return gen.Workspace{}, mapNoRows(err)
+	}
+	return workspace, nil
 }
 
 // DeleteWorkspace 删除工作区，其下项目/列/任务等由外键级联删除；不存在时返回 ErrNotFound。

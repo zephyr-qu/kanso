@@ -32,7 +32,6 @@ func NewRouter(cfg config.Config, svc *service.Service) http.Handler {
 	// 其余 /api 路由全部要求密钥。
 	r.Group(func(pr chi.Router) {
 		pr.Use(auth.Middleware(cfg.AccessKey))
-
 		pr.Get("/api/workspaces", a.listWorkspaces)
 		pr.Post("/api/workspaces", a.createWorkspace)
 		pr.Patch("/api/workspaces/{id}", a.renameWorkspace)
@@ -41,6 +40,10 @@ func NewRouter(cfg config.Config, svc *service.Service) http.Handler {
 		pr.Post("/api/workspaces/{id}/projects", a.createProject)
 		pr.Patch("/api/projects/{id}", a.renameProject)
 		pr.Delete("/api/projects/{id}", a.deleteProject)
+		pr.Get("/api/projects/{id}", a.getBoard)
+		pr.Post("/api/projects/{id}/columns", a.createColumn)
+		pr.Patch("/api/columns/{id}", a.updateColumn)
+		pr.Delete("/api/columns/{id}", a.deleteColumn)
 	})
 
 	return r

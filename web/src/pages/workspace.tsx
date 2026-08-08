@@ -1,138 +1,15 @@
-// 工作区页：项目列表 + 创建/重命名/删除（删除经确认）。
+// 工作区页：项目列表 + 创建/重命名/删除（删除经确认）。点击项目卡片进入看板。
 import { useState } from "react";
-import { useParams } from "react-router";
+import { Link, useParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
+import { ArrowUpRightIcon, PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
+import ConfirmDialog from "@/components/confirm-dialog";
+import NameDialog from "@/components/name-dialog";
 import { Button } from "@/components/ui/button";
-import {
-	Dialog,
-	DialogBackdrop,
-	DialogClose,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogPortal,
-	DialogPopup,
-	DialogTitle,
-} from "@/components/ui/dialog";
-import {
-	Empty,
-	EmptyDescription,
-	EmptyHeader,
-	EmptyTitle,
-} from "@/components/ui/empty";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
 import type { Project } from "@/types/project";
-
-// NameDialog 承担"创建项目"与"重命名项目"两种形态。
-function NameDialog(props: {
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-	title: string;
-	description: string;
-	submitLabel: string;
-	initialValue?: string;
-	onSubmit: (name: string) => Promise<void>;
-}) {
-	const [name, setName] = useState(props.initialValue ?? "");
-	const [submitting, setSubmitting] = useState(false);
-
-	return (
-		<Dialog open={props.open} onOpenChange={props.onOpenChange}>
-			<DialogPortal>
-				<DialogBackdrop />
-				<DialogPopup>
-					<DialogHeader>
-						<DialogTitle>{props.title}</DialogTitle>
-						<DialogDescription>{props.description}</DialogDescription>
-					</DialogHeader>
-					<form
-						className="space-y-4 p-4"
-						onSubmit={async (e) => {
-							e.preventDefault();
-							if (!name.trim() || submitting) return;
-							setSubmitting(true);
-							try {
-								await props.onSubmit(name.trim());
-								props.onOpenChange(false);
-								setName("");
-							} finally {
-								setSubmitting(false);
-							}
-						}}
-					>
-						<div className="space-y-1.5">
-							<Label htmlFor="project-name">名称</Label>
-							<Input
-								id="project-name"
-								value={name}
-								onChange={(e) => setName(e.target.value)}
-								autoFocus
-								placeholder="项目名称"
-							/>
-						</div>
-						<DialogFooter>
-							<DialogClose render={<Button variant="ghost">取消</Button>} />
-							<Button
-								type="submit"
-								loading={submitting}
-								disabled={!name.trim()}
-							>
-								{props.submitLabel}
-							</Button>
-						</DialogFooter>
-					</form>
-				</DialogPopup>
-			</DialogPortal>
-		</Dialog>
-	);
-}
-
-// ConfirmDialog 承担删除确认。
-function ConfirmDialog(props: {
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-	title: string;
-	description: string;
-	onConfirm: () => Promise<void>;
-}) {
-	const [submitting, setSubmitting] = useState(false);
-
-	return (
-		<Dialog open={props.open} onOpenChange={props.onOpenChange}>
-			<DialogPortal>
-				<DialogBackdrop />
-				<DialogPopup>
-					<DialogHeader>
-						<DialogTitle>{props.title}</DialogTitle>
-						<DialogDescription>{props.description}</DialogDescription>
-					</DialogHeader>
-					<DialogFooter className="p-4 pt-0">
-						<DialogClose render={<Button variant="ghost">取消</Button>} />
-						<Button
-							variant="destructive"
-							loading={submitting}
-							onClick={async () => {
-								setSubmitting(true);
-								try {
-									await props.onConfirm();
-									props.onOpenChange(false);
-								} finally {
-									setSubmitting(false);
-								}
-							}}
-						>
-							删除
-						</Button>
-					</DialogFooter>
-				</DialogPopup>
-			</DialogPortal>
-		</Dialog>
-	);
-}
 
 export default function WorkspacePage() {
 	const { workspaceId = "" } = useParams();
@@ -141,11 +18,7 @@ export default function WorkspacePage() {
 	const [renaming, setRenaming] = useState<Project | null>(null);
 	const [deleting, setDeleting] = useState<Project | null>(null);
 
-	const {
-		data: projects,
-		isLoading,
-		isError,
-	} = useQuery({
+	const { data: projects, isLoading, isError } = useQuery({
 		queryKey: ["projects", workspaceId],
 		queryFn: () => api<Project[]>(`/api/workspaces/${workspaceId}/projects`),
 		enabled: workspaceId !== "",
@@ -165,16 +38,12 @@ export default function WorkspacePage() {
 
 	const renameMutation = useMutation({
 		mutationFn: ({ id, name }: { id: string; name: string }) =>
-			api<Project>(`/api/projects/${id}`, {
-				method: "PATCH",
-				body: JSON.stringify({ name }),
-			}),
+			api<Project>(`/api/projects/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
 		onSuccess: invalidateProjects,
 	});
 
 	const deleteMutation = useMutation({
-		mutationFn: (id: string) =>
-			api<void>(`/api/projects/${id}`, { method: "DELETE" }),
+		mutationFn: (id: string) => api<void>(`/api/projects/${id}`, { method: "DELETE" }),
 		onSuccess: invalidateProjects,
 	});
 
@@ -192,23 +61,27 @@ export default function WorkspacePage() {
 					<Spinner />
 				</div>
 			) : isError ? (
-				<p className="py-16 text-center text-sm text-destructive">
-					加载项目失败
-				</p>
+				<p className="py-16 text-center text-sm text-destructive">加载项目失败</p>
 			) : projects && projects.length > 0 ? (
 				<ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
 					{projects.map((project) => (
 						<li
 							key={project.id}
-							className="group flex items-center justify-between rounded-lg border bg-card p-4"
+							className="group flex items-center justify-between rounded-lg border bg-card p-4 transition-colors hover:border-primary/50"
 						>
-							<div className="min-w-0">
-								<p className="truncate font-medium">{project.name}</p>
-								<p className="mt-0.5 text-xs text-muted-foreground">
-									{project.createdAt.slice(0, 10)}
-								</p>
-							</div>
-							<div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+							<Link
+								to={`/w/${workspaceId}/p/${project.id}`}
+								className="flex min-w-0 flex-1 items-center gap-2"
+							>
+								<div className="min-w-0">
+									<p className="truncate font-medium">{project.name}</p>
+									<p className="mt-0.5 text-xs text-muted-foreground">
+										{project.createdAt.slice(0, 10)}
+									</p>
+								</div>
+								<ArrowUpRightIcon className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+							</Link>
+							<div className="flex shrink-0 gap-1">
 								<Button
 									variant="ghost"
 									size="icon"
@@ -234,9 +107,7 @@ export default function WorkspacePage() {
 				<Empty>
 					<EmptyHeader>
 						<EmptyTitle>还没有项目</EmptyTitle>
-						<EmptyDescription>
-							点击右上角"新建项目"，系统会自动创建默认列（待办/进行中/已完成）。
-						</EmptyDescription>
+						<EmptyDescription>点击右上角"新建项目"，系统会自动创建默认列（待办/进行中/已完成）。</EmptyDescription>
 					</EmptyHeader>
 				</Empty>
 			)}
@@ -261,8 +132,7 @@ export default function WorkspacePage() {
 				submitLabel="保存"
 				initialValue={renaming?.name ?? ""}
 				onSubmit={async (name) => {
-					if (renaming)
-						await renameMutation.mutateAsync({ id: renaming.id, name });
+					if (renaming) await renameMutation.mutateAsync({ id: renaming.id, name });
 				}}
 			/>
 			<ConfirmDialog

@@ -53,13 +53,33 @@ func (q *Queries) CreateColumn(ctx context.Context, arg CreateColumnParams) (Col
 	return i, err
 }
 
-const deleteColumn = `-- name: DeleteColumn :exec
+const deleteColumn = `-- name: DeleteColumn :execrows
 DELETE FROM column WHERE id = ?
 `
 
-func (q *Queries) DeleteColumn(ctx context.Context, id string) error {
-	_, err := q.db.ExecContext(ctx, deleteColumn, id)
-	return err
+func (q *Queries) DeleteColumn(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteColumn, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const getColumn = `-- name: GetColumn :one
+SELECT id, project_id, name, position, created_at FROM column WHERE id = ?
+`
+
+func (q *Queries) GetColumn(ctx context.Context, id string) (Column, error) {
+	row := q.db.QueryRowContext(ctx, getColumn, id)
+	var i Column
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Position,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const listColumnsByProject = `-- name: ListColumnsByProject :many
@@ -93,6 +113,20 @@ func (q *Queries) ListColumnsByProject(ctx context.Context, projectID string) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const setColumnPosition = `-- name: SetColumnPosition :exec
+UPDATE column SET position = ? WHERE id = ?
+`
+
+type SetColumnPositionParams struct {
+	Position int64  `json:"position"`
+	ID       string `json:"id"`
+}
+
+func (q *Queries) SetColumnPosition(ctx context.Context, arg SetColumnPositionParams) error {
+	_, err := q.db.ExecContext(ctx, setColumnPosition, arg.Position, arg.ID)
+	return err
 }
 
 const updateColumnName = `-- name: UpdateColumnName :one

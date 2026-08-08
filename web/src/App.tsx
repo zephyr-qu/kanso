@@ -10,6 +10,7 @@ import {
 } from "react-router";
 import AppShell from "@/components/app-shell";
 import { UNAUTHORIZED_EVENT } from "@/lib/api";
+import BoardPage from "@/pages/board";
 import LoginPage from "@/pages/login";
 import RedirectHome from "@/pages/redirect-home";
 import WorkspacePage from "@/pages/workspace";
@@ -41,6 +42,7 @@ const router = createBrowserRouter([
 				children: [
 					{ index: true, element: <RedirectHome /> },
 					{ path: "w/:workspaceId", element: <WorkspacePage /> },
+					{ path: "w/:workspaceId/p/:projectId", element: <BoardPage /> },
 				],
 			},
 		],

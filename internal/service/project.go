@@ -73,12 +73,16 @@ func (s *Service) CreateProject(ctx context.Context, workspaceID, name string) (
 	return project, nil
 }
 
-// RenameProject 重命名项目。
+// RenameProject 重命名项目；不存在时返回 ErrNotFound。
 func (s *Service) RenameProject(ctx context.Context, projectID, name string) (gen.Project, error) {
-	return gen.New(s.db).UpdateProjectName(ctx, gen.UpdateProjectNameParams{
+	project, err := gen.New(s.db).UpdateProjectName(ctx, gen.UpdateProjectNameParams{
 		ID:   projectID,
 		Name: name,
 	})
+	if err != nil {
+		return gen.Project{}, mapNoRows(err)
+	}
+	return project, nil
 }
 
 // DeleteProject 删除项目，其下列/任务/评论/活动由外键级联删除；不存在时返回 ErrNotFound。

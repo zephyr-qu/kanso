@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -206,25 +207,19 @@ func TestProjectLifecycle(t *testing.T) {
 	}
 }
 
-// TestProjectSeedsDefaultColumns 校验建项目自动种子默认列。
-// 注：聚合接口（GET /api/projects/:id）在 04 落地，届时此处改为 API 断言。
+// TestProjectSeedsDefaultColumns 校验建项目自动种子默认列（经看板聚合接口断言）。
 func TestProjectSeedsDefaultColumns(t *testing.T) {
 	e := newTestEnv(t)
-	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
-	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
+	projectID := createProject(t, e, "种子项目")
 
-	res, body := e.do(t, http.MethodPost, "/api/workspaces/"+workspaceID+"/projects", `{"name":"种子项目"}`)
-	if res.StatusCode != http.StatusCreated {
-		t.Fatalf("创建项目应 201，实际 %d", res.StatusCode)
+	res, body := e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("看板聚合应 200，实际 %d", res.StatusCode)
 	}
-	projectID := decode[map[string]any](t, body)["id"].(string)
-
-	var count int
-	if err := e.db.QueryRow(`SELECT COUNT(*) FROM "column" WHERE project_id = ?`, projectID).Scan(&count); err != nil {
-		t.Fatalf("读取默认列失败: %v", err)
-	}
-	if count != 3 {
-		t.Fatalf("应种子 3 个默认列，实际 %d", count)
+	board := decode[map[string]any](t, body)
+	columns, _ := board["columns"].([]any)
+	if len(columns) != 3 {
+		t.Fatalf("应种子 3 个默认列，实际 %d", len(columns))
 	}
 }
 
@@ -254,5 +249,104 @@ func TestWorkspaceDeleteCascadesProjects(t *testing.T) {
 	}
 	if columnCount != 0 {
 		t.Fatalf("级联后应无残留列，实际 %d", columnCount)
+	}
+}
+
+// createProject 经 API 创建工作区下的项目并返回其 ID。
+func createProject(t *testing.T, e *testEnv, name string) string {
+	t.Helper()
+	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
+	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
+	res, body := e.do(t, http.MethodPost, "/api/workspaces/"+workspaceID+"/projects", `{"name":"`+name+`"}`)
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("创建项目应 201，实际 %d", res.StatusCode)
+	}
+	return decode[map[string]any](t, body)["id"].(string)
+}
+
+// TestBoardAggregate 校验看板聚合形状：project + columns（含 tasks 数组）+ labels 数组。
+func TestBoardAggregate(t *testing.T) {
+	e := newTestEnv(t)
+	projectID := createProject(t, e, "聚合项目")
+
+	res, body := e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("看板聚合应 200，实际 %d", res.StatusCode)
+	}
+	board := decode[map[string]any](t, body)
+
+	if name := board["project"].(map[string]any)["name"]; name != "聚合项目" {
+		t.Fatalf("project 名称错误: %v", name)
+	}
+
+	columns, _ := board["columns"].([]any)
+	if len(columns) != 3 {
+		t.Fatalf("应 3 列，实际 %d", len(columns))
+	}
+	for _, c := range columns {
+		if _, ok := c.(map[string]any)["tasks"]; !ok {
+			t.Fatalf("列应含 tasks 数组字段")
+		}
+	}
+
+	if labels, _ := board["labels"].([]any); labels == nil {
+		t.Fatalf("labels 应为数组而非 null")
+	}
+}
+
+// TestColumnLifecycle 覆盖列创建（追加到末尾）/重命名/删除（含不存在 404）。
+func TestColumnLifecycle(t *testing.T) {
+	e := newTestEnv(t)
+	projectID := createProject(t, e, "列管理")
+
+	res, body := e.do(t, http.MethodPost, "/api/projects/"+projectID+"/columns", `{"name":"新增列"}`)
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("创建列应 201，实际 %d", res.StatusCode)
+	}
+	column := decode[map[string]any](t, body)
+	columnID := column["id"].(string)
+	if column["position"].(float64) != 3 {
+		t.Fatalf("新列应追加到 position 3，实际 %v", column["position"])
+	}
+
+	res, body = e.do(t, http.MethodPatch, "/api/columns/"+columnID, `{"name":"改名列"}`)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("重命名列应 200，实际 %d", res.StatusCode)
+	}
+	if name := decode[map[string]any](t, body)["name"]; name != "改名列" {
+		t.Fatalf("列重命名结果错误: %v", name)
+	}
+
+	if res, _ := e.do(t, http.MethodDelete, "/api/columns/"+columnID, ""); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("删除列应 204，实际 %d", res.StatusCode)
+	}
+	if res, _ := e.do(t, http.MethodDelete, "/api/columns/"+columnID, ""); res.StatusCode != http.StatusNotFound {
+		t.Fatalf("删除不存在列应 404，实际 %d", res.StatusCode)
+	}
+}
+
+// TestColumnReorder 校验列移动到目标位置后整列 reindex。
+func TestColumnReorder(t *testing.T) {
+	e := newTestEnv(t)
+	projectID := createProject(t, e, "列排序")
+
+	_, body := e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	columns := decode[map[string]any](t, body)["columns"].([]any)
+	firstID := columns[0].(map[string]any)["id"].(string)
+
+	// 把第一列（待办）移到末尾。
+	if res, _ := e.do(t, http.MethodPatch, "/api/columns/"+firstID, `{"position":2}`); res.StatusCode != http.StatusOK {
+		t.Fatalf("移动列应 200，实际 %d", res.StatusCode)
+	}
+
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	columns = decode[map[string]any](t, body)["columns"].([]any)
+	names := make([]string, 0, len(columns))
+	for _, c := range columns {
+		names = append(names, c.(map[string]any)["name"].(string))
+	}
+	want := []string{"进行中", "已完成", "待办"}
+	if !reflect.DeepEqual(names, want) {
+		t.Fatalf("移动后顺序应为 %v，实际 %v", want, names)
 	}
 }

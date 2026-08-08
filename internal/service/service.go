@@ -10,6 +10,14 @@ import (
 // ErrNotFound 表示目标实体不存在，HTTP 层映射为 404。
 var ErrNotFound = errors.New("not found")
 
+// mapNoRows 把 sql.ErrNoRows（:one 查询未命中）映射为 ErrNotFound。
+func mapNoRows(err error) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
+}
+
 // Service 持有数据库句柄，提供全部领域操作。
 type Service struct {
 	db *sql.DB
