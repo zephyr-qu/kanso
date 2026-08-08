@@ -418,3 +418,85 @@ func TestTaskLifecycle(t *testing.T) {
 		t.Fatalf("删除不存在任务应 404，实际 %d", res.StatusCode)
 	}
 }
+
+// TestTaskMoveAcrossColumns 校验任务跨列移动后源/目标列 reindex。
+func TestTaskMoveAcrossColumns(t *testing.T) {
+	e := newTestEnv(t)
+	projectID := createProject(t, e, "跨列移动")
+
+	_, body := e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	columns := decode[map[string]any](t, body)["columns"].([]any)
+	col1 := columns[0].(map[string]any)["id"].(string)
+	col2 := columns[1].(map[string]any)["id"].(string)
+
+	// 任务一/二在 col1。
+	res, body := e.do(t, http.MethodPost, "/api/columns/"+col1+"/tasks", `{"title":"任务一"}`)
+	task1 := decode[map[string]any](t, body)["id"].(string)
+	e.do(t, http.MethodPost, "/api/columns/"+col1+"/tasks", `{"title":"任务二"}`)
+
+	// 把任务一移到 col2 的 position 0。
+	res, body = e.do(t, http.MethodPatch, "/api/tasks/"+task1, `{"columnId":"`+col2+`","position":0}`)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("移动任务应 200，实际 %d", res.StatusCode)
+	}
+
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	columns = decode[map[string]any](t, body)["columns"].([]any)
+	newCol1Tasks := columns[0].(map[string]any)["tasks"].([]any)
+	newCol2Tasks := columns[1].(map[string]any)["tasks"].([]any)
+
+	if len(newCol1Tasks) != 1 {
+		t.Fatalf("源列应剩 1 个任务，实际 %d", len(newCol1Tasks))
+	}
+	if got := newCol1Tasks[0].(map[string]any)["title"]; got != "任务二" {
+		t.Fatalf("源列剩余任务应为任务二，实际 %v", got)
+	}
+	if len(newCol2Tasks) != 1 || newCol2Tasks[0].(map[string]any)["title"] != "任务一" {
+		t.Fatalf("目标列应含任务一，实际 %v", newCol2Tasks)
+	}
+	if got := newCol2Tasks[0].(map[string]any)["position"].(float64); got != 0 {
+		t.Fatalf("目标列 reindex 后 position 应为 0，实际 %v", got)
+	}
+}
+
+// TestTaskReorderWithinColumn 校验同列拖拽排序后 position 全量 reindex。
+func TestTaskReorderWithinColumn(t *testing.T) {
+	e := newTestEnv(t)
+	projectID := createProject(t, e, "同列排序")
+
+	_, body := e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	col1 := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["id"].(string)
+
+	e.do(t, http.MethodPost, "/api/columns/"+col1+"/tasks", `{"title":"任务A"}`)
+	e.do(t, http.MethodPost, "/api/columns/"+col1+"/tasks", `{"title":"任务B"}`)
+	e.do(t, http.MethodPost, "/api/columns/"+col1+"/tasks", `{"title":"任务C"}`)
+
+	// 重查看板拿回所有任务。
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	tasks := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["tasks"].([]any)
+	taskIDs := make(map[string]string, len(tasks))
+	for _, t := range tasks {
+		tm := t.(map[string]any)
+		taskIDs[tm["title"].(string)] = tm["id"].(string)
+	}
+
+	// 把任务A（position 0）移到 position 2（末尾）。
+	if res, _ := e.do(t, http.MethodPatch, "/api/tasks/"+taskIDs["任务A"], `{"position":2}`); res.StatusCode != http.StatusOK {
+		t.Fatalf("同列移动应 200，实际 %d", res.StatusCode)
+	}
+
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	tasks = decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["tasks"].([]any)
+	got := make([]string, 0, len(tasks))
+	for _, item := range tasks {
+		tm := item.(map[string]any)
+		got = append(got, tm["title"].(string))
+		if int(tm["position"].(float64)) != len(got)-1 {
+			t.Fatalf("reindex 后 position 应为 %d，实际 %v", len(got)-1, tm["position"])
+		}
+	}
+	want := []string{"任务B", "任务C", "任务A"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("移动后顺序应为 %v，实际 %v", want, got)
+	}
+}

@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	DndContext,
 	PointerSensor,
-	closestCenter,
+	closestCorners,
 	useSensor,
 	useSensors,
 	type DragEndEvent,
@@ -15,6 +15,7 @@ import {
 	arrayMove,
 	horizontalListSortingStrategy,
 	useSortable,
+	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
@@ -74,6 +75,59 @@ function AddTaskForm(props: { onAdd: (title: string) => void }) {
 				className="h-8 text-sm"
 			/>
 		</form>
+	);
+}
+
+// 可拖拽的任务卡片（含编辑/删除操作，按钮不触发拖拽）。
+function SortableTaskCard(props: {
+	task: Task;
+	onEdit: (task: Task) => void;
+	onDelete: (task: Task) => void;
+}) {
+	const { task, onEdit, onDelete } = props;
+	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+		id: task.id,
+	});
+	const style = {
+		transform: CSS.Transform.toString(transform),
+		transition,
+	};
+
+	return (
+		<div
+			ref={setNodeRef}
+			style={style}
+			{...attributes}
+			{...listeners}
+			className={`group relative cursor-grab rounded-md border bg-card p-3 text-sm active:cursor-grabbing ${
+				isDragging ? "z-10 opacity-60" : ""
+			}`}
+		>
+			<p className="break-words pr-6">{task.title}</p>
+			<div
+				className="absolute right-1 top-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+				onPointerDown={(e) => e.stopPropagation()}
+			>
+				<Button
+					variant="ghost"
+					size="icon"
+					className="size-6"
+					aria-label={`编辑任务 ${task.title}`}
+					onClick={() => onEdit(task)}
+				>
+					<PencilIcon />
+				</Button>
+				<Button
+					variant="ghost"
+					size="icon"
+					className="size-6 text-destructive"
+					aria-label={`删除任务 ${task.title}`}
+					onClick={() => onDelete(task)}
+				>
+					<TrashIcon />
+				</Button>
+			</div>
+		</div>
 	);
 }
 
@@ -149,34 +203,19 @@ function SortableColumn(props: {
 						空列
 					</p>
 				) : (
-					column.tasks.map((task) => (
-						<div
-							key={task.id}
-							className="group relative rounded-md border bg-card p-3 text-sm"
-						>
-							<p className="break-words pr-6">{task.title}</p>
-							<div className="absolute right-1 top-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-								<Button
-									variant="ghost"
-									size="icon"
-									className="size-6"
-									aria-label={`编辑任务 ${task.title}`}
-									onClick={() => onEditTask(task)}
-								>
-									<PencilIcon />
-								</Button>
-								<Button
-									variant="ghost"
-									size="icon"
-									className="size-6 text-destructive"
-									aria-label={`删除任务 ${task.title}`}
-									onClick={() => onDeleteTask(task)}
-								>
-									<TrashIcon />
-								</Button>
-							</div>
-						</div>
-					))
+					<SortableContext
+						items={column.tasks.map((t) => t.id)}
+						strategy={verticalListSortingStrategy}
+					>
+						{column.tasks.map((task) => (
+							<SortableTaskCard
+								key={task.id}
+								task={task}
+								onEdit={onEditTask}
+								onDelete={onDeleteTask}
+							/>
+						))}
+					</SortableContext>
 				)}
 				<AddTaskForm onAdd={(title) => onAddTask(column.id, title)} />
 			</div>
@@ -263,6 +302,17 @@ export default function BoardPage() {
 		onSuccess: invalidateBoard,
 	});
 
+	const moveTaskMutation = useMutation({
+		mutationFn: ({ id, columnId, position }: { id: string; columnId: string; position: number }) =>
+			api<void>(`/api/tasks/${id}`, {
+				method: "PATCH",
+				body: JSON.stringify({ columnId, position }),
+			}),
+		// 失败回滚：重新拉取服务端真值；成功后以 invalidate 收敛 reindex。
+		onError: invalidateBoard,
+		onSuccess: invalidateBoard,
+	});
+
 	const sensors = useSensors(
 		useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
 	);
@@ -270,16 +320,69 @@ export default function BoardPage() {
 	function handleDragEnd(event: DragEndEvent) {
 		const { active, over } = event;
 		if (!over || active.id === over.id || !board) return;
-		const oldIndex = board.columns.findIndex((c) => c.id === active.id);
-		const newIndex = board.columns.findIndex((c) => c.id === over.id);
-		if (oldIndex < 0 || newIndex < 0) return;
-		// 乐观更新：立即反映，服务端 reindex 后以 invalidate 收敛。
+		const activeId = String(active.id);
+		const overId = String(over.id);
+
+		// 列拖拽（active 是列 ID）。
+		const oldColIndex = board.columns.findIndex((c) => c.id === activeId);
+		if (oldColIndex >= 0) {
+			const newColIndex = board.columns.findIndex((c) => c.id === overId);
+			if (newColIndex < 0) return;
+			// 乐观更新：立即反映，服务端 reindex 后以 invalidate 收敛。
+			queryClient.setQueryData<Board>(["board", projectId], (old) =>
+				old ? { ...old, columns: arrayMove(old.columns, oldColIndex, newColIndex) } : old,
+			);
+			moveColumnMutation.mutate({ id: activeId, position: newColIndex });
+			return;
+		}
+
+		// 任务拖拽：定位源列与目标列/位置。
+		let sourceColumn: BoardColumn | undefined;
+		let dragged: Task | undefined;
+		for (const column of board.columns) {
+			const task = column.tasks.find((t) => t.id === activeId);
+			if (task) {
+				sourceColumn = column;
+				dragged = task;
+				break;
+			}
+		}
+		if (!sourceColumn || !dragged) return;
+
+		// 目标：over 是列（空列区域）或任务。
+		let targetColumn = board.columns.find((c) => c.id === overId);
+		let targetIndex = targetColumn ? targetColumn.tasks.length : 0;
+		if (!targetColumn) {
+			for (const column of board.columns) {
+				const idx = column.tasks.findIndex((t) => t.id === overId);
+				if (idx >= 0) {
+					targetColumn = column;
+					targetIndex = idx;
+					break;
+				}
+			}
+		}
+		if (!targetColumn) return;
+		// 同列且位置没变则跳过。
+		if (sourceColumn.id === targetColumn.id && sourceColumn.tasks.indexOf(dragged) === targetIndex) return;
+
+		// 乐观更新：从源列移除、插入目标列。
+		const newColumns = board.columns.map((c) => ({ ...c, tasks: [...c.tasks] }));
+		const src = newColumns.find((c) => c.id === sourceColumn.id)!;
+		src.tasks = src.tasks.filter((t) => t.id !== dragged.id);
+		const dst = newColumns.find((c) => c.id === targetColumn.id)!;
+		dst.tasks.splice(Math.min(targetIndex, dst.tasks.length), 0, {
+			...dragged,
+			columnId: targetColumn.id,
+		});
 		queryClient.setQueryData<Board>(["board", projectId], (old) =>
-			old
-				? { ...old, columns: arrayMove(old.columns, oldIndex, newIndex) }
-				: old,
+			old ? { ...old, columns: newColumns } : old,
 		);
-		moveColumnMutation.mutate({ id: String(active.id), position: newIndex });
+		moveTaskMutation.mutate({
+			id: dragged.id,
+			columnId: targetColumn.id,
+			position: targetIndex,
+		});
 	}
 
 	return (
@@ -313,7 +416,7 @@ export default function BoardPage() {
 				<div className="flex-1 overflow-auto p-4">
 					<DndContext
 						sensors={sensors}
-						collisionDetection={closestCenter}
+						collisionDetection={closestCorners}
 						onDragEnd={handleDragEnd}
 					>
 						<SortableContext

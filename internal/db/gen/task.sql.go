@@ -166,6 +166,27 @@ func (q *Queries) MaxTaskPositionByColumn(ctx context.Context, columnID string) 
 	return column_1, err
 }
 
+const setTaskPosition = `-- name: SetTaskPosition :exec
+UPDATE task SET column_id = ?, position = ?, updated_at = ? WHERE id = ?
+`
+
+type SetTaskPositionParams struct {
+	ColumnID  string `json:"column_id"`
+	Position  int64  `json:"position"`
+	UpdatedAt string `json:"updated_at"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) SetTaskPosition(ctx context.Context, arg SetTaskPositionParams) error {
+	_, err := q.db.ExecContext(ctx, setTaskPosition,
+		arg.ColumnID,
+		arg.Position,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	return err
+}
+
 const updateTask = `-- name: UpdateTask :one
 UPDATE task SET title = ?, description = ?, updated_at = ? WHERE id = ? RETURNING id, project_id, column_id, title, description, position, created_at, updated_at
 `

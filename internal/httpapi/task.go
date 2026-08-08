@@ -34,20 +34,42 @@ func (a *API) createTask(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, task)
 }
 
-// updateTask 更新任务标题/描述（body 中缺失的字段保持不变）。
+// updateTask 更新任务标题/描述（body 中缺失的字段保持不变）；含 columnId/position 时执行移动。
 func (a *API) updateTask(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Title       *string `json:"title"`
 		Description *string `json:"description"`
+		ColumnID    *string `json:"columnId"`
+		Position    *int64  `json:"position"`
 	}
 	if !decodeBody(w, r, &body) {
 		return
 	}
+	taskID := chi.URLParam(r, "id")
+
+	// 移动/排序（含 columnId 或 position）。
+	if body.ColumnID != nil || body.Position != nil {
+		position := int64(0)
+		if body.Position != nil {
+			position = *body.Position
+		}
+		if err := a.svc.MoveTask(r.Context(), taskID, body.ColumnID, position); err != nil {
+			if errors.Is(err, service.ErrNotFound) {
+				writeError(w, http.StatusNotFound, "任务或目标列不存在")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "移动任务失败")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		return
+	}
+
 	if body.Title != nil && *body.Title == "" {
 		writeError(w, http.StatusBadRequest, "任务标题不能为空")
 		return
 	}
-	task, err := a.svc.UpdateTask(r.Context(), chi.URLParam(r, "id"), body.Title, body.Description)
+	task, err := a.svc.UpdateTask(r.Context(), taskID, body.Title, body.Description)
 	if err != nil {
 		if errors.Is(err, service.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "任务不存在")

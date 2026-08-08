@@ -18,5 +18,8 @@ RETURNING *;
 -- name: UpdateTask :one
 UPDATE task SET title = ?, description = ?, updated_at = ? WHERE id = ? RETURNING *;
 
+-- name: SetTaskPosition :exec
+UPDATE task SET column_id = ?, position = ?, updated_at = ? WHERE id = ?;
+
 -- name: DeleteTask :execrows
 DELETE FROM task WHERE id = ?;
