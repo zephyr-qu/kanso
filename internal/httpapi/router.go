@@ -47,6 +47,12 @@ func NewRouter(cfg config.Config, svc *service.Service) http.Handler {
 		pr.Post("/api/columns/{id}/tasks", a.createTask)
 		pr.Patch("/api/tasks/{id}", a.updateTask)
 		pr.Delete("/api/tasks/{id}", a.deleteTask)
+		pr.Get("/api/workspaces/{id}/labels", a.listLabels)
+		pr.Post("/api/workspaces/{id}/labels", a.createLabel)
+		pr.Patch("/api/labels/{id}", a.updateLabel)
+		pr.Delete("/api/labels/{id}", a.deleteLabel)
+		pr.Post("/api/tasks/{taskId}/labels/{labelId}", a.attachLabel)
+		pr.Delete("/api/tasks/{taskId}/labels/{labelId}", a.detachLabel)
 	})
 
 	return r

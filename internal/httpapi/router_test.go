@@ -500,3 +500,94 @@ func TestTaskReorderWithinColumn(t *testing.T) {
 		t.Fatalf("移动后顺序应为 %v，实际 %v", want, got)
 	}
 }
+
+// TestLabelLifecycle 覆盖工作区级标签 CRUD。
+func TestLabelLifecycle(t *testing.T) {
+	e := newTestEnv(t)
+	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
+	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
+
+	// 创建。
+	res, body := e.do(t, http.MethodPost, "/api/workspaces/"+workspaceID+"/labels", `{"name":"紧急","color":"#ef4444"}`)
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("创建标签应 201，实际 %d", res.StatusCode)
+	}
+	label := decode[map[string]any](t, body)
+	labelID := label["id"].(string)
+	if label["color"] != "#ef4444" {
+		t.Fatalf("标签颜色错误: %v", label["color"])
+	}
+
+	// 列表。
+	_, body = e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/labels", "")
+	if got := len(decode[[]map[string]any](t, body)); got != 1 {
+		t.Fatalf("应 1 个标签，实际 %d", got)
+	}
+
+	// 部分更新（只改名称）。
+	res, body = e.do(t, http.MethodPatch, "/api/labels/"+labelID, `{"name":"特急"}`)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("更新标签应 200，实际 %d", res.StatusCode)
+	}
+	updated := decode[map[string]any](t, body)
+	if updated["name"] != "特急" || updated["color"] != "#ef4444" {
+		t.Fatalf("部分更新结果错误: %v", updated)
+	}
+
+	// 删除。
+	if res, _ := e.do(t, http.MethodDelete, "/api/labels/"+labelID, ""); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("删除标签应 204，实际 %d", res.StatusCode)
+	}
+	if res, _ := e.do(t, http.MethodDelete, "/api/labels/"+labelID, ""); res.StatusCode != http.StatusNotFound {
+		t.Fatalf("删除不存在标签应 404，实际 %d", res.StatusCode)
+	}
+}
+
+// TestTaskLabels 覆盖贴/摘标签与看板任务携带标签。
+func TestTaskLabels(t *testing.T) {
+	e := newTestEnv(t)
+	projectID := createProject(t, e, "任务标签")
+
+	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
+	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
+	_, body = e.do(t, http.MethodPost, "/api/workspaces/"+workspaceID+"/labels", `{"name":"前端","color":"#3b82f6"}`)
+	labelID := decode[map[string]any](t, body)["id"].(string)
+	// 建任务。
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	columnID := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["id"].(string)
+	_, body = e.do(t, http.MethodPost, "/api/columns/"+columnID+"/tasks", `{"title":"带标签任务"}`)
+	taskID := decode[map[string]any](t, body)["id"].(string)
+	// 贴标签。
+	if res, _ := e.do(t, http.MethodPost, "/api/tasks/"+taskID+"/labels/"+labelID, ""); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("贴标签应 204，实际 %d", res.StatusCode)
+	}
+
+	// 看板任务携带标签。
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	tasks := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["tasks"].([]any)
+	labels := tasks[0].(map[string]any)["labels"].([]any)
+	if len(labels) != 1 || labels[0].(map[string]any)["name"] != "前端" {
+		t.Fatalf("任务应携带 1 个标签，实际 %v", labels)
+	}
+
+	// 摘标签。
+	if res, _ := e.do(t, http.MethodDelete, "/api/tasks/"+taskID+"/labels/"+labelID, ""); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("摘标签应 204，实际 %d", res.StatusCode)
+	}
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	tasks = decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["tasks"].([]any)
+	if got := len(tasks[0].(map[string]any)["labels"].([]any)); got != 0 {
+		t.Fatalf("摘标签后应无标签，实际 %d", got)
+	}
+
+	// 删除标签级联清除任务关联。
+	e.do(t, http.MethodPost, "/api/tasks/"+taskID+"/labels/"+labelID, "")
+	if res, _ := e.do(t, http.MethodDelete, "/api/labels/"+labelID, ""); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("删除标签应 204，实际 %d", res.StatusCode)
+	}
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	tasks = decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["tasks"].([]any)
+	if got := len(tasks[0].(map[string]any)["labels"].([]any)); got != 0 {
+		t.Fatalf("删除标签后任务徽章应消失，实际 %d", got)
+	}
+}

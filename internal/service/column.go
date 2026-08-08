@@ -9,10 +9,16 @@ import (
 	"kanso/internal/id"
 )
 
+// BoardTask 是看板中携带标签的任务。
+type BoardTask struct {
+	gen.Task
+	Labels []gen.Label `json:"labels"`
+}
+
 // BoardColumn 是看板聚合中一列及其任务。
 type BoardColumn struct {
 	gen.Column
-	Tasks []gen.Task `json:"tasks"`
+	Tasks []BoardTask `json:"tasks"`
 }
 
 // Board 是看板页单次拉取的聚合（列 + 任务 + 工作区标签）。
@@ -46,6 +52,21 @@ func (s *Service) GetBoard(ctx context.Context, projectID string) (Board, error)
 		tasksByColumn[task.ColumnID] = append(tasksByColumn[task.ColumnID], task)
 	}
 
+	// 任务标签按任务分组（单次查询，避免 N+1）。
+	labelsByTask := make(map[string][]gen.Label)
+	labelRows, err := q.ListTaskLabelsByProject(ctx, projectID)
+	if err != nil {
+		return Board{}, fmt.Errorf("查询任务标签失败: %w", err)
+	}
+	for _, row := range labelRows {
+		labelsByTask[row.TaskID] = append(labelsByTask[row.TaskID], gen.Label{
+			ID:          row.ID,
+			WorkspaceID: row.WorkspaceID,
+			Name:        row.Name,
+			Color:       row.Color,
+			CreatedAt:   row.CreatedAt,
+		})
+	}
 	labels, err := q.ListLabelsByWorkspace(ctx, project.WorkspaceID)
 	if err != nil {
 		return Board{}, fmt.Errorf("查询标签失败: %w", err)
@@ -60,9 +81,20 @@ func (s *Service) GetBoard(ctx context.Context, projectID string) (Board, error)
 		if tasks == nil {
 			tasks = []gen.Task{}
 		}
+		boardTasks := make([]BoardTask, 0, len(tasks))
+		for _, task := range tasks {
+			labels := labelsByTask[task.ID]
+			if labels == nil {
+				labels = []gen.Label{}
+			}
+			boardTasks = append(boardTasks, BoardTask{
+				Task:   task,
+				Labels: labels,
+			})
+		}
 		boardColumns = append(boardColumns, BoardColumn{
 			Column: column,
-			Tasks:  tasks,
+			Tasks:  boardTasks,
 		})
 	}
 

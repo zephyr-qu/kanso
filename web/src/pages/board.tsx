@@ -22,10 +22,12 @@ import {
 	GripVerticalIcon,
 	PencilIcon,
 	PlusIcon,
+	TagIcon,
 	TrashIcon,
 } from "lucide-react";
 import { Link, useParams } from "react-router";
 import ConfirmDialog from "@/components/confirm-dialog";
+import LabelManagerDialog from "@/components/label-manager";
 import NameDialog from "@/components/name-dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,9 +37,11 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverPopup, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
 import type { Board, BoardColumn, Column } from "@/types/board";
+import type { Label } from "@/types/label";
 import type { Task } from "@/types/task";
 
 // 列内"添加任务"的内联表单（回车创建）。
@@ -81,10 +85,12 @@ function AddTaskForm(props: { onAdd: (title: string) => void }) {
 // 可拖拽的任务卡片（含编辑/删除操作，按钮不触发拖拽）。
 function SortableTaskCard(props: {
 	task: Task;
+	labels: Label[];
 	onEdit: (task: Task) => void;
 	onDelete: (task: Task) => void;
+	onToggleLabel: (task: Task, label: Label) => void;
 }) {
-	const { task, onEdit, onDelete } = props;
+	const { task, labels, onEdit, onDelete, onToggleLabel } = props;
 	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
 		id: task.id,
 	});
@@ -92,6 +98,7 @@ function SortableTaskCard(props: {
 		transform: CSS.Transform.toString(transform),
 		transition,
 	};
+	const taskLabels = task.labels ?? [];
 
 	return (
 		<div
@@ -103,11 +110,70 @@ function SortableTaskCard(props: {
 				isDragging ? "z-10 opacity-60" : ""
 			}`}
 		>
-			<p className="break-words pr-6">{task.title}</p>
+			{taskLabels.length > 0 ? (
+				<div className="mb-1.5 flex flex-wrap gap-1">
+					{taskLabels.map((label) => (
+						<span
+							key={label.id}
+							className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium text-white"
+							style={{ backgroundColor: label.color }}
+						>
+							{label.name}
+						</span>
+					))}
+				</div>
+			) : null}
+			<p className="break-words pr-14">{task.title}</p>
 			<div
 				className="absolute right-1 top-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
 				onPointerDown={(e) => e.stopPropagation()}
 			>
+				<Popover>
+					<PopoverTrigger
+						render={
+								<Button
+									variant="ghost"
+									size="icon"
+									className="size-6"
+									aria-label={`标签 ${task.title}`}
+								>
+									<TagIcon />
+								</Button>
+							}
+						/>
+					<PopoverPopup className="w-52 p-2">
+						<PopoverTitle className="px-1 pb-1 text-xs font-medium text-muted-foreground">
+							标签
+						</PopoverTitle>
+						{labels.length === 0 ? (
+							<p className="px-1 py-2 text-xs text-muted-foreground">
+								暂无标签，可先在看板右上角创建
+							</p>
+						) : (
+							<ul className="space-y-0.5">
+								{labels.map((label) => {
+									const attached = taskLabels.some((l) => l.id === label.id);
+									return (
+										<li key={label.id}>
+											<button
+												type="button"
+												className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-xs hover:bg-muted"
+												onClick={() => onToggleLabel(task, label)}
+											>
+												<span
+													className="size-2.5 shrink-0 rounded-full"
+													style={{ backgroundColor: label.color }}
+												/>
+												<span className="flex-1">{label.name}</span>
+												{attached ? <span className="text-primary">✓</span> : null}
+											</button>
+										</li>
+									);
+								})}
+							</ul>
+						)}
+					</PopoverPopup>
+				</Popover>
 				<Button
 					variant="ghost"
 					size="icon"
@@ -133,14 +199,24 @@ function SortableTaskCard(props: {
 
 function SortableColumn(props: {
 	column: BoardColumn;
+	labels: Label[];
 	onRename: (column: BoardColumn) => void;
 	onDelete: (column: BoardColumn) => void;
 	onAddTask: (columnId: string, title: string) => void;
 	onEditTask: (task: Task) => void;
 	onDeleteTask: (task: Task) => void;
+	onToggleLabel: (task: Task, label: Label) => void;
 }) {
-	const { column, onRename, onDelete, onAddTask, onEditTask, onDeleteTask } =
-		props;
+	const {
+		column,
+		labels,
+		onRename,
+		onDelete,
+		onAddTask,
+		onEditTask,
+		onDeleteTask,
+		onToggleLabel,
+	} = props;
 	const {
 		attributes,
 		listeners,
@@ -211,8 +287,10 @@ function SortableColumn(props: {
 							<SortableTaskCard
 								key={task.id}
 								task={task}
+								labels={labels}
 								onEdit={onEditTask}
 								onDelete={onDeleteTask}
+								onToggleLabel={onToggleLabel}
 							/>
 						))}
 					</SortableContext>
@@ -313,6 +391,37 @@ export default function BoardPage() {
 		onSuccess: invalidateBoard,
 	});
 
+	const [labelManagerOpen, setLabelManagerOpen] = useState(false);
+
+	const createLabelMutation = useMutation({
+		mutationFn: ({ name, color }: { name: string; color: string }) =>
+			api<Label>(`/api/workspaces/${board?.project.workspaceId ?? ""}/labels`, {
+				method: "POST",
+				body: JSON.stringify({ name, color }),
+			}),
+		onSuccess: invalidateBoard,
+	});
+
+	const renameLabelMutation = useMutation({
+		mutationFn: ({ id, name }: { id: string; name: string }) =>
+			api<Label>(`/api/labels/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+		onSuccess: invalidateBoard,
+	});
+
+	const deleteLabelMutation = useMutation({
+		mutationFn: (id: string) => api<void>(`/api/labels/${id}`, { method: "DELETE" }),
+		onSuccess: invalidateBoard,
+	});
+
+	function toggleLabel(task: Task, label: Label) {
+		const attached = (task.labels ?? []).some((l) => l.id === label.id);
+		const url = `/api/tasks/${task.id}/labels/${label.id}`;
+		const method = attached ? "DELETE" : "POST";
+		api<void>(url, { method })
+			.then(invalidateBoard)
+			.catch(invalidateBoard);
+	}
+
 	const sensors = useSensors(
 		useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
 	);
@@ -399,9 +508,14 @@ export default function BoardPage() {
 						{board?.project.name ?? "看板"}
 					</h1>
 				</div>
-				<Button onClick={() => setCreateOpen(true)}>
-					<PlusIcon /> 新建列
-				</Button>
+				<div className="flex gap-2">
+					<Button variant="ghost" onClick={() => setLabelManagerOpen(true)}>
+						<TagIcon /> 标签
+					</Button>
+					<Button onClick={() => setCreateOpen(true)}>
+						<PlusIcon /> 新建列
+					</Button>
+				</div>
 			</div>
 
 			{isLoading ? (
@@ -428,6 +542,7 @@ export default function BoardPage() {
 									<SortableColumn
 										key={column.id}
 										column={column}
+										labels={board.labels}
 										onRename={setRenaming}
 										onDelete={setDeleting}
 										onAddTask={(columnId, title) =>
@@ -435,6 +550,7 @@ export default function BoardPage() {
 										}
 										onEditTask={setEditingTask}
 										onDeleteTask={setDeletingTask}
+										onToggleLabel={toggleLabel}
 									/>
 								))}
 							</div>
@@ -511,11 +627,25 @@ export default function BoardPage() {
 				}}
 				title="删除任务"
 				description={`确定删除任务"${deletingTask?.title ?? ""}"吗？此操作不可撤销。`}
-				onConfirm={async () => {
-					if (deletingTask)
-						await deleteTaskMutation.mutateAsync(deletingTask.id);
-				}}
-			/>
-		</div>
+					onConfirm={async () => {
+						if (deletingTask)
+							await deleteTaskMutation.mutateAsync(deletingTask.id);
+					}}
+				/>
+				<LabelManagerDialog
+					open={labelManagerOpen}
+					onOpenChange={setLabelManagerOpen}
+					labels={board?.labels ?? []}
+					onCreate={async (name, color) => {
+						await createLabelMutation.mutateAsync({ name, color });
+					}}
+					onRename={async (id, name) => {
+						await renameLabelMutation.mutateAsync({ id, name });
+					}}
+					onDelete={async (id) => {
+						await deleteLabelMutation.mutateAsync(id);
+					}}
+				/>
+			</div>
 	);
 }

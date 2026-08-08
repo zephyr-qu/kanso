@@ -9,6 +9,96 @@ import (
 	"context"
 )
 
+const attachLabel = `-- name: AttachLabel :exec
+INSERT OR IGNORE INTO task_label (task_id, label_id) VALUES (?, ?)
+`
+
+type AttachLabelParams struct {
+	TaskID  string `json:"task_id"`
+	LabelID string `json:"label_id"`
+}
+
+func (q *Queries) AttachLabel(ctx context.Context, arg AttachLabelParams) error {
+	_, err := q.db.ExecContext(ctx, attachLabel, arg.TaskID, arg.LabelID)
+	return err
+}
+
+const createLabel = `-- name: CreateLabel :one
+INSERT INTO label (id, workspace_id, name, color, created_at)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, workspace_id, name, color, created_at
+`
+
+type CreateLabelParams struct {
+	ID          string `json:"id"`
+	WorkspaceID string `json:"workspace_id"`
+	Name        string `json:"name"`
+	Color       string `json:"color"`
+	CreatedAt   string `json:"created_at"`
+}
+
+func (q *Queries) CreateLabel(ctx context.Context, arg CreateLabelParams) (Label, error) {
+	row := q.db.QueryRowContext(ctx, createLabel,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.Name,
+		arg.Color,
+		arg.CreatedAt,
+	)
+	var i Label
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Color,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const deleteLabel = `-- name: DeleteLabel :execrows
+DELETE FROM label WHERE id = ?
+`
+
+func (q *Queries) DeleteLabel(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteLabel, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const detachLabel = `-- name: DetachLabel :exec
+DELETE FROM task_label WHERE task_id = ? AND label_id = ?
+`
+
+type DetachLabelParams struct {
+	TaskID  string `json:"task_id"`
+	LabelID string `json:"label_id"`
+}
+
+func (q *Queries) DetachLabel(ctx context.Context, arg DetachLabelParams) error {
+	_, err := q.db.ExecContext(ctx, detachLabel, arg.TaskID, arg.LabelID)
+	return err
+}
+
+const getLabel = `-- name: GetLabel :one
+SELECT id, workspace_id, name, color, created_at FROM label WHERE id = ?
+`
+
+func (q *Queries) GetLabel(ctx context.Context, id string) (Label, error) {
+	row := q.db.QueryRowContext(ctx, getLabel, id)
+	var i Label
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Color,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listLabelsByWorkspace = `-- name: ListLabelsByWorkspace :many
 SELECT id, workspace_id, name, color, created_at FROM label WHERE workspace_id = ? ORDER BY created_at
 `
@@ -40,4 +130,72 @@ func (q *Queries) ListLabelsByWorkspace(ctx context.Context, workspaceID string)
 		return nil, err
 	}
 	return items, nil
+}
+
+const listTaskLabelsByProject = `-- name: ListTaskLabelsByProject :many
+SELECT tl.task_id, l.id, l.workspace_id, l.name, l.color, l.created_at FROM task_label tl
+JOIN label l ON l.id = tl.label_id
+WHERE tl.task_id IN (SELECT id FROM task WHERE project_id = ?)
+`
+
+type ListTaskLabelsByProjectRow struct {
+	TaskID      string `json:"task_id"`
+	ID          string `json:"id"`
+	WorkspaceID string `json:"workspace_id"`
+	Name        string `json:"name"`
+	Color       string `json:"color"`
+	CreatedAt   string `json:"created_at"`
+}
+
+func (q *Queries) ListTaskLabelsByProject(ctx context.Context, projectID string) ([]ListTaskLabelsByProjectRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTaskLabelsByProject, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTaskLabelsByProjectRow
+	for rows.Next() {
+		var i ListTaskLabelsByProjectRow
+		if err := rows.Scan(
+			&i.TaskID,
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Name,
+			&i.Color,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateLabel = `-- name: UpdateLabel :one
+UPDATE label SET name = ?, color = ? WHERE id = ? RETURNING id, workspace_id, name, color, created_at
+`
+
+type UpdateLabelParams struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
+	ID    string `json:"id"`
+}
+
+func (q *Queries) UpdateLabel(ctx context.Context, arg UpdateLabelParams) (Label, error) {
+	row := q.db.QueryRowContext(ctx, updateLabel, arg.Name, arg.Color, arg.ID)
+	var i Label
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Color,
+		&i.CreatedAt,
+	)
+	return i, err
 }
