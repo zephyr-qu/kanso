@@ -1,17 +1,8 @@
-// 登录页：输入 Access Key 调用 /api/auth/verify，通过后写入 localStorage 并进入应用。
+// 登录页：品牌时刻——朱印 + 明朝字标 + 和紙底，不对称构图。
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardFooter,
-	CardHeader,
-	CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { setAccessKey, verifyAccessKey } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 
@@ -43,18 +34,53 @@ export default function LoginPage() {
 	}
 
 	return (
-		<div className="flex h-dvh items-center justify-center bg-background p-4">
-			<Card className="w-full max-w-sm">
-				<CardHeader>
-					<CardTitle>Kanso</CardTitle>
-					<CardDescription>
-						输入访问密钥以进入（内网自用，见 KANSO_ACCESS_KEY 或 docker logs）
-					</CardDescription>
-				</CardHeader>
-				<form onSubmit={handleSubmit}>
-					<CardContent className="space-y-3">
-						<div className="space-y-1.5">
-							<Label htmlFor="access-key">访问密钥</Label>
+		<div className="flex h-dvh flex-col justify-between overflow-hidden md:flex-row">
+			{/* 左：品牌块——朱印盖下、字标、一句注脚 */}
+			<div className="relative flex flex-1 flex-col justify-between p-8 md:p-14">
+				<div className="flex items-center gap-4 animate-[fadeIn_500ms_ease_both]">
+					<span className="seal seal-lg animate-[stamp_500ms_cubic-bezier(0.23,1,0.32,1)_both]">
+						簡
+					</span>
+					<span className="wordmark">Kanso</span>
+				</div>
+				<div className="hidden md:block">
+					<p
+						className="font-display text-4xl leading-snug tracking-wide animate-[fadeInUp_700ms_150ms_ease_both]"
+						style={{ animationDelay: "150ms" }}
+					>
+						簡素。
+					</p>
+					<p
+						className="mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground animate-[fadeInUp_700ms_300ms_ease_both]"
+						style={{ animationDelay: "300ms" }}
+					>
+						内网看板，自用轻量。去除芜杂，只留事务本身。
+					</p>
+				</div>
+				<div className="hairline-b pb-3">
+					<p className="font-mono text-[11px] uppercase tracking-[0.28em] text-muted-foreground/70">
+						Kanban · 内网 · 单机
+					</p>
+				</div>
+			</div>
+
+			{/* 右：密钥入口 */}
+			<div className="flex items-center justify-center border-l px-8 py-16 md:w-[26rem] md:px-12">
+				<div className="w-full max-w-sm animate-[fadeInUp_600ms_200ms_ease_both]">
+					<p className="font-display text-2xl">进入</p>
+					<p className="mt-1 text-sm text-muted-foreground">
+						输入访问密钥（见{" "}
+						<code className="font-mono text-xs">KANSO_ACCESS_KEY</code> 或
+						<code className="font-mono text-xs"> docker logs</code>）
+					</p>
+					<form onSubmit={handleSubmit} className="mt-8 space-y-4">
+						<div>
+							<label
+								htmlFor="access-key"
+								className="mb-1.5 block text-xs text-muted-foreground"
+							>
+								访问密钥
+							</label>
 							<Input
 								id="access-key"
 								type="password"
@@ -63,22 +89,32 @@ export default function LoginPage() {
 								onChange={(e) => setKey(e.target.value)}
 								placeholder="粘贴访问密钥"
 								autoFocus
+								className="h-10 rounded-[3px]"
 							/>
 						</div>
 						{error ? <p className="text-sm text-destructive">{error}</p> : null}
-					</CardContent>
-					<CardFooter>
 						<Button
 							type="submit"
-							className="w-full"
+							className="w-full rounded-[3px]"
 							loading={loading}
 							disabled={!key.trim()}
 						>
 							进入
 						</Button>
-					</CardFooter>
-				</form>
-			</Card>
+					</form>
+				</div>
+			</div>
+
+			{/* 入场动画 */}
+			<style>{`
+				@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+				@keyframes fadeInUp { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+				@keyframes stamp {
+					0% { opacity: 0; transform: scale(1.6) rotate(-14deg) }
+					55% { opacity: 1; transform: scale(0.92) rotate(2deg) }
+					100% { opacity: 1; transform: scale(1) rotate(0deg) }
+				}
+			`}</style>
 		</div>
 	);
 }

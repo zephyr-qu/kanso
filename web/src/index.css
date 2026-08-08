@@ -10,28 +10,29 @@ input:-webkit-autofill:active {
 }
 
 @font-face {
-  font-family: "Cal Sans UI";
-  src: url("./assets/fonts/CalSansUI[wght,GEOM]-s.p.c2e3469d.woff2") format("woff2");
+  font-family: "Zen Old Mincho";
+  src: url("./assets/fonts/zen-old-mincho-400.woff2") format("woff2");
   font-display: swap;
   font-style: normal;
-  font-weight: 300 700;
+  font-weight: 400;
 }
 
 @font-face {
-  font-family: "Cal Sans Heading";
-  src: url("./assets/fonts/CalSans-SemiBold.woff2") format("woff2");
+  font-family: "Zen Old Mincho";
+  src: url("./assets/fonts/zen-old-mincho-600.woff2") format("woff2");
   font-display: swap;
   font-style: normal;
   font-weight: 600;
 }
 
 @font-face {
-  font-family: "Paper Mono";
-  src: url("./assets/fonts/PaperMono-Regular.woff2") format("woff2");
+  font-family: "IBM Plex Mono";
+  src: url("./assets/fonts/ibm-plex-mono-400.woff2") format("woff2");
   font-display: swap;
   font-style: normal;
   font-weight: 400;
 }
+
 
 @custom-variant dark (&:is(.dark *));
 
@@ -122,125 +123,123 @@ input:-webkit-autofill:active {
 }
 
 :root {
+  /* 字体：明朝体（显示）+ 黑体（正文）+ 等宽（数字/编号） */
+  --font-display:
+    "Zen Old Mincho",
+    "Songti SC",
+    "STSong",
+    "SimSun",
+    "Noto Serif CJK SC",
+    serif;
   --font-sans:
-    "Cal Sans UI",
+    "PingFang SC",
+    "Microsoft YaHei",
+    "Noto Sans CJK SC",
     ui-sans-serif,
     system-ui,
     sans-serif;
-  --font-heading: "Cal Sans Heading", var(--font-sans);
+  --font-heading: var(--font-display);
   --font-mono:
-    "Paper Mono",
+    "IBM Plex Mono",
     ui-monospace,
     SFMono-Regular,
     Menlo,
     Monaco,
     Consolas,
-    "Liberation Mono",
-    "Courier New",
     monospace;
-  --radius: 0.625rem;
-  --accent: --alpha(var(--color-black) / 4%);
-  --accent-foreground: var(--color-neutral-800);
-  --background: var(--color-white);
-  --border: --alpha(var(--color-black) / 8%);
-  --card: var(--color-white);
-  --card-foreground: var(--color-neutral-800);
-  --destructive: var(--color-red-500);
-  --destructive-foreground: var(--color-red-700);
-  --foreground: var(--color-neutral-800);
-  --info: var(--color-blue-500);
-  --info-foreground: var(--color-blue-700);
-  --input: --alpha(var(--color-black) / 10%);
-  --muted: --alpha(var(--color-black) / 4%);
-  --muted-foreground: color-mix(in srgb, var(--color-neutral-500) 90%, var(--color-black));
-  --popover: var(--color-white);
-  --popover-foreground: var(--color-neutral-800);
-  --primary: var(--color-neutral-800);
-  --primary-foreground: var(--color-neutral-50);
-  --ring: var(--color-neutral-400);
-  --secondary: --alpha(var(--color-black) / 4%);
-  --secondary-foreground: var(--color-neutral-800);
-  --success: var(--color-emerald-500);
-  --success-foreground: var(--color-emerald-700);
-  --warning: var(--color-amber-500);
-  --warning-foreground: var(--color-amber-700);
-  --chart-1: var(--color-orange-600);
-  --chart-2: var(--color-teal-600);
-  --chart-3: var(--color-cyan-900);
-  --chart-4: var(--color-amber-400);
-  --chart-5: var(--color-amber-500);
-  --sidebar: var(--color-neutral-50);
-  --sidebar-foreground: color-mix(
-    in srgb,
-    var(--color-neutral-800) 64%,
-    var(--sidebar)
-  );
-  --sidebar-primary: var(--color-neutral-800);
-  --sidebar-primary-foreground: var(--color-neutral-50);
-  --sidebar-accent: --alpha(var(--color-black) / 4%);
-  --sidebar-accent-foreground: var(--color-neutral-800);
-  --sidebar-border: --alpha(var(--color-black) / 6%);
-  --sidebar-ring: var(--color-neutral-400);
-  --code: var(--color-white);
-  --code-foreground: var(--foreground);
-  --code-highlight: --alpha(var(--color-black) / 4%);
+
+  /* 方角语言：近乎直角，发丝细线 */
+  --radius: 0.25rem;
+
+  /* 和紙 × 墨 × 苔 × 朱（明） */
+  --background: #f4f1e8;
+  --foreground: #26221b;
+  --card: #faf8f1;
+  --card-foreground: #26221b;
+  --popover: #faf8f1;
+  --popover-foreground: #26221b;
+  --primary: #55614c;
+  --primary-foreground: #f4f1e8;
+  --secondary: rgba(38, 34, 27, 0.05);
+  --secondary-foreground: #26221b;
+  --muted: rgba(38, 34, 27, 0.05);
+  --muted-foreground: #7c7464;
+  --accent: rgba(85, 97, 76, 0.09);
+  --accent-foreground: #3c4536;
+  --destructive: #b04a2b;
+  --destructive-foreground: #f4f1e8;
+  --info: #3a5a6e;
+  --info-foreground: #f4f1e8;
+  --success: #4a6851;
+  --success-foreground: #f4f1e8;
+  --warning: #9a6b1f;
+  --warning-foreground: #f4f1e8;
+  --border: rgba(38, 34, 27, 0.13);
+  --input: rgba(38, 34, 27, 0.16);
+  --ring: #55614c;
+  --sidebar: #efece1;
+  --sidebar-foreground: #3c372e;
+  --sidebar-primary: #55614c;
+  --sidebar-primary-foreground: #f4f1e8;
+  --sidebar-accent: rgba(38, 34, 27, 0.06);
+  --sidebar-accent-foreground: #26221b;
+  --sidebar-border: rgba(38, 34, 27, 0.1);
+  --sidebar-ring: #55614c;
+  --chart-1: #55614c;
+  --chart-2: #b04a2b;
+  --chart-3: #7c7464;
+  --chart-4: #9a6b1f;
+  --chart-5: #3a5a6e;
+  --code: #faf8f1;
+  --code-foreground: #26221b;
+  --code-highlight: rgba(38, 34, 27, 0.05);
 }
 
 .dark {
-  --accent: --alpha(var(--color-white) / 4%);
-  --accent-foreground: var(--color-neutral-100);
-  --background: color-mix(
-    in srgb,
-    var(--color-neutral-950) 96%,
-    var(--color-white)
-  );
-  --border: --alpha(var(--color-white) / 6%);
-  --card: color-mix(in srgb, var(--background) 98%, var(--color-white));
-  --card-foreground: var(--color-neutral-100);
-  --destructive: color-mix(in srgb, var(--color-red-500) 90%, var(--color-white));
-  --destructive-foreground: var(--color-red-400);
-  --foreground: var(--color-neutral-100);
-  --info: var(--color-blue-500);
-  --info-foreground: var(--color-blue-400);
-  --input: --alpha(var(--color-white) / 8%);
-  --muted: --alpha(var(--color-white) / 4%);
-  --muted-foreground: color-mix(in srgb, var(--color-neutral-500) 90%, var(--color-white));
-  --popover: color-mix(in srgb, var(--background) 98%, var(--color-white));
-  --popover-foreground: var(--color-neutral-100);
-  --primary: var(--color-neutral-100);
-  --primary-foreground: var(--color-neutral-800);
-  --ring: var(--color-neutral-500);
-  --secondary: --alpha(var(--color-white) / 4%);
-  --secondary-foreground: var(--color-neutral-100);
-  --success: var(--color-emerald-500);
-  --success-foreground: var(--color-emerald-400);
-  --warning: var(--color-amber-500);
-  --warning-foreground: var(--color-amber-400);
-  --chart-1: var(--color-blue-700);
-  --chart-2: var(--color-emerald-500);
-  --chart-3: var(--color-amber-500);
-  --chart-4: var(--color-purple-500);
-  --chart-5: var(--color-rose-500);
-  --sidebar: color-mix(
-    in srgb,
-    var(--color-neutral-950) 97%,
-    var(--color-white)
-  );
-  --sidebar-foreground: color-mix(
-    in srgb,
-    var(--color-neutral-100) 64%,
-    var(--sidebar)
-  );
-  --sidebar-primary: var(--color-neutral-100);
-  --sidebar-primary-foreground: var(--color-neutral-800);
-  --sidebar-accent: --alpha(var(--color-white) / 4%);
-  --sidebar-accent-foreground: var(--color-neutral-100);
-  --sidebar-border: --alpha(var(--color-white) / 5%);
-  --sidebar-ring: var(--color-neutral-400);
-  --code: color-mix(in srgb, var(--background) 98%, var(--color-white));
-  --code-foreground: var(--foreground);
-  --code-highlight: --alpha(var(--color-white) / 4%);
+  /* 墨 × 纸（暗） */
+  --background: #171714;
+  --foreground: #e5dfcf;
+  --card: #1d1c18;
+  --card-foreground: #e5dfcf;
+  --popover: #1d1c18;
+  --popover-foreground: #e5dfcf;
+  --primary: #98a48c;
+  --primary-foreground: #171714;
+  --secondary: rgba(229, 223, 207, 0.06);
+  --secondary-foreground: #e5dfcf;
+  --muted: rgba(229, 223, 207, 0.06);
+  --muted-foreground: #9a927f;
+  --accent: rgba(152, 164, 140, 0.12);
+  --accent-foreground: #c3ccb9;
+  --destructive: #d06a48;
+  --destructive-foreground: #171714;
+  --info: #6d93a8;
+  --info-foreground: #171714;
+  --success: #7ba083;
+  --success-foreground: #171714;
+  --warning: #c2933d;
+  --warning-foreground: #171714;
+  --border: rgba(229, 223, 207, 0.13);
+  --input: rgba(229, 223, 207, 0.18);
+  --ring: #98a48c;
+  --sidebar: #12120f;
+  --sidebar-foreground: #b5ad9a;
+  --sidebar-primary: #98a48c;
+  --sidebar-primary-foreground: #171714;
+  --sidebar-accent: rgba(229, 223, 207, 0.07);
+  --sidebar-accent-foreground: #e5dfcf;
+  --sidebar-border: rgba(229, 223, 207, 0.1);
+  --sidebar-ring: #98a48c;
+  --chart-1: #98a48c;
+  --chart-2: #d06a48;
+  --chart-3: #9a927f;
+  --chart-4: #c2933d;
+  --chart-5: #6d93a8;
+  --code: #1d1c18;
+  --code-foreground: #e5dfcf;
+  --code-highlight: rgba(229, 223, 207, 0.07);
 }
+
 
 @layer base {
   * {
@@ -1341,4 +1340,72 @@ input:-webkit-autofill:active {
     background: color-mix(in srgb, var(--primary) 18%, transparent);
   }
 
+}
+
+/* ============ 簡素 (Kanso) — 日式禅意极简：纸纹、印鉴、发丝细线 ============ */
+
+/* 和紙颗粒：细微噪点叠加在背景上，制造纸面质感 */
+body {
+  background-image:
+    radial-gradient(ellipse at 18% 0%, rgba(176, 74, 43, 0.045), transparent 55%),
+    radial-gradient(ellipse at 85% 100%, rgba(85, 97, 76, 0.05), transparent 60%);
+  background-attachment: fixed;
+}
+
+/* 朱印（hanko）：品牌印章，方形 + 苔色/朱色描边 */
+.seal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--destructive);
+  letter-spacing: 0;
+}
+.seal-lg {
+  width: 3.5rem;
+  height: 3.5rem;
+  font-size: 1.75rem;
+  border-width: 2px;
+}
+
+/* 发丝细线分隔 */
+.hairline-b { border-bottom: 1px solid var(--border); }
+.hairline-r { border-right: 1px solid var(--border); }
+
+/* 札（任务卡）：暖纸面 + 柔和阴影 + 方形角 */
+.fuda {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  box-shadow: 0 1px 2px rgba(38, 34, 27, 0.05), 0 2px 8px rgba(38, 34, 27, 0.04);
+  transition: box-shadow 160ms ease, transform 160ms ease, border-color 160ms ease;
+}
+.fuda:hover {
+  box-shadow: 0 2px 4px rgba(38, 34, 27, 0.07), 0 6px 18px rgba(38, 34, 27, 0.08);
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+}
+
+/* 选择色：墨绿 */
+::selection {
+  background: color-mix(in srgb, var(--primary) 22%, transparent);
+  color: var(--foreground);
+}
+
+/* 明数字体细节：标题追踪放款 */
+.font-display { font-family: var(--font-heading); }
+.font-mono-num { font-variant-numeric: tabular-nums; }
+
+/* 品牌字标：明朝体 + 宽字距 */
+.wordmark {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  font-size: 0.95rem;
 }

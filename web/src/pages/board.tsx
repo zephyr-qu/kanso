@@ -108,7 +108,7 @@ function SortableTaskCard(props: {
 			style={style}
 			{...attributes}
 			{...listeners}
-			className={`group relative cursor-grab rounded-md border bg-card p-3 text-sm active:cursor-grabbing ${
+			className={`fuda group relative cursor-grab p-3 text-sm active:cursor-grabbing ${
 				isDragging ? "z-10 opacity-60" : ""
 			}`}
 			onClick={() => onOpen(task)}
@@ -242,20 +242,20 @@ function SortableColumn(props: {
 		<div
 			ref={setNodeRef}
 			style={style}
-			className={`flex w-72 shrink-0 flex-col rounded-lg border bg-muted/30 ${
+			className={`flex w-72 shrink-0 flex-col rounded-[3px] border bg-card/35 ${
 				isDragging ? "z-10 opacity-60" : ""
 			}`}
 		>
 			<div
 				{...attributes}
 				{...listeners}
-				className="flex cursor-grab items-center gap-1 border-b px-3 py-2 active:cursor-grabbing"
+				className="flex cursor-grab items-center gap-1.5 border-b px-3 py-2.5 active:cursor-grabbing"
 			>
-				<GripVerticalIcon className="size-4 text-muted-foreground/60" />
-				<span className="min-w-0 flex-1 truncate text-sm font-medium">
+				<GripVerticalIcon className="size-4 text-muted-foreground/50" />
+				<span className="font-display min-w-0 flex-1 truncate text-[15px] font-semibold">
 					{column.name}
 				</span>
-				<span className="text-xs text-muted-foreground">
+				<span className="font-mono-num font-mono text-xs text-muted-foreground">
 					{column.tasks.length}
 				</span>
 				<div className="flex" onPointerDown={(e) => e.stopPropagation()}>
@@ -280,10 +280,10 @@ function SortableColumn(props: {
 				</div>
 			</div>
 			<div className="flex flex-1 flex-col gap-2 p-2">
-				{column.tasks.length === 0 ? (
-					<p className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">
-						空列
-					</p>
+						{column.tasks.length === 0 ? (
+							<p className="rounded-[3px] border border-dashed p-3 text-center text-xs text-muted-foreground">
+								空列
+							</p>
 				) : (
 					<SortableContext
 						items={column.tasks.map((t) => t.id)}
@@ -507,11 +507,12 @@ export default function BoardPage() {
 				<div className="flex min-w-0 items-center gap-3">
 					<Link
 						to={`/w/${board?.project.workspaceId ?? ""}`}
-						className="text-sm text-muted-foreground hover:text-foreground"
+						className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground"
 					>
-						← 项目列表
+						← Projects
 					</Link>
-					<h1 className="truncate text-lg font-semibold">
+					<span className="text-muted-foreground/40">/</span>
+					<h1 className="font-display truncate text-xl font-semibold tracking-wide">
 						{board?.project.name ?? "看板"}
 					</h1>
 				</div>

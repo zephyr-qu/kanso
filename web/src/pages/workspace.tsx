@@ -68,7 +68,7 @@ export default function WorkspacePage() {
 	return (
 		<div className="mx-auto max-w-4xl p-6">
 			<div className="mb-6 flex items-center justify-between">
-				<h1 className="text-xl font-semibold">项目</h1>
+				<h1 className="font-display text-2xl font-semibold tracking-wide">项目</h1>
 				<Button onClick={() => setCreateOpen(true)}>
 					<PlusIcon /> 新建项目
 				</Button>
@@ -87,15 +87,15 @@ export default function WorkspacePage() {
 					{projects.map((project) => (
 						<li
 							key={project.id}
-							className="group flex items-center justify-between rounded-lg border bg-card p-4 transition-colors hover:border-primary/50"
+							className="fuda group flex items-center justify-between p-4"
 						>
 							<Link
 								to={`/w/${workspaceId}/p/${project.id}`}
 								className="flex min-w-0 flex-1 items-center gap-2"
 							>
 								<div className="min-w-0">
-									<p className="truncate font-medium">{project.name}</p>
-									<p className="mt-0.5 text-xs text-muted-foreground">
+									<p className="font-display truncate font-semibold tracking-wide">{project.name}</p>
+									<p className="font-mono-num mt-0.5 font-mono text-xs text-muted-foreground">
 										{project.createdAt.slice(0, 10)}
 									</p>
 								</div>

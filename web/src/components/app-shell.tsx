@@ -1,4 +1,4 @@
-// 应用壳：左侧导航框架 + 内容区。导航列出工作区并链接到项目列表页。
+// 应用壳：左侧导航框架 + 内容区。品牌块 + 工作区导航（发丝细线列表）。
 import { useQuery } from "@tanstack/react-query";
 import { NavLink, Outlet } from "react-router";
 import { Button } from "@/components/ui/button";
@@ -16,21 +16,24 @@ export default function AppShell() {
 
 	return (
 		<div className="flex h-dvh">
-			<aside className="flex w-60 shrink-0 flex-col border-r bg-muted/30">
-				<div className="flex h-12 items-center gap-2 border-b px-4">
-					<span className="font-semibold">Kanso</span>
+			<aside className="flex w-56 shrink-0 flex-col border-r bg-sidebar">
+				<div className="flex h-14 items-center gap-3 border-b px-4">
+					<span className="seal !size-8 !text-sm">簡</span>
+					<span className="wordmark text-xs">Kanso</span>
 				</div>
-				<nav className="flex-1 space-y-1 overflow-auto p-2">
-					<div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-						工作区
-					</div>
+				<nav className="flex-1 overflow-auto p-2">
+					<p className="px-2 py-2 font-mono text-[10px] uppercase tracking-[0.26em] text-muted-foreground/70">
+						Workspace
+					</p>
 					{workspaces?.map((workspace) => (
 						<NavLink
 							key={workspace.id}
 							to={`/w/${workspace.id}`}
 							className={({ isActive }) =>
-								`block rounded-md px-2 py-1.5 text-sm hover:bg-muted ${
-									isActive ? "bg-muted font-medium" : ""
+								`block rounded-[3px] px-2 py-1.5 text-sm ${
+									isActive
+										? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+										: "text-sidebar-foreground hover:bg-sidebar-accent/60"
 								}`
 							}
 						>

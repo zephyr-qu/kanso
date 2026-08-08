@@ -134,7 +134,7 @@ export default function TaskDetailPage() {
 					</>
 				) : (
 					<h1
-						className="cursor-text text-xl font-semibold"
+						className="font-display cursor-text text-2xl font-semibold tracking-wide"
 						onClick={() => {
 							setTitle(data.task.title);
 							setEditingTitle(true);
