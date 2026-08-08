@@ -10,6 +10,7 @@ import (
 
 	"kanso/internal/auth"
 	"kanso/internal/config"
+	"kanso/internal/realtime"
 	"kanso/internal/service"
 )
 
@@ -18,8 +19,9 @@ type API struct {
 	svc *service.Service
 }
 
-func NewRouter(cfg config.Config, svc *service.Service) http.Handler {
+func NewRouter(cfg config.Config, svc *service.Service, hub *realtime.Hub) http.Handler {
 	a := &API{cfg: cfg, svc: svc}
+	svc.SetBroadcaster(hub)
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
@@ -28,6 +30,9 @@ func NewRouter(cfg config.Config, svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "name": "kanso"})
 	})
 	r.Post("/api/auth/verify", a.verify)
+
+	// WebSocket：密钥经查询参数（浏览器无法自定义 WS 请求头），单独注册。
+	r.Get("/api/ws", a.handleWS(hub))
 
 	// 其余 /api 路由全部要求密钥。
 	r.Group(func(pr chi.Router) {

@@ -51,6 +51,22 @@ func (q *Queries) DeleteComment(ctx context.Context, id string) (int64, error) {
 	return result.RowsAffected()
 }
 
+const getComment = `-- name: GetComment :one
+SELECT id, task_id, content, created_at FROM comment WHERE id = ?
+`
+
+func (q *Queries) GetComment(ctx context.Context, id string) (Comment, error) {
+	row := q.db.QueryRowContext(ctx, getComment, id)
+	var i Comment
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.Content,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listCommentsByTask = `-- name: ListCommentsByTask :many
 SELECT id, task_id, content, created_at FROM comment WHERE task_id = ? ORDER BY created_at
 `

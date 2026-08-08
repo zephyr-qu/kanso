@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { useRealtime } from "@/hooks/use-realtime";
 import { api } from "@/lib/api";
 import type { Comment, TaskDetail } from "@/types/task-detail";
 import type { Task } from "@/types/task";
@@ -45,6 +46,9 @@ export default function TaskDetailPage() {
 		queryFn: () => api<TaskDetail>(`/api/tasks/${taskId}`),
 		enabled: taskId !== "",
 	});
+
+	// 实时：项目事件推送后 invalidate 本页查询（含 board，返回看板时同步）。
+	useRealtime(projectId);
 
 	const invalidateTask = () =>
 		queryClient.invalidateQueries({ queryKey: ["task", taskId] });

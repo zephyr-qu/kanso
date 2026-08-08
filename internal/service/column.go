@@ -123,13 +123,18 @@ func (s *Service) CreateColumn(ctx context.Context, projectID, name string) (gen
 	if err != nil {
 		return gen.Column{}, err
 	}
-	return q.CreateColumn(ctx, gen.CreateColumnParams{
+	column, err := q.CreateColumn(ctx, gen.CreateColumnParams{
 		ID:        columnID,
 		ProjectID: projectID,
 		Name:      name,
 		Position:  count,
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	})
+	if err != nil {
+		return gen.Column{}, fmt.Errorf("创建列失败: %w", err)
+	}
+	s.emit(projectID, "column.created", column.ID)
+	return column, nil
 }
 
 // RenameColumn 重命名列；不存在时返回 ErrNotFound。
@@ -141,11 +146,16 @@ func (s *Service) RenameColumn(ctx context.Context, columnID, name string) (gen.
 	if err != nil {
 		return gen.Column{}, mapNoRows(err)
 	}
+	s.emit(column.ProjectID, "column.updated", column.ID)
 	return column, nil
 }
 
 // DeleteColumn 删除列（其下任务由外键级联删除）；不存在时返回 ErrNotFound。
 func (s *Service) DeleteColumn(ctx context.Context, columnID string) error {
+	column, err := gen.New(s.db).GetColumn(ctx, columnID)
+	if err != nil {
+		return mapNoRows(err)
+	}
 	n, err := gen.New(s.db).DeleteColumn(ctx, columnID)
 	if err != nil {
 		return fmt.Errorf("删除列失败: %w", err)
@@ -153,6 +163,7 @@ func (s *Service) DeleteColumn(ctx context.Context, columnID string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
+	s.emit(column.ProjectID, "column.deleted", columnID)
 	return nil
 }
 
@@ -200,5 +211,9 @@ func (s *Service) MoveColumn(ctx context.Context, columnID string, targetPositio
 			return fmt.Errorf("更新列位置失败: %w", err)
 		}
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交事务失败: %w", err)
+	}
+	s.emit(column.ProjectID, "column.moved", columnID)
+	return nil
 }

@@ -39,6 +39,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverPopup, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
+import { useRealtime } from "@/hooks/use-realtime";
 import { api } from "@/lib/api";
 import type { Board, BoardColumn, Column } from "@/types/board";
 import type { Label } from "@/types/label";
@@ -317,15 +318,14 @@ export default function BoardPage() {
 	const [editingTask, setEditingTask] = useState<Task | null>(null);
 	const [deletingTask, setDeletingTask] = useState<Task | null>(null);
 
-	const {
-		data: board,
-		isLoading,
-		isError,
-	} = useQuery({
+	const { data: board, isLoading, isError } = useQuery({
 		queryKey: ["board", projectId],
 		queryFn: () => api<Board>(`/api/projects/${projectId}`),
 		enabled: projectId !== "",
 	});
+
+	// 实时：其他窗口的写操作经 WS 推送后 invalidate 本页查询。
+	useRealtime(projectId);
 
 	const invalidateBoard = () =>
 		queryClient.invalidateQueries({ queryKey: ["board", projectId] });

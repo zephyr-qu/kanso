@@ -10,7 +10,7 @@ export default defineConfig({
 	},
 	server: {
 		port: 5173,
-		// 开发时 API 走本地 Go 服务（默认 8080）
-		proxy: { "/api": "http://localhost:8080" },
+		// 开发时 API 走本地 Go 服务（默认 8080）；ws: true 让 WebSocket 升级也经代理。
+		proxy: { "/api": { target: "http://localhost:8080", ws: true } },
 	},
 });

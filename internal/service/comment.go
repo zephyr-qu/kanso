@@ -33,7 +33,8 @@ func (s *Service) ListComments(ctx context.Context, taskID string) ([]gen.Commen
 // CreateComment 发表评论并记录活动（评论即活动，见 spec）。
 func (s *Service) CreateComment(ctx context.Context, taskID, content string) (gen.Comment, error) {
 	q := gen.New(s.db)
-	if _, err := q.GetTask(ctx, taskID); err != nil {
+	task, err := q.GetTask(ctx, taskID)
+	if err != nil {
 		return gen.Comment{}, mapNoRows(err)
 	}
 	commentID, err := id.New()
@@ -53,17 +54,26 @@ func (s *Service) CreateComment(ctx context.Context, taskID, content string) (ge
 	if err := s.recordActivity(ctx, taskID, "comment.created", nil); err != nil {
 		return gen.Comment{}, err
 	}
+	s.emit(task.ProjectID, "comment.created", comment.ID)
 	return comment, nil
 }
 
 // DeleteComment 删除评论；不存在时返回 ErrNotFound。
 func (s *Service) DeleteComment(ctx context.Context, commentID string) error {
+	comment, err := gen.New(s.db).GetComment(ctx, commentID)
+	if err != nil {
+		return mapNoRows(err)
+	}
 	n, err := gen.New(s.db).DeleteComment(ctx, commentID)
 	if err != nil {
 		return fmt.Errorf("删除评论失败: %w", err)
 	}
 	if n == 0 {
 		return ErrNotFound
+	}
+	task, err := gen.New(s.db).GetTask(ctx, comment.TaskID)
+	if err == nil {
+		s.emit(task.ProjectID, "comment.deleted", commentID)
 	}
 	return nil
 }

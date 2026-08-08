@@ -27,13 +27,18 @@ func (s *Service) CreateLabel(ctx context.Context, workspaceID, name, color stri
 	if err != nil {
 		return gen.Label{}, err
 	}
-	return gen.New(s.db).CreateLabel(ctx, gen.CreateLabelParams{
+	label, err := gen.New(s.db).CreateLabel(ctx, gen.CreateLabelParams{
 		ID:          labelID,
 		WorkspaceID: workspaceID,
 		Name:        name,
 		Color:       color,
 		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
 	})
+	if err != nil {
+		return gen.Label{}, fmt.Errorf("创建标签失败: %w", err)
+	}
+	s.emitAll("label.created", workspaceID, label.ID)
+	return label, nil
 }
 
 // UpdateLabel 更新标签名称与颜色（指针字段为空表示不改）；不存在时返回 ErrNotFound。
@@ -56,11 +61,16 @@ func (s *Service) UpdateLabel(ctx context.Context, labelID string, name, color *
 	if err != nil {
 		return gen.Label{}, fmt.Errorf("更新标签失败: %w", err)
 	}
+	s.emitAll("label.updated", label.WorkspaceID, label.ID)
 	return label, nil
 }
 
 // DeleteLabel 删除标签（任务上的关联由外键级联清除）。
 func (s *Service) DeleteLabel(ctx context.Context, labelID string) error {
+	label, err := gen.New(s.db).GetLabel(ctx, labelID)
+	if err != nil {
+		return mapNoRows(err)
+	}
 	n, err := gen.New(s.db).DeleteLabel(ctx, labelID)
 	if err != nil {
 		return fmt.Errorf("删除标签失败: %w", err)
@@ -68,13 +78,15 @@ func (s *Service) DeleteLabel(ctx context.Context, labelID string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
+	s.emitAll("label.deleted", label.WorkspaceID, labelID)
 	return nil
 }
 
 // AttachLabel 给任务贴标签（幂等）；任务或标签不存在时返回 ErrNotFound。
 func (s *Service) AttachLabel(ctx context.Context, taskID, labelID string) error {
 	q := gen.New(s.db)
-	if _, err := q.GetTask(ctx, taskID); err != nil {
+	task, err := q.GetTask(ctx, taskID)
+	if err != nil {
 		return mapNoRows(err)
 	}
 	label, err := q.GetLabel(ctx, labelID)
@@ -84,13 +96,19 @@ func (s *Service) AttachLabel(ctx context.Context, taskID, labelID string) error
 	if err := q.AttachLabel(ctx, gen.AttachLabelParams{TaskID: taskID, LabelID: labelID}); err != nil {
 		return fmt.Errorf("贴标签失败: %w", err)
 	}
+	s.emit(task.ProjectID, "label.attached", taskID)
 	return s.recordActivity(ctx, taskID, "label.attached", map[string]string{"label": label.Name})
 }
 
 // DetachLabel 从任务移除标签（幂等）。
 func (s *Service) DetachLabel(ctx context.Context, taskID, labelID string) error {
+	task, err := gen.New(s.db).GetTask(ctx, taskID)
+	if err != nil {
+		return mapNoRows(err)
+	}
 	if err := gen.New(s.db).DetachLabel(ctx, gen.DetachLabelParams{TaskID: taskID, LabelID: labelID}); err != nil {
 		return fmt.Errorf("移除标签失败: %w", err)
 	}
+	s.emit(task.ProjectID, "label.detached", taskID)
 	return s.recordActivity(ctx, taskID, "label.detached", map[string]string{"labelID": labelID})
 }

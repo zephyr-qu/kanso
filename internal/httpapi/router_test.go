@@ -12,10 +12,14 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/coder/websocket"
 
 	"kanso/internal/config"
 	"kanso/internal/db"
 	"kanso/internal/httpapi"
+	"kanso/internal/realtime"
 	"kanso/internal/service"
 )
 
@@ -41,7 +45,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		t.Fatalf("种子默认工作区失败: %v", err)
 	}
 	cfg := config.Config{Addr: "127.0.0.1:0", AccessKey: testKey}
-	srv := httptest.NewServer(httpapi.NewRouter(cfg, svc))
+	srv := httptest.NewServer(httpapi.NewRouter(cfg, svc, realtime.NewHub()))
 	t.Cleanup(srv.Close)
 	return &testEnv{srv: srv, db: database}
 }
@@ -717,5 +721,66 @@ func TestActivityTracksWrites(t *testing.T) {
 	last := activity[0].(map[string]any)["action"].(string)
 	if last != "label.attached" {
 		t.Fatalf("活动流应按时间倒序，最新应为 label.attached，实际 %s", last)
+	}
+}
+
+// TestRealtimeBroadcast 校验 WS 广播与项目隔离。
+func TestRealtimeBroadcast(t *testing.T) {
+	e := newTestEnv(t)
+	project1 := createProject(t, e, "实时项目一")
+	project2 := createProject(t, e, "实时项目二")
+
+	// 订阅 project1。
+	wsURL := "ws" + strings.TrimPrefix(e.srv.URL, "http") + "/api/ws?project=" + project1 + "&key=" + testKey
+	ctx := context.Background()
+	conn, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatalf("WS 连接失败: %v", err)
+	}
+	defer conn.CloseNow()
+	// 等待服务端完成订阅（Dial 返回与 handler Subscribe 之间存在竞态窗口）。
+	time.Sleep(200 * time.Millisecond)
+
+	// project1 建任务 → 应收到 task.created 事件。
+	_, body := e.do(t, http.MethodGet, "/api/projects/"+project1, "")
+	column1 := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["id"].(string)
+	e.do(t, http.MethodPost, "/api/columns/"+column1+"/tasks", `{"title":"同步任务"}`)
+
+	readCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	_, data, err := conn.Read(readCtx)
+	if err != nil {
+		t.Fatalf("读取事件失败: %v", err)
+	}
+	var event realtime.Event
+	if err := json.Unmarshal(data, &event); err != nil {
+		t.Fatalf("解析事件失败: %v", err)
+	}
+	if event.Type != "task.created" || event.ProjectID != project1 {
+		t.Fatalf("期望 task.created 事件（project=%s），实际 %+v", project1, event)
+	}
+
+	// 项目隔离：project2 建任务，project1 的连接不应收到事件。
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+project2, "")
+	column2 := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["id"].(string)
+	e.do(t, http.MethodPost, "/api/columns/"+column2+"/tasks", `{"title":"隔离任务"}`)
+
+	isolationCtx, cancel2 := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel2()
+	if _, _, err := conn.Read(isolationCtx); err == nil {
+		t.Fatalf("项目隔离失败：跨项目事件被收到")
+	}
+}
+
+// TestRealtimeAuth 校验 WS 端点鉴权（错误密钥被拒绝）。
+func TestRealtimeAuth(t *testing.T) {
+	e := newTestEnv(t)
+	project1 := createProject(t, e, "鉴权项目")
+	wsURL := "ws" + strings.TrimPrefix(e.srv.URL, "http") + "/api/ws?project=" + project1 + "&key=wrong-key"
+	ctx := context.Background()
+	conn, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err == nil {
+		conn.CloseNow()
+		t.Fatalf("错误密钥应拒绝 WS 连接")
 	}
 }
