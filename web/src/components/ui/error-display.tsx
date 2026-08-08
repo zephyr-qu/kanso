@@ -1,0 +1,115 @@
+import { AlertTriangle, ExternalLink, RefreshCw } from "lucide-react";
+import {
+  getCorsTroubleshootingSteps,
+  getNetworkTroubleshootingSteps,
+  parseApiError,
+} from "../../lib/error-handler";
+import { Button } from "./button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "./card";
+
+type ErrorDisplayProps = {
+  error: unknown;
+  onRetry?: () => void;
+  title?: string;
+  className?: string;
+};
+
+export function ErrorDisplay({
+  error,
+  onRetry,
+  title,
+  className,
+}: ErrorDisplayProps) {
+  const parsedError = parseApiError(error);
+  const resolvedTitle = title ?? "出错了";
+
+  const getTroubleshootingSteps = () => {
+    switch (parsedError.type) {
+      case "cors":
+        return getCorsTroubleshootingSteps();
+      case "network":
+        return getNetworkTroubleshootingSteps();
+      default:
+        return [];
+    }
+  };
+
+  const troubleshootingSteps = getTroubleshootingSteps();
+
+  return (
+    <div
+      className={`flex items-center justify-center min-h-[400px] p-6 ${className}`}
+    >
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/12">
+            <AlertTriangle className="h-6 w-6 text-destructive-foreground" />
+          </div>
+          <CardTitle className="text-lg">{resolvedTitle}</CardTitle>
+          <CardDescription className="text-sm">
+            {parsedError.message}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {troubleshootingSteps.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-foreground">
+                {"排查建议"}
+              </h4>
+              <ul className="text-xs text-muted-foreground space-y-1">
+                {troubleshootingSteps.map((step) => (
+                  <li key={step} className="flex items-start gap-2">
+                    <span className="text-muted-foreground mt-0.5">•</span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2 pt-2">
+            {onRetry && (
+              <Button
+                onClick={onRetry}
+                variant="outline"
+                size="sm"
+                className="w-full"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                {"重试"}
+              </Button>
+            )}
+
+            {parsedError.type === "cors" && (
+              <Button
+                onClick={() => window.open("https://kaneo.app/docs", "_blank")}
+                variant="outline"
+                size="icon"
+                className="w-full"
+              >
+                <ExternalLink className="w-4 h-4 mr-2" />
+                {"查看部署指南"}
+              </Button>
+            )}
+
+            <Button
+              onClick={() => window.location.reload()}
+              variant="outline"
+              size="icon"
+              className="w-full"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              {"刷新页面"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

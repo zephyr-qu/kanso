@@ -1,0 +1,5 @@
+# pnpm 11 配置（package.json 的 "pnpm" 字段已废弃，设置移到这里）
+packages:
+  - "."
+allowBuilds:
+  esbuild: true
