@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"crypto/subtle"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 
@@ -11,15 +10,16 @@ import (
 
 	"kanso/internal/auth"
 	"kanso/internal/config"
+	"kanso/internal/service"
 )
 
 type API struct {
 	cfg config.Config
-	db  *sql.DB
+	svc *service.Service
 }
 
-func NewRouter(cfg config.Config, database *sql.DB) http.Handler {
-	a := &API{cfg: cfg, db: database}
+func NewRouter(cfg config.Config, svc *service.Service) http.Handler {
+	a := &API{cfg: cfg, svc: svc}
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
@@ -29,9 +29,18 @@ func NewRouter(cfg config.Config, database *sql.DB) http.Handler {
 	})
 	r.Post("/api/auth/verify", a.verify)
 
-	// 其余 /api 路由全部要求密钥（M1 在此挂 workspace/project/column/task/label/comment/activity）。
+	// 其余 /api 路由全部要求密钥。
 	r.Group(func(pr chi.Router) {
 		pr.Use(auth.Middleware(cfg.AccessKey))
+
+		pr.Get("/api/workspaces", a.listWorkspaces)
+		pr.Post("/api/workspaces", a.createWorkspace)
+		pr.Patch("/api/workspaces/{id}", a.renameWorkspace)
+		pr.Delete("/api/workspaces/{id}", a.deleteWorkspace)
+		pr.Get("/api/workspaces/{id}/projects", a.listProjects)
+		pr.Post("/api/workspaces/{id}/projects", a.createProject)
+		pr.Patch("/api/projects/{id}", a.renameProject)
+		pr.Delete("/api/projects/{id}", a.deleteProject)
 	})
 
 	return r
@@ -57,4 +66,18 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+// writeError 输出统一错误 JSON。
+func writeError(w http.ResponseWriter, status int, message string) {
+	writeJSON(w, status, map[string]string{"error": message})
+}
+
+// decodeBody 解析请求体；失败时已写入 400 响应并返回 false。
+func decodeBody(w http.ResponseWriter, r *http.Request, dst any) bool {
+	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return false
+	}
+	return true
 }

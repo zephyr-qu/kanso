@@ -1,11 +1,18 @@
 // 路由（react-router v7，library 模式）：/login 公开，其余路由经 RequireAuth 守卫。
 // 守卫依据 zustand 登录态；401 事件（api.ts 广播）使登录态失效并重定向回登录页。
 import { useEffect } from "react";
-import { createBrowserRouter, Navigate, Outlet, RouterProvider, useLocation } from "react-router";
+import {
+	createBrowserRouter,
+	Navigate,
+	Outlet,
+	RouterProvider,
+	useLocation,
+} from "react-router";
 import AppShell from "@/components/app-shell";
 import { UNAUTHORIZED_EVENT } from "@/lib/api";
-import HomePage from "@/pages/home";
 import LoginPage from "@/pages/login";
+import RedirectHome from "@/pages/redirect-home";
+import WorkspacePage from "@/pages/workspace";
 import { useAuthStore } from "@/store/auth";
 
 function RequireAuth() {
@@ -31,7 +38,10 @@ const router = createBrowserRouter([
 		children: [
 			{
 				element: <AppShell />,
-				children: [{ index: true, element: <HomePage /> }],
+				children: [
+					{ index: true, element: <RedirectHome /> },
+					{ path: "w/:workspaceId", element: <WorkspacePage /> },
+				],
 			},
 		],
 	},

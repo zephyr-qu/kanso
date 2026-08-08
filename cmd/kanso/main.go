@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"log"
@@ -33,11 +34,13 @@ func main() {
 	if err := db.Migrate(database); err != nil {
 		log.Fatalf("执行迁移失败: %v", err)
 	}
-	if err := service.SeedDefaultWorkspace(database); err != nil {
+
+	svc := service.New(database)
+	if err := svc.SeedDefaultWorkspace(context.Background()); err != nil {
 		log.Fatalf("初始化默认工作区失败: %v", err)
 	}
 
-	router := httpapi.NewRouter(cfg, database)
+	router := httpapi.NewRouter(cfg, svc)
 	log.Printf("Kanso 已启动: http://%s （健康检查 /api/health）", cfg.Addr)
 
 	server := &http.Server{Addr: cfg.Addr, Handler: router}

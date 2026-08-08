@@ -38,3 +38,69 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
 	return i, err
 }
+
+const deleteWorkspace = `-- name: DeleteWorkspace :execrows
+DELETE FROM workspace WHERE id = ?
+`
+
+func (q *Queries) DeleteWorkspace(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteWorkspace, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const getWorkspace = `-- name: GetWorkspace :one
+SELECT id, name, created_at FROM workspace WHERE id = ?
+`
+
+func (q *Queries) GetWorkspace(ctx context.Context, id string) (Workspace, error) {
+	row := q.db.QueryRowContext(ctx, getWorkspace, id)
+	var i Workspace
+	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
+	return i, err
+}
+
+const listWorkspaces = `-- name: ListWorkspaces :many
+SELECT id, name, created_at FROM workspace ORDER BY created_at
+`
+
+func (q *Queries) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkspaces)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Workspace
+	for rows.Next() {
+		var i Workspace
+		if err := rows.Scan(&i.ID, &i.Name, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateWorkspaceName = `-- name: UpdateWorkspaceName :one
+UPDATE workspace SET name = ? WHERE id = ? RETURNING id, name, created_at
+`
+
+type UpdateWorkspaceNameParams struct {
+	Name string `json:"name"`
+	ID   string `json:"id"`
+}
+
+func (q *Queries) UpdateWorkspaceName(ctx context.Context, arg UpdateWorkspaceNameParams) (Workspace, error) {
+	row := q.db.QueryRowContext(ctx, updateWorkspaceName, arg.Name, arg.ID)
+	var i Workspace
+	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
+	return i, err
+}

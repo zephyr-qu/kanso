@@ -2,7 +2,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardFooter,
+	CardHeader,
+	CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { setAccessKey, verifyAccessKey } from "@/lib/api";
@@ -40,7 +47,9 @@ export default function LoginPage() {
 			<Card className="w-full max-w-sm">
 				<CardHeader>
 					<CardTitle>Kanso</CardTitle>
-					<CardDescription>输入访问密钥以进入（内网自用，见 KANSO_ACCESS_KEY 或 docker logs）</CardDescription>
+					<CardDescription>
+						输入访问密钥以进入（内网自用，见 KANSO_ACCESS_KEY 或 docker logs）
+					</CardDescription>
 				</CardHeader>
 				<form onSubmit={handleSubmit}>
 					<CardContent className="space-y-3">
@@ -59,7 +68,12 @@ export default function LoginPage() {
 						{error ? <p className="text-sm text-destructive">{error}</p> : null}
 					</CardContent>
 					<CardFooter>
-						<Button type="submit" className="w-full" loading={loading} disabled={!key.trim()}>
+						<Button
+							type="submit"
+							className="w-full"
+							loading={loading}
+							disabled={!key.trim()}
+						>
 							进入
 						</Button>
 					</CardFooter>
