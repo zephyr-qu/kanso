@@ -12,6 +12,9 @@ import (
 // ErrNotFound 表示目标实体不存在，HTTP 层映射为 404。
 var ErrNotFound = errors.New("not found")
 
+// ErrCrossProjectMove 表示把任务移动到另一项目的列（客户端错误，HTTP 层映射为 400）。
+var ErrCrossProjectMove = errors.New("cross project task move")
+
 // Broadcaster 是实时事件广播抽象（由 httpapi 注入 Hub）。
 type Broadcaster interface {
 	Broadcast(projectID string, event realtime.Event)

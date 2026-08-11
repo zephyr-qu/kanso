@@ -1,72 +1,39 @@
+// 看板列内任务的显示层排序（仅改变渲染顺序，不改写 position）。
+// 字段只保留后端真实存在的：position（原顺序）/ title / createdAt。
+// priority/dueDate/number 是前端预留字段，后端任务模型不存在，不做排序入口（spec 0002）。
 import type { Task } from "@/types/task";
 
-export type SortField =
-  | "position"
-  | "createdAt"
-  | "priority"
-  | "dueDate"
-  | "title"
-  | "number";
+export type SortField = "position" | "createdAt" | "title";
 
 export type SortDirection = "asc" | "desc";
 
 export type SortConfig = {
-  field: SortField;
-  direction: SortDirection;
+	field: SortField;
+	direction: SortDirection;
 };
-
-const priorityOrder: Record<string, number> = {
-  urgent: 4,
-  high: 3,
-  medium: 2,
-  low: 1,
-};
-
-function getPriorityValue(priority: string | null | undefined): number {
-  if (!priority) return 0;
-  return priorityOrder[priority] ?? 0;
-}
 
 export function sortTasks(tasks: Task[], config: SortConfig): Task[] {
-  if (config.field === "position") {
-    return tasks;
-  }
+	if (config.field === "position") {
+		return tasks;
+	}
 
-  const sorted = [...tasks].sort((a, b) => {
-    let comparison = 0;
+	const sorted = [...tasks].sort((a, b) => {
+		let comparison = 0;
 
-    switch (config.field) {
-      case "priority": {
-        comparison =
-          getPriorityValue(a.priority) - getPriorityValue(b.priority);
-        break;
-      }
-      case "dueDate": {
-        const aDate = a.dueDate ? new Date(a.dueDate).getTime() : 0;
-        const bDate = b.dueDate ? new Date(b.dueDate).getTime() : 0;
-        if (!a.dueDate && !b.dueDate) comparison = 0;
-        else if (!a.dueDate) comparison = 1;
-        else if (!b.dueDate) comparison = -1;
-        else comparison = aDate - bDate;
-        break;
-      }
-      case "createdAt": {
-        comparison =
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        break;
-      }
-      case "title": {
-        comparison = a.title.localeCompare(b.title);
-        break;
-      }
-      case "number": {
-        comparison = (a.number ?? 0) - (b.number ?? 0);
-        break;
-      }
-    }
+		switch (config.field) {
+			case "createdAt": {
+				comparison =
+					new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+				break;
+			}
+			case "title": {
+				comparison = a.title.localeCompare(b.title);
+				break;
+			}
+		}
 
-    return config.direction === "asc" ? comparison : -comparison;
-  });
+		return config.direction === "asc" ? comparison : -comparison;
+	});
 
-  return sorted;
+	return sorted;
 }

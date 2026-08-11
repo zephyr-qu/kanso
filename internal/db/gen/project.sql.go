@@ -21,9 +21,9 @@ func (q *Queries) CountProjectsByWorkspace(ctx context.Context, workspaceID stri
 }
 
 const createProject = `-- name: CreateProject :one
-INSERT INTO project (id, workspace_id, name, position, created_at)
-VALUES (?, ?, ?, ?, ?)
-RETURNING id, workspace_id, name, position, created_at
+INSERT INTO project (id, workspace_id, name, position, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?)
+RETURNING id, workspace_id, name, position, created_at, updated_at
 `
 
 type CreateProjectParams struct {
@@ -32,6 +32,7 @@ type CreateProjectParams struct {
 	Name        string `json:"name"`
 	Position    int64  `json:"position"`
 	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
 }
 
 func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error) {
@@ -41,6 +42,7 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 		arg.Name,
 		arg.Position,
 		arg.CreatedAt,
+		arg.UpdatedAt,
 	)
 	var i Project
 	err := row.Scan(
@@ -49,6 +51,7 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 		&i.Name,
 		&i.Position,
 		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -66,7 +69,7 @@ func (q *Queries) DeleteProject(ctx context.Context, id string) (int64, error) {
 }
 
 const getProject = `-- name: GetProject :one
-SELECT id, workspace_id, name, position, created_at FROM project WHERE id = ?
+SELECT id, workspace_id, name, position, created_at, updated_at FROM project WHERE id = ?
 `
 
 func (q *Queries) GetProject(ctx context.Context, id string) (Project, error) {
@@ -78,12 +81,13 @@ func (q *Queries) GetProject(ctx context.Context, id string) (Project, error) {
 		&i.Name,
 		&i.Position,
 		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const listProjectsByWorkspace = `-- name: ListProjectsByWorkspace :many
-SELECT id, workspace_id, name, position, created_at FROM project WHERE workspace_id = ? ORDER BY position, created_at
+SELECT id, workspace_id, name, position, created_at, updated_at FROM project WHERE workspace_id = ? ORDER BY position, created_at
 `
 
 func (q *Queries) ListProjectsByWorkspace(ctx context.Context, workspaceID string) ([]Project, error) {
@@ -101,6 +105,7 @@ func (q *Queries) ListProjectsByWorkspace(ctx context.Context, workspaceID strin
 			&i.Name,
 			&i.Position,
 			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -116,16 +121,17 @@ func (q *Queries) ListProjectsByWorkspace(ctx context.Context, workspaceID strin
 }
 
 const updateProjectName = `-- name: UpdateProjectName :one
-UPDATE project SET name = ? WHERE id = ? RETURNING id, workspace_id, name, position, created_at
+UPDATE project SET name = ?, updated_at = ? WHERE id = ? RETURNING id, workspace_id, name, position, created_at, updated_at
 `
 
 type UpdateProjectNameParams struct {
-	Name string `json:"name"`
-	ID   string `json:"id"`
+	Name      string `json:"name"`
+	UpdatedAt string `json:"updatedAt"`
+	ID        string `json:"id"`
 }
 
 func (q *Queries) UpdateProjectName(ctx context.Context, arg UpdateProjectNameParams) (Project, error) {
-	row := q.db.QueryRowContext(ctx, updateProjectName, arg.Name, arg.ID)
+	row := q.db.QueryRowContext(ctx, updateProjectName, arg.Name, arg.UpdatedAt, arg.ID)
 	var i Project
 	err := row.Scan(
 		&i.ID,
@@ -133,6 +139,7 @@ func (q *Queries) UpdateProjectName(ctx context.Context, arg UpdateProjectNamePa
 		&i.Name,
 		&i.Position,
 		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

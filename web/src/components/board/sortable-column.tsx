@@ -1,4 +1,5 @@
-// 可拖拽的看板列：列头（名称/计数/操作）+ 任务列表（SortableContext）+ 添加任务表单。
+// 可拖拽的看板列（借鉴原型 .col：280px 列 + 列头名称/计数 + 任务列表 + 添加任务）。
+// 列操作（重命名/删除）hover 显示；拖拽把手保留（列排序需要）。
 import {
 	SortableContext,
 	useSortable,
@@ -9,6 +10,7 @@ import { GripVerticalIcon, PencilIcon, TrashIcon } from "lucide-react";
 import AddTaskForm from "@/components/board/add-task-form";
 import SortableTaskCard from "@/components/board/sortable-task-card";
 import { Button } from "@/components/ui/button";
+import { sortTasks, type SortConfig } from "@/lib/sort-tasks";
 import type { BoardColumn } from "@/types/board";
 import type { Label } from "@/types/label";
 import type { Task } from "@/types/task";
@@ -16,6 +18,7 @@ import type { Task } from "@/types/task";
 export default function SortableColumn(props: {
 	column: BoardColumn;
 	labels: Label[];
+	sortConfig: SortConfig;
 	onRename: (column: BoardColumn) => void;
 	onDelete: (column: BoardColumn) => void;
 	onAddTask: (columnId: string, title: string) => void;
@@ -27,6 +30,7 @@ export default function SortableColumn(props: {
 	const {
 		column,
 		labels,
+		sortConfig,
 		onRename,
 		onDelete,
 		onAddTask,
@@ -49,32 +53,37 @@ export default function SortableColumn(props: {
 		transform: CSS.Transform.toString(transform),
 		transition,
 	};
+	// 显示层排序：仅改变渲染顺序，不改写 position；排序视图下禁用任务拖拽（避免与 position 语义冲突）。
+	const sortActive = sortConfig.field !== "position";
+	const visibleTasks = sortActive ? sortTasks(column.tasks, sortConfig) : column.tasks;
+	const sortable = !sortActive;
 
 	return (
 		<div
 			ref={setNodeRef}
 			style={style}
-			className={`flex w-72 shrink-0 flex-col rounded-[3px] border bg-card/35 ${
-				isDragging ? "z-10 opacity-60" : ""
-			}`}
+			className={`group/col flex w-[280px] shrink-0 flex-col px-3 ${isDragging ? "z-10 opacity-60" : ""}`}
 		>
 			<div
 				{...attributes}
 				{...listeners}
-				className="flex cursor-grab items-center gap-1.5 border-b px-3 py-2.5 active:cursor-grabbing"
+				className="flex cursor-grab items-center gap-2 px-1 pb-3 pt-1 active:cursor-grabbing"
 			>
-				<GripVerticalIcon className="size-4 text-muted-foreground/50" />
-				<span className="font-display min-w-0 flex-1 truncate text-[15px] font-semibold">
+				<GripVerticalIcon className="size-4 shrink-0 text-muted-foreground/40" />
+				<span className="min-w-0 flex-1 truncate text-sm font-semibold">
 					{column.name}
 				</span>
-				<span className="font-mono-num font-mono text-xs text-muted-foreground">
+				<span className="shrink-0 rounded-full bg-[rgba(24,24,27,0.06)] px-[7px] py-0.5 text-[11px] tabular-nums text-muted-foreground">
 					{column.tasks.length}
 				</span>
-				<div className="flex" onPointerDown={(e) => e.stopPropagation()}>
+				<div
+					className="flex shrink-0 opacity-0 transition-opacity group-hover/col:opacity-100"
+					onPointerDown={(e) => e.stopPropagation()}
+				>
 					<Button
 						variant="ghost"
 						size="icon"
-						className="size-7"
+						className="size-6"
 						aria-label={`重命名列 ${column.name}`}
 						onClick={() => onRename(column)}
 					>
@@ -83,7 +92,7 @@ export default function SortableColumn(props: {
 					<Button
 						variant="ghost"
 						size="icon"
-						className="size-7 text-destructive"
+						className="size-6 text-destructive"
 						aria-label={`删除列 ${column.name}`}
 						onClick={() => onDelete(column)}
 					>
@@ -91,17 +100,19 @@ export default function SortableColumn(props: {
 					</Button>
 				</div>
 			</div>
-			<div className="flex flex-1 flex-col gap-2 p-2">
+
+				<div className="flex flex-1 flex-col gap-2">
 				{column.tasks.length === 0 ? (
-					<p className="rounded-[3px] border border-dashed p-3 text-center text-xs text-muted-foreground">
+					<p className="rounded-[10px] border border-dashed p-4 text-center text-xs text-muted-foreground">
 						空列
 					</p>
 				) : (
 					<SortableContext
-						items={column.tasks.map((t) => t.id)}
+						items={visibleTasks.map((t) => t.id)}
 						strategy={verticalListSortingStrategy}
+						disabled={!sortable}
 					>
-						{column.tasks.map((task) => (
+						{visibleTasks.map((task) => (
 							<SortableTaskCard
 								key={task.id}
 								task={task}

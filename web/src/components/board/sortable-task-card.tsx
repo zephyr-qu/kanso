@@ -1,4 +1,5 @@
-// 可拖拽的任务卡片（含编辑/删除操作，按钮不触发拖拽）。
+// 可拖拽的任务卡片（借鉴原型 .card：白卡 + 圆角 + hover 上浮；标签=小圆点+灰字）。
+// 保留右上 hover 操作（标签/编辑/删除，按钮不触发拖拽与跳转）。
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { PencilIcon, TagIcon, TrashIcon } from "lucide-react";
@@ -43,27 +44,36 @@ export default function SortableTaskCard(props: {
 			style={style}
 			{...attributes}
 			{...listeners}
-			className={`fuda group relative cursor-grab p-3 text-sm active:cursor-grabbing ${
+			className={`group relative cursor-grab rounded-[10px] border bg-card p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.04)] transition-all duration-150 hover:-translate-y-px hover:border-[rgba(24,24,27,0.14)] hover:shadow-[0_6px_16px_rgba(24,24,27,0.08)] active:cursor-grabbing ${
 				isDragging ? "z-10 opacity-60" : ""
 			}`}
 			onClick={() => onOpen(task)}
 		>
 			{taskLabels.length > 0 ? (
-				<div className="mb-1.5 flex flex-wrap gap-1">
+				<div className="mb-2 flex flex-wrap gap-x-1.5 gap-y-1">
 					{taskLabels.map((label) => (
 						<span
 							key={label.id}
-							className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium text-white"
-							style={{ backgroundColor: label.color }}
+							className="inline-flex items-center gap-[5px] text-xs text-muted-foreground"
 						>
+							<span
+								className="size-2 shrink-0 rounded-full"
+								style={{ backgroundColor: label.color }}
+							/>
 							{label.name}
 						</span>
 					))}
 				</div>
 			) : null}
-			<p className="break-words pr-14">{task.title}</p>
+			<p className="break-words pr-12 text-sm leading-normal">{task.title}</p>
+			{task.description ? (
+				<p className="mt-1 line-clamp-2 text-xs leading-normal text-muted-foreground">
+					{task.description}
+				</p>
+			) : null}
+
 			<div
-				className="absolute right-1 top-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+				className="absolute right-1.5 top-1.5 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
 				onPointerDown={(e) => e.stopPropagation()}
 				onClick={(e) => e.stopPropagation()}
 			>

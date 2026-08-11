@@ -8,12 +8,12 @@ SELECT * FROM project WHERE id = ?;
 SELECT COUNT(*) FROM project WHERE workspace_id = ?;
 
 -- name: CreateProject :one
-INSERT INTO project (id, workspace_id, name, position, created_at)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO project (id, workspace_id, name, position, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: UpdateProjectName :one
-UPDATE project SET name = ? WHERE id = ? RETURNING *;
+UPDATE project SET name = ?, updated_at = ? WHERE id = ? RETURNING *;
 
 -- name: DeleteProject :execrows
 DELETE FROM project WHERE id = ?;

@@ -10,9 +10,13 @@ import {
 } from "react-router";
 import AppShell from "@/components/app-shell";
 import { UNAUTHORIZED_EVENT } from "@/lib/api";
+import ActivityPage from "@/pages/activity";
 import BoardPage from "@/pages/board";
+import DashboardPage from "@/pages/dashboard";
+import LabelsPage from "@/pages/labels";
 import LoginPage from "@/pages/login";
 import RedirectHome from "@/pages/redirect-home";
+import SettingsPage from "@/pages/settings";
 import TaskDetailPage from "@/pages/task-detail";
 import WorkspacePage from "@/pages/workspace";
 import { useAuthStore } from "@/store/auth";
@@ -42,7 +46,11 @@ const router = createBrowserRouter([
 				element: <AppShell />,
 				children: [
 					{ index: true, element: <RedirectHome /> },
+					{ path: "dashboard", element: <DashboardPage /> },
+					{ path: "activity", element: <ActivityPage /> },
+					{ path: "settings", element: <SettingsPage /> },
 					{ path: "w/:workspaceId", element: <WorkspacePage /> },
+					{ path: "w/:workspaceId/labels", element: <LabelsPage /> },
 					{ path: "w/:workspaceId/p/:projectId", element: <BoardPage /> },
 					{
 						path: "w/:workspaceId/p/:projectId/t/:taskId",

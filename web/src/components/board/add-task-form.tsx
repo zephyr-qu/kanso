@@ -1,7 +1,6 @@
-// 列内"添加任务"的内联表单（回车创建）。
+// 列内"添加任务"的内联表单（借鉴原型 .add：轻量触发按钮，hover 加深；回车创建）。
 import { useState } from "react";
 import { PlusIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export default function AddTaskForm(props: { onAdd: (title: string) => void }) {
@@ -10,13 +9,13 @@ export default function AddTaskForm(props: { onAdd: (title: string) => void }) {
 
 	if (!adding) {
 		return (
-			<Button
-				variant="ghost"
-				className="w-full justify-start text-xs text-muted-foreground"
+			<button
+				type="button"
+				className="flex w-full items-center gap-1.5 rounded-[6px] px-1.5 py-2 text-left text-[13px] text-muted-foreground/80 transition-colors hover:bg-[rgba(24,24,27,0.04)] hover:text-foreground"
 				onClick={() => setAdding(true)}
 			>
-				<PlusIcon /> 添加任务
-			</Button>
+				<PlusIcon className="size-3.5" /> 添加任务
+			</button>
 		);
 	}
 	return (

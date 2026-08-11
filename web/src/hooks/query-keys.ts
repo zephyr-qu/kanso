@@ -4,10 +4,13 @@ import type { QueryClient } from "@tanstack/react-query";
 
 export const queryKeys = {
 	workspaces: () => ["workspaces"] as const,
+	dashboard: () => ["dashboard"] as const,
+	labels: (workspaceId: string) => ["labels", workspaceId] as const,
 	projects: (workspaceId: string) => ["projects", workspaceId] as const,
 	board: (projectId: string) => ["board", projectId] as const,
 	task: (taskId: string) => ["task", taskId] as const,
 	tasks: () => ["task"] as const,
+	activities: () => ["activity"] as const,
 };
 
 // —— 失效映射 ——

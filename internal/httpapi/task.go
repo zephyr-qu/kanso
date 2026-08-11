@@ -58,6 +58,10 @@ func (a *API) updateTask(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusNotFound, "任务或目标列不存在")
 				return
 			}
+			if errors.Is(err, service.ErrCrossProjectMove) {
+				writeError(w, http.StatusBadRequest, "不能跨项目移动任务")
+				return
+			}
 			writeError(w, http.StatusInternalServerError, "移动任务失败")
 			return
 		}

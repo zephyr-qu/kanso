@@ -20,6 +20,8 @@ export type Activity = {
 
 export type TaskDetail = {
 	task: Task;
+	/** 所属项目名，供详情页顶部面包屑显示。 */
+	projectName: string;
 	labels: Label[];
 	comments: Comment[];
 	activity: Activity[];

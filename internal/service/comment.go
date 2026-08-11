@@ -11,11 +11,13 @@ import (
 )
 
 // TaskDetail 是任务详情页单次拉取的聚合（任务 + 标签 + 评论 + 活动）。
+// ProjectName 供详情页顶部面包屑显示所属项目。
 type TaskDetail struct {
-	Task     gen.Task       `json:"task"`
-	Labels   []gen.Label    `json:"labels"`
-	Comments []gen.Comment  `json:"comments"`
-	Activity []gen.Activity `json:"activity"`
+	Task        gen.Task       `json:"task"`
+	ProjectName string         `json:"projectName"`
+	Labels      []gen.Label    `json:"labels"`
+	Comments    []gen.Comment  `json:"comments"`
+	Activity    []gen.Activity `json:"activity"`
 }
 
 // ListComments 返回任务的评论（按时间正序）。
@@ -119,11 +121,18 @@ func (s *Service) GetTaskDetail(ctx context.Context, taskID string) (TaskDetail,
 		activity = []gen.Activity{}
 	}
 
+	// 项目名供详情页顶部面包屑使用；项目缺失时留空，不阻塞详情渲染。
+	projectName := ""
+	if project, err := q.GetProject(ctx, task.ProjectID); err == nil {
+		projectName = project.Name
+	}
+
 	return TaskDetail{
-		Task:     task,
-		Labels:   labels,
-		Comments: comments,
-		Activity: activity,
+		Task:        task,
+		ProjectName: projectName,
+		Labels:      labels,
+		Comments:    comments,
+		Activity:    activity,
 	}, nil
 }
 

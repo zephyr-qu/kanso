@@ -115,7 +115,15 @@ func (s *Service) DeleteTask(ctx context.Context, taskID string) error {
 // MoveTask 把任务移动到目标列的目标位置（0 起），源/目标列分别 reindex。
 // 目标列缺省为当前列（同列排序）；不允许跨项目移动。
 func (s *Service) MoveTask(ctx context.Context, taskID string, targetColumnID *string, targetPosition int64) error {
-	q := gen.New(s.db)
+	// 读（任务/列顺序）与写（reindex）在同一事务内：单连接（SetMaxOpenConns(1)）
+	// 下后到的事务必在先前事务提交后才开始，读到的必是已提交的新顺序，
+	// 不会基于旧顺序 reindex 覆盖他人提交。
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("开启事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := gen.New(tx)
 
 	task, err := q.GetTask(ctx, taskID)
 	if err != nil {
@@ -131,7 +139,7 @@ func (s *Service) MoveTask(ctx context.Context, taskID string, targetColumnID *s
 				return mapNoRows(err)
 			}
 			if column.ProjectID != task.ProjectID {
-				return fmt.Errorf("不能跨项目移动任务")
+				return ErrCrossProjectMove
 			}
 		}
 	}
@@ -152,24 +160,18 @@ func (s *Service) MoveTask(ctx context.Context, taskID string, targetColumnID *s
 	newSource := removeTask(sourceTasks, taskID)
 	newDest := insertTask(removeTask(destTasks, taskID), task, targetPosition)
 
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("开启事务失败: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	tq := gen.New(tx)
 	now := time.Now().UTC().Format(time.RFC3339)
 	if destColumnID == sourceColumnID {
 		// 同列移动：newDest 就是完整新列表（含被移任务），整体 reindex。
-		if err := reindexTasks(ctx, tq, newDest, sourceColumnID, now); err != nil {
+		if err := reindexTasks(ctx, q, newDest, sourceColumnID, now); err != nil {
 			return err
 		}
 	} else {
 		// 跨列移动：源列（已移除）与目标列（已插入）分别 reindex。
-		if err := reindexTasks(ctx, tq, newSource, sourceColumnID, now); err != nil {
+		if err := reindexTasks(ctx, q, newSource, sourceColumnID, now); err != nil {
 			return err
 		}
-		if err := reindexTasks(ctx, tq, newDest, destColumnID, now); err != nil {
+		if err := reindexTasks(ctx, q, newDest, destColumnID, now); err != nil {
 			return err
 		}
 	}

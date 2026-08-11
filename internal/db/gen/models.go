@@ -42,6 +42,7 @@ type Project struct {
 	Name        string `json:"name"`
 	Position    int64  `json:"position"`
 	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
 }
 
 type Task struct {

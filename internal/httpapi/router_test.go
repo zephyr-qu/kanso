@@ -223,8 +223,8 @@ func TestProjectSeedsDefaultColumns(t *testing.T) {
 	}
 	board := decode[map[string]any](t, body)
 	columns, _ := board["columns"].([]any)
-	if len(columns) != 3 {
-		t.Fatalf("应种子 3 个默认列，实际 %d", len(columns))
+	if len(columns) != 4 {
+		t.Fatalf("应种子 4 个默认列，实际 %d", len(columns))
 	}
 }
 
@@ -282,39 +282,34 @@ func TestWorkspaceDeleteCascadesProjects(t *testing.T) {
 	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
 	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
 
-	// 建项目 + 任务（产生 task.created 活动）。
+	// 建项目 + 任务 + 评论 + 贴标签（产生 task.created/comment.created/label.attached 活动）。
 	projectID := createProject(t, e, "将被级联")
 	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
 	columnID := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["id"].(string)
-	e.do(t, http.MethodPost, "/api/columns/"+columnID+"/tasks", `{"title":"级联任务"}`)
+	_, body = e.do(t, http.MethodPost, "/api/columns/"+columnID+"/tasks", `{"title":"级联任务"}`)
+	taskID := decode[map[string]any](t, body)["id"].(string)
+	e.do(t, http.MethodPost, "/api/tasks/"+taskID+"/comments", `{"content":"级联评论"}`)
+	_, body = e.do(t, http.MethodPost, "/api/workspaces/"+workspaceID+"/labels", `{"name":"级联标签","color":"#ef4444"}`)
+	labelID := decode[map[string]any](t, body)["id"].(string)
+	e.do(t, http.MethodPost, "/api/tasks/"+taskID+"/labels/"+labelID, "")
 
 	if res, _ := e.do(t, http.MethodDelete, "/api/workspaces/"+workspaceID, ""); res.StatusCode != http.StatusNoContent {
 		t.Fatalf("删除工作区应 204，实际 %d", res.StatusCode)
 	}
 
-	var projectCount int
-	if err := e.db.QueryRow(`SELECT COUNT(*) FROM project`).Scan(&projectCount); err != nil {
-		t.Fatalf("统计项目失败: %v", err)
-	}
-	if projectCount != 0 {
-		t.Fatalf("级联后应无残留项目，实际 %d", projectCount)
-	}
-
-	var columnCount int
-	if err := e.db.QueryRow(`SELECT COUNT(*) FROM "column"`).Scan(&columnCount); err != nil {
-		t.Fatalf("统计列失败: %v", err)
-	}
-	if columnCount != 0 {
-		t.Fatalf("级联后应无残留列，实际 %d", columnCount)
-	}
-
-	// spec 必测：删工作区后活动也应消失（无孤儿记录）。
-	var activityCount int
-	if err := e.db.QueryRow(`SELECT COUNT(*) FROM activity`).Scan(&activityCount); err != nil {
-		t.Fatalf("统计活动失败: %v", err)
-	}
-	if activityCount != 0 {
-		t.Fatalf("级联后应无残留活动，实际 %d", activityCount)
+	// spec 必测：删工作区后项目/任务/评论/活动全部消失（无孤儿记录）。
+	for _, tc := range []struct {
+		table string
+	}{
+		{"project"}, {"column"}, {"task"}, {"comment"}, {"label"}, {"task_label"}, {"activity"},
+	} {
+		var n int
+		if err := e.db.QueryRow(`SELECT COUNT(*) FROM "` + tc.table + `"`).Scan(&n); err != nil {
+			t.Fatalf("统计 %s 失败: %v", tc.table, err)
+		}
+		if n != 0 {
+			t.Fatalf("级联后 %s 应无残留，实际 %d", tc.table, n)
+		}
 	}
 }
 
@@ -346,8 +341,8 @@ func TestBoardAggregate(t *testing.T) {
 	}
 
 	columns, _ := board["columns"].([]any)
-	if len(columns) != 3 {
-		t.Fatalf("应 3 列，实际 %d", len(columns))
+	if len(columns) != 4 {
+		t.Fatalf("应 4 列，实际 %d", len(columns))
 	}
 	for _, c := range columns {
 		if _, ok := c.(map[string]any)["tasks"]; !ok {
@@ -371,8 +366,8 @@ func TestColumnLifecycle(t *testing.T) {
 	}
 	column := decode[map[string]any](t, body)
 	columnID := column["id"].(string)
-	if column["position"].(float64) != 3 {
-		t.Fatalf("新列应追加到 position 3，实际 %v", column["position"])
+	if column["position"].(float64) != 4 {
+		t.Fatalf("新列应追加到 position 4，实际 %v", column["position"])
 	}
 
 	res, body = e.do(t, http.MethodPatch, "/api/columns/"+columnID, `{"name":"改名列"}`)
@@ -411,7 +406,7 @@ func TestColumnReorder(t *testing.T) {
 	for _, c := range columns {
 		names = append(names, c.(map[string]any)["name"].(string))
 	}
-	want := []string{"进行中", "已完成", "待办"}
+	want := []string{"进行中", "已阻塞", "待办", "已完成"}
 	if !reflect.DeepEqual(names, want) {
 		t.Fatalf("移动后顺序应为 %v，实际 %v", want, names)
 	}
@@ -844,5 +839,522 @@ func TestRealtimeAuth(t *testing.T) {
 	if err == nil {
 		conn.CloseNow()
 		t.Fatalf("错误密钥应拒绝 WS 连接")
+	}
+}
+
+// TestHealthAndVerify 覆盖健康检查与登录验证端点（此前 0%）。
+func TestHealthAndVerify(t *testing.T) {
+	e := newTestEnv(t)
+
+	// /api/health 无需鉴权。
+	res, body := e.doAuth(t, "", http.MethodGet, "/api/health", "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("health 应 200，实际 %d", res.StatusCode)
+	}
+	if ok := decode[map[string]any](t, body)["ok"]; ok != true {
+		t.Fatalf("health 应返回 ok:true，实际 %v", ok)
+	}
+
+	// verify 正确密钥 → 200 ok:true。
+	res, body = e.do(t, http.MethodPost, "/api/auth/verify", `{"key":"`+testKey+`"}`)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("正确密钥应 200，实际 %d", res.StatusCode)
+	}
+	if ok := decode[map[string]any](t, body)["ok"]; ok != true {
+		t.Fatalf("verify 应返回 ok:true，实际 %v", ok)
+	}
+
+	// verify 错误密钥 → 401。
+	if res, _ := e.do(t, http.MethodPost, "/api/auth/verify", `{"key":"wrong"}`); res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("错误密钥应 401，实际 %d", res.StatusCode)
+	}
+
+	// verify 非法 JSON → 400。
+	if res, _ := e.do(t, http.MethodPost, "/api/auth/verify", `not-json`); res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("非法 JSON 应 400，实际 %d", res.StatusCode)
+	}
+}
+
+// TestTaskMoveAcrossProjectsRejected 校验把任务移入另一项目的列被拒绝（数据完整性约束）。
+func TestTaskMoveAcrossProjectsRejected(t *testing.T) {
+	e := newTestEnv(t)
+	p1 := createProject(t, e, "项目甲")
+	p2 := createProject(t, e, "项目乙")
+
+	_, body := e.do(t, http.MethodGet, "/api/projects/"+p1, "")
+	col1 := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["id"].(string)
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+p2, "")
+	col2 := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["id"].(string)
+
+	_, body = e.do(t, http.MethodPost, "/api/columns/"+col1+"/tasks", `{"title":"跨项目任务"}`)
+	taskID := decode[map[string]any](t, body)["id"].(string)
+
+	// 移入另一项目的列 → 400，且任务留在原列。
+	if res, _ := e.do(t, http.MethodPatch, "/api/tasks/"+taskID, `{"columnId":"`+col2+`","position":0}`); res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("跨项目移动应 400，实际 %d", res.StatusCode)
+	}
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+p1, "")
+	if tasks := boardTasks(body); len(tasks) != 1 || tasks[0]["title"] != "跨项目任务" {
+		t.Fatalf("任务应留在原列，实际 %v", tasks)
+	}
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+p2, "")
+	if tasks := boardTasks(body); len(tasks) != 0 {
+		t.Fatalf("目标项目不应出现该任务，实际 %v", tasks)
+	}
+}
+
+// TestTaskPositionClamping 校验任务越界 position 在服务层收敛（负数→列首，超大→列尾）。
+func TestTaskPositionClamping(t *testing.T) {
+	e := newTestEnv(t)
+	projectID := createProject(t, e, "位置收敛")
+	_, body := e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	col1 := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["id"].(string)
+
+	e.do(t, http.MethodPost, "/api/columns/"+col1+"/tasks", `{"title":"任务A"}`)
+	e.do(t, http.MethodPost, "/api/columns/"+col1+"/tasks", `{"title":"任务B"}`)
+	e.do(t, http.MethodPost, "/api/columns/"+col1+"/tasks", `{"title":"任务C"}`)
+
+	// 任务B（position 1）移到 position -1 → 收敛到列首。
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	taskB := findTaskID(body, "任务B")
+	if res, _ := e.do(t, http.MethodPatch, "/api/tasks/"+taskB, `{"position":-1}`); res.StatusCode != http.StatusOK {
+		t.Fatalf("负数 position 应 200，实际 %d", res.StatusCode)
+	}
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	if got := taskTitles(body); !reflect.DeepEqual(got, []string{"任务B", "任务A", "任务C"}) {
+		t.Fatalf("负数 position 应收敛到列首，实际 %v", got)
+	}
+
+	// 任务B（position 0）移到 position 99 → 收敛到列尾。
+	taskB = findTaskID(body, "任务B")
+	if res, _ := e.do(t, http.MethodPatch, "/api/tasks/"+taskB, `{"position":99}`); res.StatusCode != http.StatusOK {
+		t.Fatalf("超大 position 应 200，实际 %d", res.StatusCode)
+	}
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	if got := taskTitles(body); !reflect.DeepEqual(got, []string{"任务A", "任务C", "任务B"}) {
+		t.Fatalf("超大 position 应收敛到列尾，实际 %v", got)
+	}
+}
+
+// TestColumnPositionClamping 校验列越界 position 收敛（负数→首位，超大→末尾）。
+func TestColumnPositionClamping(t *testing.T) {
+	e := newTestEnv(t)
+	projectID := createProject(t, e, "列位置收敛")
+	_, body := e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	cols := decode[map[string]any](t, body)["columns"].([]any)
+	doingID := cols[1].(map[string]any)["id"].(string) // 进行中
+
+	// position -1 → 收敛到 0（列首）。
+	if res, _ := e.do(t, http.MethodPatch, "/api/columns/"+doingID, `{"position":-1}`); res.StatusCode != http.StatusOK {
+		t.Fatalf("负数 position 应 200，实际 %d", res.StatusCode)
+	}
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	if got := columnNames(body); !reflect.DeepEqual(got, []string{"进行中", "待办", "已阻塞", "已完成"}) {
+		t.Fatalf("负数 position 应收敛到列首，实际 %v", got)
+	}
+
+	// position 99 → 收敛到列尾。
+	if res, _ := e.do(t, http.MethodPatch, "/api/columns/"+doingID, `{"position":99}`); res.StatusCode != http.StatusOK {
+		t.Fatalf("超大 position 应 200，实际 %d", res.StatusCode)
+	}
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	if got := columnNames(body); !reflect.DeepEqual(got, []string{"待办", "已阻塞", "已完成", "进行中"}) {
+		t.Fatalf("超大 position 应收敛到列尾，实际 %v", got)
+	}
+}
+
+// TestRealtimeQueryErrors 校验 WS 握手前的参数校验（缺 project → 400，错密钥 → 401）。
+func TestRealtimeQueryErrors(t *testing.T) {
+	e := newTestEnv(t)
+
+	// 缺 project 参数 → 400（未升级握手即拒绝）。
+	if res, _ := e.doAuth(t, "", http.MethodGet, "/api/ws?key="+testKey, ""); res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("缺 project 参数应 400，实际 %d", res.StatusCode)
+	}
+
+	// 错误密钥 → 401。
+	project := createProject(t, e, "查询鉴权")
+	if res, _ := e.doAuth(t, "", http.MethodGet, "/api/ws?project="+project+"&key=wrong", ""); res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("错误密钥应 401，实际 %d", res.StatusCode)
+	}
+}
+
+// TestRealtimeDisconnectNoPanic 校验客户端断开后广播不 panic、服务存活、可重连。
+func TestRealtimeDisconnectNoPanic(t *testing.T) {
+	e := newTestEnv(t)
+	project := createProject(t, e, "断开项目")
+	wsURL := "ws" + strings.TrimPrefix(e.srv.URL, "http") + "/api/ws?project=" + project + "&key=" + testKey
+
+	conn, _, err := websocket.Dial(context.Background(), wsURL, nil)
+	if err != nil {
+		t.Fatalf("WS 连接失败: %v", err)
+	}
+	time.Sleep(200 * time.Millisecond) // 等待订阅完成
+	conn.CloseNow()                    // 客户端立即断开
+	time.Sleep(200 * time.Millisecond) // 等待 handler 读循环退出并注销订阅
+
+	// 断开后向该项目广播：不应 panic / 阻塞。
+	_, body := e.do(t, http.MethodGet, "/api/projects/"+project, "")
+	column := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["id"].(string)
+	e.do(t, http.MethodPost, "/api/columns/"+column+"/tasks", `{"title":"断开后广播"}`)
+
+	// 服务仍健康，且新连接能正常收到事件。
+	if res, _ := e.do(t, http.MethodGet, "/api/health", ""); res.StatusCode != http.StatusOK {
+		t.Fatalf("断开后服务应仍健康，实际 %d", res.StatusCode)
+	}
+	conn2, _, err := websocket.Dial(context.Background(), wsURL, nil)
+	if err != nil {
+		t.Fatalf("断开后重新连接失败: %v", err)
+	}
+	defer conn2.CloseNow()
+	time.Sleep(200 * time.Millisecond)
+	e.do(t, http.MethodPost, "/api/columns/"+column+"/tasks", `{"title":"重连后事件"}`)
+	readCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, data, err := conn2.Read(readCtx)
+	if err != nil {
+		t.Fatalf("重连后读取事件失败: %v", err)
+	}
+	var ev realtime.Event
+	if err := json.Unmarshal(data, &ev); err != nil {
+		t.Fatalf("解析事件失败: %v", err)
+	}
+	if ev.Type != "task.created" {
+		t.Fatalf("重连后应收到 task.created，实际 %+v", ev)
+	}
+}
+
+// TestEventActionContract 锁定全部 15 个事件动作字符串（前端 lib/events.ts 与之对齐，ADR-0004）。
+func TestEventActionContract(t *testing.T) {
+	e := newTestEnv(t)
+	project := createProject(t, e, "事件合约")
+	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
+	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+project, "")
+	col1 := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["id"].(string)
+
+	wsURL := "ws" + strings.TrimPrefix(e.srv.URL, "http") + "/api/ws?project=" + project + "&key=" + testKey
+	conn, _, err := websocket.Dial(context.Background(), wsURL, nil)
+	if err != nil {
+		t.Fatalf("WS 连接失败: %v", err)
+	}
+	defer conn.CloseNow()
+	time.Sleep(200 * time.Millisecond)
+
+	// 每步执行一个写操作，读取一条 WS 事件并断言 action 字符串。
+	readEvent := func(want string) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_, data, err := conn.Read(ctx)
+		if err != nil {
+			t.Fatalf("读取 %s 事件失败: %v", want, err)
+		}
+		var ev realtime.Event
+		if err := json.Unmarshal(data, &ev); err != nil {
+			t.Fatalf("解析 %s 事件失败: %v, raw=%s", want, err, data)
+		}
+		if ev.Type != want {
+			t.Fatalf("期望事件 %s，实际 %s（raw=%s）", want, ev.Type, data)
+		}
+	}
+
+	// task 生命周期。
+	_, body = e.do(t, http.MethodPost, "/api/columns/"+col1+"/tasks", `{"title":"合约任务"}`)
+	taskID := decode[map[string]any](t, body)["id"].(string)
+	readEvent("task.created")
+	e.do(t, http.MethodPatch, "/api/tasks/"+taskID, `{"title":"改名"}`)
+	readEvent("task.updated")
+	e.do(t, http.MethodPatch, "/api/tasks/"+taskID, `{"position":0}`)
+	readEvent("task.moved")
+
+	// column 生命周期（用新建的空列做删除）。
+	e.do(t, http.MethodPost, "/api/projects/"+project+"/columns", `{"name":"临时列"}`)
+	readEvent("column.created")
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+project, "")
+	tmpCol := decode[map[string]any](t, body)["columns"].([]any)[3].(map[string]any)["id"].(string)
+	e.do(t, http.MethodPatch, "/api/columns/"+tmpCol, `{"name":"临时列2"}`)
+	readEvent("column.updated")
+	e.do(t, http.MethodPatch, "/api/columns/"+tmpCol, `{"position":0}`)
+	readEvent("column.moved")
+	e.do(t, http.MethodDelete, "/api/columns/"+tmpCol, "")
+	readEvent("column.deleted")
+
+	// comment 生命周期。
+	_, body = e.do(t, http.MethodPost, "/api/tasks/"+taskID+"/comments", `{"content":"合约评论"}`)
+	commentID := decode[map[string]any](t, body)["id"].(string)
+	readEvent("comment.created")
+	e.do(t, http.MethodDelete, "/api/comments/"+commentID, "")
+	readEvent("comment.deleted")
+
+	// label 生命周期：created/updated/deleted 工作区级（BroadcastAll），attached/detached 项目级。
+	_, body = e.do(t, http.MethodPost, "/api/workspaces/"+workspaceID+"/labels", `{"name":"合约标签","color":"#3b82f6"}`)
+	labelID := decode[map[string]any](t, body)["id"].(string)
+	readEvent("label.created")
+	e.do(t, http.MethodPatch, "/api/labels/"+labelID, `{"name":"合约标签2"}`)
+	readEvent("label.updated")
+	e.do(t, http.MethodPost, "/api/tasks/"+taskID+"/labels/"+labelID, "")
+	readEvent("label.attached")
+	e.do(t, http.MethodDelete, "/api/tasks/"+taskID+"/labels/"+labelID, "")
+	readEvent("label.detached")
+
+	// task 删除、label 删除收尾。
+	e.do(t, http.MethodDelete, "/api/tasks/"+taskID, "")
+	readEvent("task.deleted")
+	e.do(t, http.MethodDelete, "/api/labels/"+labelID, "")
+	readEvent("label.deleted")
+}
+
+// boardTasks 返回看板第一列的任务（map 视图，按 position 顺序）。
+func boardTasks(body []byte) []map[string]any {
+	var board map[string]any
+	_ = json.Unmarshal(body, &board)
+	tasks := board["columns"].([]any)[0].(map[string]any)["tasks"].([]any)
+	out := make([]map[string]any, 0, len(tasks))
+	for _, t := range tasks {
+		out = append(out, t.(map[string]any))
+	}
+	return out
+}
+
+// taskTitles 返回看板第一列任务标题（按 position 顺序）。
+func taskTitles(body []byte) []string {
+	tasks := boardTasks(body)
+	out := make([]string, 0, len(tasks))
+	for _, t := range tasks {
+		out = append(out, t["title"].(string))
+	}
+	return out
+}
+
+// findTaskID 返回看板第一列中指定标题任务的 ID。
+func findTaskID(body []byte, title string) string {
+	for _, t := range boardTasks(body) {
+		if t["title"] == title {
+			return t["id"].(string)
+		}
+	}
+	return ""
+}
+
+// columnNames 返回看板列名（按 position 顺序）。
+func columnNames(body []byte) []string {
+	var board map[string]any
+	_ = json.Unmarshal(body, &board)
+	cols := board["columns"].([]any)
+	out := make([]string, 0, len(cols))
+	for _, c := range cols {
+		out = append(out, c.(map[string]any)["name"].(string))
+	}
+	return out
+}
+
+// TestMalformedBodyRejected 校验所有写端点对非法 JSON 统一返回 400（decodeBody 错误分支）。
+func TestMalformedBodyRejected(t *testing.T) {
+	e := newTestEnv(t)
+	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
+	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
+	projectID := createProject(t, e, "坏请求体")
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	col1 := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["id"].(string)
+	_, body = e.do(t, http.MethodPost, "/api/columns/"+col1+"/tasks", `{"title":"任务"}`)
+	taskID := decode[map[string]any](t, body)["id"].(string)
+
+	for _, tc := range []struct {
+		name   string
+		method string
+		path   string
+	}{
+		{"创建工作区", http.MethodPost, "/api/workspaces"},
+		{"创建项目", http.MethodPost, "/api/workspaces/" + workspaceID + "/projects"},
+		{"重命名项目", http.MethodPatch, "/api/projects/" + projectID},
+		{"创建列", http.MethodPost, "/api/projects/" + projectID + "/columns"},
+		{"更新列", http.MethodPatch, "/api/columns/" + col1},
+		{"创建任务", http.MethodPost, "/api/columns/" + col1 + "/tasks"},
+		{"更新任务", http.MethodPatch, "/api/tasks/" + taskID},
+		{"创建标签", http.MethodPost, "/api/workspaces/" + workspaceID + "/labels"},
+		{"发表评论", http.MethodPost, "/api/tasks/" + taskID + "/comments"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			res, _ := e.do(t, tc.method, tc.path, `not-json`)
+			if res.StatusCode != http.StatusBadRequest {
+				t.Fatalf("非法 JSON 应 400，实际 %d", res.StatusCode)
+			}
+		})
+	}
+}
+
+// TestDashboardContract 校验 /api/dashboard 聚合契约（形状 + 数据一致性）。
+func TestDashboardContract(t *testing.T) {
+	e := newTestEnv(t)
+	projectID := createProject(t, e, "仪表盘项目")
+
+	// 建任务：待办列 1 个 + 已完成列 1 个（标签"紧急"贴在待办任务上）。
+	_, body := e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	cols := decode[map[string]any](t, body)["columns"].([]any)
+	todoCol := cols[0].(map[string]any)["id"].(string)
+	_, body = e.do(t, http.MethodPost, "/api/columns/"+todoCol+"/tasks", `{"title":"待办任务"}`)
+	taskID := decode[map[string]any](t, body)["id"].(string)
+	// 标签。
+	_, body = e.do(t, http.MethodGet, "/api/workspaces", "")
+	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
+	_, body = e.do(t, http.MethodPost, "/api/workspaces/"+workspaceID+"/labels", `{"name":"紧急","color":"#ef4444"}`)
+	labelID := decode[map[string]any](t, body)["id"].(string)
+	e.do(t, http.MethodPost, "/api/tasks/"+taskID+"/labels/"+labelID, "")
+
+	res, body := e.do(t, http.MethodGet, "/api/dashboard", "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("dashboard 应 200，实际 %d", res.StatusCode)
+	}
+	d := decode[map[string]any](t, body)
+
+	// 统计卡：默认列待办/进行中/已阻塞/已完成，共 1 个任务（末列已完成空）。
+	if d["totalTasks"].(float64) != 1 {
+		t.Fatalf("totalTasks 应为 1，实际 %v", d["totalTasks"])
+	}
+	if d["urgent"].(float64) != 1 {
+		t.Fatalf("urgent 应为 1，实际 %v", d["urgent"])
+	}
+	if d["completionPercent"].(float64) != 0 {
+		t.Fatalf("completionPercent 应为 0（任务在首列非末列），实际 %v", d["completionPercent"])
+	}
+
+	// 数组字段非 null 且形状正确。
+	for _, key := range []string{"byColumn", "projects", "focus", "recentActivity", "trend"} {
+		if arr, _ := d[key].([]any); arr == nil {
+			t.Fatalf("%s 应为数组而非 null", key)
+		}
+	}
+	// 趋势：14 天窗口（含今天），每天有 created/completed 数值字段；今天应含刚创建的任务。
+	trend := d["trend"].([]any)
+	if len(trend) != 14 {
+		t.Fatalf("trend 应为 14 天窗口，实际 %d", len(trend))
+	}
+	last := trend[len(trend)-1].(map[string]any)
+	if _, ok := last["created"].(float64); !ok {
+		t.Fatalf("trend 每天应含 created，实际 %v", last)
+	}
+	if _, ok := last["completed"].(float64); !ok {
+		t.Fatalf("trend 每天应含 completed，实际 %v", last)
+	}
+	// 项目速览应带 workspaceId（前端跨工作区跳转用）。
+	projects := d["projects"].([]any)
+	if len(projects) != 1 {
+		t.Fatalf("projects 应含 1 个项目，实际 %d", len(projects))
+	}
+	if ws, ok := projects[0].(map[string]any)["workspaceId"].(string); !ok || ws == "" {
+		t.Fatalf("projects[0].workspaceId 应存在，实际 %v", projects[0])
+	}
+	if focus := d["focus"].([]any); len(focus) != 1 || focus[0].(map[string]any)["title"] != "待办任务" {
+		t.Fatalf("focus 应含待办任务，实际 %v", focus)
+	}
+	// 最近活动含 task.created（文案为「在 X 中，你 创建了任务」）。
+	recent := d["recentActivity"].([]any)
+	foundCreated := false
+	for _, item := range recent {
+		if strings.Contains(item.(map[string]any)["text"].(string), "创建了任务") {
+			foundCreated = true
+			break
+		}
+	}
+	if !foundCreated {
+		t.Fatalf("recentActivity 应含 task.created 文案，实际 %v", recent)
+	}
+}
+
+// TestBackupContract 校验 /api/settings/backup 导出完整性（只导出）。
+func TestBackupContract(t *testing.T) {
+	e := newTestEnv(t)
+	createProject(t, e, "备份项目")
+
+	res, body := e.do(t, http.MethodGet, "/api/settings/backup", "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("backup 应 200，实际 %d", res.StatusCode)
+	}
+	b := decode[map[string]any](t, body)
+
+	if _, ok := b["exportedAt"]; !ok {
+		t.Fatalf("backup 应含 exportedAt")
+	}
+	for _, key := range []string{"workspaces", "projects", "columns", "tasks", "labels", "taskLabels", "comments", "activities"} {
+		if arr, _ := b[key].([]any); arr == nil {
+			t.Fatalf("backup.%s 应为数组而非 null", key)
+		}
+	}
+	projects := b["projects"].([]any)
+	if len(projects) != 1 {
+		t.Fatalf("backup.projects 应含 1 个项目，实际 %d", len(projects))
+	}
+	if p := projects[0].(map[string]any); p["name"] != "备份项目" {
+	}
+	if columns := b["columns"].([]any); len(columns) != 4 {
+		t.Fatalf("backup.columns 应含 4 个默认列，实际 %d", len(columns))
+	}
+}
+
+// TestProjectUpdatedAt 校验项目创建/重命名写入 updatedAt，列表接口返回该字段。
+func TestProjectUpdatedAt(t *testing.T) {
+	e := newTestEnv(t)
+	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
+	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
+
+	res, body := e.do(t, http.MethodPost, "/api/workspaces/"+workspaceID+"/projects", `{"name":"时间项目"}`)
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("创建项目应 201，实际 %d", res.StatusCode)
+	}
+	created := decode[map[string]any](t, body)
+	createdID := created["id"].(string)
+	if _, ok := created["updatedAt"]; !ok {
+		t.Fatalf("创建响应应含 updatedAt，实际键: %v", jsonKeys(created))
+	}
+
+	// 重命名后 updatedAt 应更新且非空。
+	if res, body := e.do(t, http.MethodPatch, "/api/projects/"+createdID, `{"name":"时间项目2"}`); res.StatusCode != http.StatusOK {
+		t.Fatalf("重命名应 200，实际 %d", res.StatusCode)
+	} else {
+		if u := decode[map[string]any](t, body)["updatedAt"]; u == nil || u == "" {
+			t.Fatalf("重命名后 updatedAt 应为非空，实际 %v", u)
+		}
+	}
+
+	// 列表接口返回 updatedAt（前端卡片 meta 依赖）。
+	_, body = e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/projects", "")
+	p := decode[[]map[string]any](t, body)
+	if len(p) != 1 {
+		t.Fatalf("应恰有 1 个项目，实际 %d", len(p))
+	}
+	if _, ok := p[0]["updatedAt"]; !ok {
+		t.Fatalf("列表项目应含 updatedAt，实际键: %v", jsonKeys(p[0]))
+	}
+}
+
+// TestActivityContract 校验 /api/activity 全局活动流（形状 + 含任务活动）。
+func TestActivityContract(t *testing.T) {
+	e := newTestEnv(t)
+	projectID := createProject(t, e, "活动项目")
+	_, body := e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	col := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["id"].(string)
+	e.do(t, http.MethodPost, "/api/columns/"+col+"/tasks", `{"title":"活动任务"}`)
+
+	res, body := e.do(t, http.MethodGet, "/api/activity", "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("activity 应 200，实际 %d", res.StatusCode)
+	}
+	items := decode[[]map[string]any](t, body)
+	if len(items) < 1 {
+		t.Fatalf("activity 应含任务活动，实际 %d 条", len(items))
+	}
+	// 最新一条应为 task.created，且带项目名。
+	latest := items[0]
+	if latest["action"] != "task.created" {
+		t.Fatalf("最新活动应为 task.created，实际 %v", latest["action"])
+	}
+	if latest["projectName"] != "活动项目" {
+		t.Fatalf("活动应带项目名，实际 %v", latest["projectName"])
+	}
+	for _, key := range []string{"id", "projectName", "action", "createdAt"} {
+		if _, ok := latest[key]; !ok {
+			t.Fatalf("活动条目缺 %q，实际键: %v", key, jsonKeys(latest))
+		}
 	}
 }

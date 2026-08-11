@@ -123,14 +123,14 @@ input:-webkit-autofill:active {
 }
 
 :root {
-  /* 字体：明朝体（显示）+ 黑体（正文）+ 等宽（数字/编号） */
+  /* 字体：黑体（正文与标题）+ 等宽（数字/编号） */
   --font-display:
-    "Zen Old Mincho",
-    "Songti SC",
-    "STSong",
-    "SimSun",
-    "Noto Serif CJK SC",
-    serif;
+    "PingFang SC",
+    "Microsoft YaHei",
+    "Noto Sans CJK SC",
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
   --font-sans:
     "PingFang SC",
     "Microsoft YaHei",
@@ -148,100 +148,105 @@ input:-webkit-autofill:active {
     Consolas,
     monospace;
 
-  /* 方角语言：近乎直角，发丝细线 */
-  --radius: 0.25rem;
+  /* 现代简约：6-12px 圆角系（sm=4 md=6 lg=8 xl=12） */
+  --radius: 0.5rem;
 
-  /* 和紙 × 墨 × 苔 × 朱（明） */
-  --background: #f4f1e8;
-  --foreground: #26221b;
-  --card: #faf8f1;
-  --card-foreground: #26221b;
-  --popover: #faf8f1;
-  --popover-foreground: #26221b;
-  --primary: #55614c;
-  --primary-foreground: #f4f1e8;
-  --secondary: rgba(38, 34, 27, 0.05);
-  --secondary-foreground: #26221b;
-  --muted: rgba(38, 34, 27, 0.05);
-  --muted-foreground: #7c7464;
-  --accent: rgba(85, 97, 76, 0.09);
-  --accent-foreground: #3c4536;
-  --destructive: #b04a2b;
-  --destructive-foreground: #f4f1e8;
-  --info: #3a5a6e;
-  --info-foreground: #f4f1e8;
-  --success: #4a6851;
-  --success-foreground: #f4f1e8;
-  --warning: #9a6b1f;
-  --warning-foreground: #f4f1e8;
-  --border: rgba(38, 34, 27, 0.13);
-  --input: rgba(38, 34, 27, 0.16);
-  --ring: #55614c;
-  --sidebar: #efece1;
-  --sidebar-foreground: #3c372e;
-  --sidebar-primary: #55614c;
-  --sidebar-primary-foreground: #f4f1e8;
-  --sidebar-accent: rgba(38, 34, 27, 0.06);
-  --sidebar-accent-foreground: #26221b;
-  --sidebar-border: rgba(38, 34, 27, 0.1);
-  --sidebar-ring: #55614c;
-  --chart-1: #55614c;
-  --chart-2: #b04a2b;
-  --chart-3: #7c7464;
-  --chart-4: #9a6b1f;
-  --chart-5: #3a5a6e;
-  --code: #faf8f1;
-  --code-foreground: #26221b;
-  --code-highlight: rgba(38, 34, 27, 0.05);
+  /* 现代简约 SaaS（借鉴原型骨架）：白卡片 × 浅灰边框 × 蓝主色 */
+  --background: #fafafa;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --card-foreground: #18181b;
+  --popover: #ffffff;
+  --popover-foreground: #18181b;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: rgba(24, 24, 27, 0.05);
+  --secondary-foreground: #18181b;
+  --muted: rgba(24, 24, 27, 0.05);
+  --muted-foreground: #6b7280;
+  --accent: rgba(37, 99, 235, 0.08);
+  --accent-foreground: #1d4ed8;
+  --destructive: #e11d48;
+  --destructive-foreground: #ffffff;
+  --info: #0ea5e9;
+  --info-foreground: #ffffff;
+  --success: #10b981;
+  --success-foreground: #ffffff;
+  --warning: #f59e0b;
+  --warning-foreground: #ffffff;
+  --border: rgba(24, 24, 27, 0.08);
+  --input: rgba(24, 24, 27, 0.12);
+  --ring: #2563eb;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #3f3f46;
+  --sidebar-primary: #2563eb;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(37, 99, 235, 0.08);
+  --sidebar-accent-foreground: #1d4ed8;
+  --sidebar-border: rgba(24, 24, 27, 0.08);
+  --sidebar-ring: #2563eb;
+  --chart-1: #2563eb;
+  --chart-2: #0ea5e9;
+  --chart-3: #8b5cf6;
+  --chart-4: #f59e0b;
+  --chart-5: #10b981;
+  --code: #f8fafc;
+  --code-foreground: #18181b;
+  --code-highlight: rgba(24, 24, 27, 0.05);
 }
 
 .dark {
-  /* 墨 × 纸（暗） */
-  --background: #171714;
-  --foreground: #e5dfcf;
-  --card: #1d1c18;
-  --card-foreground: #e5dfcf;
-  --popover: #1d1c18;
-  --popover-foreground: #e5dfcf;
-  --primary: #98a48c;
-  --primary-foreground: #171714;
-  --secondary: rgba(229, 223, 207, 0.06);
-  --secondary-foreground: #e5dfcf;
-  --muted: rgba(229, 223, 207, 0.06);
-  --muted-foreground: #9a927f;
-  --accent: rgba(152, 164, 140, 0.12);
-  --accent-foreground: #c3ccb9;
-  --destructive: #d06a48;
-  --destructive-foreground: #171714;
-  --info: #6d93a8;
-  --info-foreground: #171714;
-  --success: #7ba083;
-  --success-foreground: #171714;
-  --warning: #c2933d;
-  --warning-foreground: #171714;
-  --border: rgba(229, 223, 207, 0.13);
-  --input: rgba(229, 223, 207, 0.18);
-  --ring: #98a48c;
-  --sidebar: #12120f;
-  --sidebar-foreground: #b5ad9a;
-  --sidebar-primary: #98a48c;
-  --sidebar-primary-foreground: #171714;
-  --sidebar-accent: rgba(229, 223, 207, 0.07);
-  --sidebar-accent-foreground: #e5dfcf;
-  --sidebar-border: rgba(229, 223, 207, 0.1);
-  --sidebar-ring: #98a48c;
-  --chart-1: #98a48c;
-  --chart-2: #d06a48;
-  --chart-3: #9a927f;
-  --chart-4: #c2933d;
-  --chart-5: #6d93a8;
-  --code: #1d1c18;
-  --code-foreground: #e5dfcf;
-  --code-highlight: rgba(229, 223, 207, 0.07);
+  /* 现代简约（暗）：深灰蓝底 */
+  --background: #0f1115;
+  --foreground: #e6e8eb;
+  --card: #171a1f;
+  --card-foreground: #e6e8eb;
+  --popover: #171a1f;
+  --popover-foreground: #e6e8eb;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: rgba(230, 232, 235, 0.07);
+  --secondary-foreground: #e6e8eb;
+  --muted: rgba(230, 232, 235, 0.07);
+  --muted-foreground: #9aa1ab;
+  --accent: rgba(59, 130, 246, 0.14);
+  --accent-foreground: #dbeafe;
+  --destructive: #f43f5e;
+  --destructive-foreground: #ffffff;
+  --info: #38bdf8;
+  --info-foreground: #0f1115;
+  --success: #34d399;
+  --success-foreground: #0f1115;
+  --warning: #fbbf24;
+  --warning-foreground: #0f1115;
+  --border: rgba(230, 232, 235, 0.12);
+  --input: rgba(230, 232, 235, 0.16);
+  --ring: #3b82f6;
+  --sidebar: #12141a;
+  --sidebar-foreground: #a7adb6;
+  --sidebar-primary: #3b82f6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(59, 130, 246, 0.14);
+  --sidebar-accent-foreground: #dbeafe;
+  --sidebar-border: rgba(230, 232, 235, 0.1);
+  --sidebar-ring: #3b82f6;
+  --chart-1: #3b82f6;
+  --chart-2: #38bdf8;
+  --chart-3: #a78bfa;
+  --chart-4: #fbbf24;
+  --chart-5: #34d399;
+  --code: #171a1f;
+  --code-foreground: #e6e8eb;
+  --code-highlight: rgba(230, 232, 235, 0.07);
 }
 
 
 @layer base {
+  html {
+    /* 覆盖 Tailwind preflight 的 1.5：原型（浏览器默认 normal）行高更紧凑，
+       全局对齐后再按原型显式覆盖个别元素（如任务卡 1.5、描述 1.7）。 */
+    line-height: 1.3;
+  }
   * {
     @apply border-border outline-ring/50;
   }
@@ -1342,70 +1347,10 @@ input:-webkit-autofill:active {
 
 }
 
-/* ============ 簡素 (Kanso) — 日式禅意极简：纸纹、印鉴、发丝细线 ============ */
+/* ============ 全局（现代简约） ============ */
 
-/* 和紙颗粒：细微噪点叠加在背景上，制造纸面质感 */
-body {
-  background-image:
-    radial-gradient(ellipse at 18% 0%, rgba(176, 74, 43, 0.045), transparent 55%),
-    radial-gradient(ellipse at 85% 100%, rgba(85, 97, 76, 0.05), transparent 60%);
-  background-attachment: fixed;
-}
-
-/* 朱印（hanko）：品牌印章，方形 + 苔色/朱色描边 */
-.seal {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border: 1.5px solid currentColor;
-  border-radius: 2px;
-  font-family: var(--font-heading);
-  font-weight: 600;
-  line-height: 1;
-  color: var(--destructive);
-  letter-spacing: 0;
-}
-.seal-lg {
-  width: 3.5rem;
-  height: 3.5rem;
-  font-size: 1.75rem;
-  border-width: 2px;
-}
-
-/* 发丝细线分隔 */
-.hairline-b { border-bottom: 1px solid var(--border); }
-.hairline-r { border-right: 1px solid var(--border); }
-
-/* 札（任务卡）：暖纸面 + 柔和阴影 + 方形角 */
-.fuda {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  box-shadow: 0 1px 2px rgba(38, 34, 27, 0.05), 0 2px 8px rgba(38, 34, 27, 0.04);
-  transition: box-shadow 160ms ease, transform 160ms ease, border-color 160ms ease;
-}
-.fuda:hover {
-  box-shadow: 0 2px 4px rgba(38, 34, 27, 0.07), 0 6px 18px rgba(38, 34, 27, 0.08);
-  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
-}
-
-/* 选择色：墨绿 */
+/* 选择色：主色 */
 ::selection {
   background: color-mix(in srgb, var(--primary) 22%, transparent);
   color: var(--foreground);
-}
-
-/* 明数字体细节：标题追踪放款 */
-.font-display { font-family: var(--font-heading); }
-.font-mono-num { font-variant-numeric: tabular-nums; }
-
-/* 品牌字标：明朝体 + 宽字距 */
-.wordmark {
-  font-family: var(--font-heading);
-  font-weight: 600;
-  letter-spacing: 0.34em;
-  text-transform: uppercase;
-  font-size: 0.95rem;
 }

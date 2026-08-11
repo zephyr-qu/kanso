@@ -1,5 +1,5 @@
 // 看板页：编排与渲染。数据/缓存/乐观更新逻辑都在领域 hooks 里（架构候选 1）。
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
 	DndContext,
 	PointerSensor,
@@ -12,13 +12,15 @@ import {
 	SortableContext,
 	horizontalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { PlusIcon, TagIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpIcon, PlusIcon, TagIcon } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router";
 import ConfirmDialog from "@/components/confirm-dialog";
 import LabelManagerDialog from "@/components/label-manager";
 import NameDialog from "@/components/name-dialog";
 import SortableColumn from "@/components/board/sortable-column";
 import { Button } from "@/components/ui/button";
+import { recordProjectOpen } from "@/lib/recent-projects";
+import { sortTasks, type SortConfig } from "@/lib/sort-tasks";
 import {
 	Empty,
 	EmptyDescription,
@@ -27,6 +29,7 @@ import {
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
 import { useBoardData } from "@/hooks/use-board-data";
+import { useBoardSort } from "@/hooks/use-board-sort";
 import { useLabelMutations } from "@/hooks/use-label-mutations";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useTaskMutations } from "@/hooks/use-task-mutations";
@@ -34,15 +37,22 @@ import type { BoardColumn } from "@/types/board";
 import type { Task } from "@/types/task";
 
 export default function BoardPage() {
-	const { projectId = "" } = useParams();
+	const { projectId = "", workspaceId = "" } = useParams();
+
+	// 打开项目即记录"最近打开"，供仪表盘"项目速览"展示。
+	useEffect(() => {
+		if (workspaceId && projectId) recordProjectOpen(workspaceId, projectId);
+	}, [workspaceId, projectId]);
 	const navigate = useNavigate();
+
 	const [createOpen, setCreateOpen] = useState(false);
 	const [renaming, setRenaming] = useState<BoardColumn | null>(null);
 	const [deleting, setDeleting] = useState<BoardColumn | null>(null);
 	const [editingTask, setEditingTask] = useState<Task | null>(null);
 	const [deletingTask, setDeletingTask] = useState<Task | null>(null);
 	const [labelManagerOpen, setLabelManagerOpen] = useState(false);
-
+	// 显示层排序（按项目持久化到 localStorage，刷新保持）：不改写 position。
+	const { sort: sortConfig, setSort: setSortConfig } = useBoardSort(projectId);
 	const { board, isLoading, isError, columnOps } = useBoardData(projectId);
 	const taskOps = useTaskMutations(projectId);
 	const labelOps = useLabelMutations(projectId);
@@ -104,23 +114,67 @@ export default function BoardPage() {
 		});
 	}
 
+
 	return (
 		<div className="flex h-full flex-col">
-			<div className="flex items-center justify-between border-b px-6 py-3">
-				<div className="flex min-w-0 items-center gap-3">
+			<div className="flex h-14 shrink-0 items-center justify-between border-b px-6">
+				<div className="flex min-w-0 items-baseline gap-3">
 					<Link
 						to={`/w/${board?.project.workspaceId ?? ""}`}
-						className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground"
+						className="text-[13px] text-muted-foreground transition-colors hover:text-foreground"
 					>
-						← Projects
+						← 项目
 					</Link>
 					<span className="text-muted-foreground/40">/</span>
-					<h1 className="font-display truncate text-xl font-semibold tracking-wide">
+					<h1 className="truncate text-[17px] font-[650] tracking-tight">
 						{board?.project.name ?? "看板"}
 					</h1>
 				</div>
 				<div className="flex gap-2">
-					<Button variant="ghost" onClick={() => setLabelManagerOpen(true)}>
+					{/* 显示层排序切换器：字段（原顺序/标题/创建时间）+ 方向；不改写 position。 */}
+					<div className="flex items-center gap-0.5 rounded-[6px] border bg-background px-1 py-0.5">
+						{(
+							[
+								{ value: "position", label: "原顺序" },
+								{ value: "title", label: "标题" },
+								{ value: "createdAt", label: "创建时间" },
+							] as const
+						).map((opt) => (
+							<Button
+								key={opt.value}
+								variant={sortConfig.field === opt.value ? "secondary" : "ghost"}
+								size="sm"
+								className="h-6 px-2 text-xs"
+								aria-pressed={sortConfig.field === opt.value}
+								onClick={() =>
+									setSortConfig((c) => ({ ...c, field: opt.value }))
+								}
+							>
+								{opt.label}
+							</Button>
+						))}
+						<Button
+							variant="ghost"
+							size="icon"
+							className="size-6"
+							aria-label={
+								sortConfig.direction === "asc" ? "切换为降序" : "切换为升序"
+							}
+							onClick={() =>
+								setSortConfig((c) => ({
+									...c,
+									direction: c.direction === "asc" ? "desc" : "asc",
+								}))
+							}
+						>
+							{sortConfig.direction === "asc" ? (
+								<ArrowUpIcon />
+							) : (
+								<ArrowDownIcon />
+							)}
+						</Button>
+					</div>
+					<Button variant="outline" onClick={() => setLabelManagerOpen(true)}>
 						<TagIcon /> 标签
 					</Button>
 					<Button onClick={() => setCreateOpen(true)}>
@@ -138,7 +192,7 @@ export default function BoardPage() {
 					加载看板失败
 				</p>
 			) : board && board.columns.length > 0 ? (
-				<div className="flex-1 overflow-auto p-4">
+				<div className="flex-1 overflow-auto py-6 pl-4 pr-7">
 					<DndContext
 						sensors={sensors}
 						collisionDetection={closestCorners}
@@ -148,12 +202,13 @@ export default function BoardPage() {
 							items={board.columns.map((c) => c.id)}
 							strategy={horizontalListSortingStrategy}
 						>
-							<div className="flex items-start gap-3">
+							<div className="flex items-start">
 								{board.columns.map((column) => (
 									<SortableColumn
 										key={column.id}
 										column={column}
 										labels={board.labels}
+										sortConfig={sortConfig}
 										onRename={setRenaming}
 										onDelete={setDeleting}
 										onAddTask={(columnId, title) =>

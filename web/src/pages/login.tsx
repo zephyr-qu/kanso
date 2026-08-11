@@ -1,4 +1,5 @@
-// 登录页：品牌时刻——朱印 + 明朝字标 + 和紙底，不对称构图。
+// 登录页（借鉴原型 #login）：品牌侧（主色 mark + 标语）+ 表单侧（密钥入口）。
+// 保留现有功能：校验密钥、错误提示、loading、401 重定向。
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
@@ -34,50 +35,47 @@ export default function LoginPage() {
 	}
 
 	return (
-		<div className="flex h-dvh flex-col justify-between overflow-hidden md:flex-row">
-			{/* 左：品牌块——朱印盖下、字标、一句注脚 */}
-			<div className="relative flex flex-1 flex-col justify-between p-8 md:p-14">
-				<div className="flex items-center gap-4 animate-[fadeIn_500ms_ease_both]">
-					<span className="seal seal-lg animate-[stamp_500ms_cubic-bezier(0.23,1,0.32,1)_both]">
-						簡
-					</span>
-					<span className="wordmark">Kanso</span>
+		<div className="flex min-h-dvh">
+			{/* 左：品牌侧 */}
+			{/* 对齐原型 #login .brand-side：padding 48px 56px。 */}
+			<div className="flex flex-1 flex-col justify-between p-12 md:px-14 md:py-12">
+				<div className="flex items-center gap-3 animate-[fadeIn_400ms_ease_both]">
+					<span
+						className="size-[26px] rounded-[7px] bg-primary shadow-[0_1px_4px_rgba(37,99,235,0.4)]"
+						aria-hidden
+					/>
+					<span className="text-[17px] font-bold tracking-[-0.01em]">Kanso</span>
 				</div>
+
 				<div className="hidden md:block">
-					<p
-						className="font-display text-4xl leading-snug tracking-wide animate-[fadeInUp_700ms_150ms_ease_both]"
-						style={{ animationDelay: "150ms" }}
-					>
-						簡素。
+					<p className="text-[26px] font-semibold leading-[1.45] tracking-tight animate-[fadeInUp_500ms_100ms_ease_both]">
+						简单，专注。
 					</p>
 					<p
-						className="mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground animate-[fadeInUp_700ms_300ms_ease_both]"
-						style={{ animationDelay: "300ms" }}
+						className="mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground animate-[fadeInUp_500ms_200ms_ease_both]"
+						style={{ animationDelay: "200ms" }}
 					>
-						内网看板，自用轻量。去除芜杂，只留事务本身。
+						内网看板 · 自用轻量 · 现代简约
 					</p>
 				</div>
-				<div className="hairline-b pb-3">
-					<p className="font-mono text-[11px] uppercase tracking-[0.28em] text-muted-foreground/70">
-						Kanban · 内网 · 单机
-					</p>
-				</div>
+
+				<p className="text-xs text-muted-foreground/70">Kanban · 单机部署</p>
 			</div>
 
 			{/* 右：密钥入口 */}
-			<div className="flex items-center justify-center border-l px-8 py-16 md:w-[26rem] md:px-12">
-				<div className="w-full max-w-sm animate-[fadeInUp_600ms_200ms_ease_both]">
-					<p className="font-display text-2xl">进入</p>
-					<p className="mt-1 text-sm text-muted-foreground">
+			<div className="flex w-full items-center justify-center border-l px-8 py-16 md:w-[420px] md:px-12">
+				<div className="w-full max-w-[320px] animate-[fadeInUp_450ms_150ms_ease_both]">
+					<h1 className="text-xl font-semibold tracking-tight">进入工作区</h1>
+					<p className="mt-1 text-[13px] text-muted-foreground">
 						输入访问密钥（见{" "}
 						<code className="font-mono text-xs">KANSO_ACCESS_KEY</code> 或
 						<code className="font-mono text-xs"> docker logs</code>）
 					</p>
-					<form onSubmit={handleSubmit} className="mt-8 space-y-4">
+					<form onSubmit={handleSubmit} className="mt-8 space-y-5">
 						<div>
 							<label
 								htmlFor="access-key"
-								className="mb-1.5 block text-xs text-muted-foreground"
+								className="mb-2 mt-6 block text-[13px] text-muted-foreground"
 							>
 								访问密钥
 							</label>
@@ -89,13 +87,13 @@ export default function LoginPage() {
 								onChange={(e) => setKey(e.target.value)}
 								placeholder="粘贴访问密钥"
 								autoFocus
-								className="h-10 rounded-[3px]"
+								className="h-[38px]"
 							/>
 						</div>
 						{error ? <p className="text-sm text-destructive">{error}</p> : null}
 						<Button
 							type="submit"
-							className="w-full rounded-[3px]"
+							className="h-[38px] w-full"
 							loading={loading}
 							disabled={!key.trim()}
 						>
@@ -109,11 +107,6 @@ export default function LoginPage() {
 			<style>{`
 				@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
 				@keyframes fadeInUp { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
-				@keyframes stamp {
-					0% { opacity: 0; transform: scale(1.6) rotate(-14deg) }
-					55% { opacity: 1; transform: scale(0.92) rotate(2deg) }
-					100% { opacity: 1; transform: scale(1) rotate(0deg) }
-				}
 			`}</style>
 		</div>
 	);

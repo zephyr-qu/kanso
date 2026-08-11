@@ -40,6 +40,18 @@ export function moveTaskInBoard(
 	return { ...board, columns };
 }
 
+// addTaskToBoard 纯函数：把新任务追加到目标列末尾（服务端创建即分配末尾 position），
+// 用于 createTask 乐观插入，消除「添加后等 refetch 才出现」的延迟感。
+export function addTaskToBoard(board: Board | undefined, task: Task): Board | undefined {
+	if (!board) return board;
+	if (!board.columns.some((c) => c.id === task.columnId)) return board;
+	return {
+		...board,
+		columns: board.columns.map((c) =>
+			c.id === task.columnId ? { ...c, tasks: [...c.tasks, task] } : c,
+		),
+	};
+}
 export function useTaskMutations(projectId: string) {
 	const queryClient = useQueryClient();
 
@@ -49,7 +61,14 @@ export function useTaskMutations(projectId: string) {
 				method: "POST",
 				body: JSON.stringify({ title }),
 			}),
-		onSuccess: () => invalidateBoard(queryClient, projectId),
+		onSuccess: (task) => {
+			// 乐观插入：用服务端返回的任务立即写入缓存（无延迟感），invalidate 后台收敛。
+			queryClient.setQueryData<Board>(
+				queryKeys.board(projectId),
+				(old) => addTaskToBoard(old, task),
+			);
+			invalidateBoard(queryClient, projectId);
+		},
 	});
 
 	const updateTask = useMutation({

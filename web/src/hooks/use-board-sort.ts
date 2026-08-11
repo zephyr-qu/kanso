@@ -9,10 +9,7 @@ const DEFAULT_SORT: SortConfig = {
 const SORT_FIELD_MAP: Record<SortField, true> = {
   position: true,
   createdAt: true,
-  priority: true,
-  dueDate: true,
   title: true,
-  number: true,
 };
 
 const SORT_FIELDS = Object.keys(SORT_FIELD_MAP) as readonly SortField[];

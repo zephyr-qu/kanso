@@ -177,7 +177,13 @@ func (s *Service) DeleteColumn(ctx context.Context, columnID string) error {
 
 // MoveColumn 把列移动到目标位置（0 起），整列列表重排（reindex）。
 func (s *Service) MoveColumn(ctx context.Context, columnID string, targetPosition int64) error {
-	q := gen.New(s.db)
+	// 读（列顺序）与写（reindex）在同一事务内：单连接下保证并发拖拽不覆盖他人提交。
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("开启事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := gen.New(tx)
 
 	column, err := q.GetColumn(ctx, columnID)
 	if err != nil {
@@ -204,15 +210,8 @@ func (s *Service) MoveColumn(ctx context.Context, columnID string, targetPositio
 	}
 	order = append(order[:targetPosition], append([]gen.Column{column}, order[targetPosition:]...)...)
 
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("开启事务失败: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	tq := gen.New(tx)
 	for i, c := range order {
-		if err := tq.SetColumnPosition(ctx, gen.SetColumnPositionParams{
+		if err := q.SetColumnPosition(ctx, gen.SetColumnPositionParams{
 			ID:       c.ID,
 			Position: int64(i),
 		}); err != nil {
