@@ -1,7 +1,6 @@
 // 仪表盘聚合纯函数：输入看板/活动数据，输出仪表盘统计（mock 与后端共用契约）。
 // 状态口径（2026-08 调整）：任务状态由列位置决定——"已完成"= 位于项目末列（position 最大列），
 // 不依赖列名，用户重命名列不影响统计。
-import { formatActivityText } from "@/lib/activity";
 import type { Board } from "@/types/board";
 
 export type DashboardData = {
@@ -19,7 +18,7 @@ export type DashboardData = {
 		total: number;
 	}[];
 	focus: { id: string; title: string; column: string; urgent: boolean }[];
-	recentActivity: { id: string; text: string; time: string }[];
+	recentActivity: { id: string; projectName: string; action: string; createdAt: string }[];
 	/** 近 14 天新增/完成趋势（含今天，无数据日期补零）。 */
 	trend: { day: string; created: number; completed: number }[];
 };
@@ -111,8 +110,9 @@ export function computeDashboard(input: DashboardInput): DashboardData {
 			.slice(0, 8)
 			.map((a) => ({
 				id: a.createdAt + a.action,
-				text: formatActivityText(a.projectName, a.action),
-				time: a.createdAt,
+				projectName: a.projectName,
+				action: a.action,
+				createdAt: a.createdAt,
 			})),
 		trend: buildTrend(activities),
 	};

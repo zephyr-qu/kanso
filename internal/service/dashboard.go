@@ -10,25 +10,6 @@ import (
 	"kanso/internal/db/gen"
 )
 
-// actionLabels 活动文案（与前端 lib/events.ts 的 ACTION_LABELS 对齐；未识别动作回退原始字符串）。
-// key 复用 events.go 的事件常量——动作字符串只在 events.go 定义一次。
-var actionLabels = map[string]string{
-	EventTaskCreated:    "创建了任务",
-	EventTaskUpdated:    "更新了任务",
-	EventTaskMoved:      "移动了任务",
-	EventTaskDeleted:    "删除了任务",
-	EventColumnCreated:  "创建了列",
-	EventColumnUpdated:  "重命名了列",
-	EventColumnMoved:    "移动了列",
-	EventColumnDeleted:  "删除了列",
-	EventLabelCreated:   "创建了标签",
-	EventLabelUpdated:   "重命名了标签",
-	EventLabelDeleted:   "删除了标签",
-	EventLabelAttached:  "贴了标签",
-	EventLabelDetached:  "移除了标签",
-	EventCommentCreated: "发表了评论",
-	EventCommentDeleted: "删除了评论",
-}
 
 type DashboardColumnStat struct {
 	Name  string `json:"name"`
@@ -50,10 +31,13 @@ type DashboardFocusTask struct {
 	Urgent bool   `json:"urgent"`
 }
 
+// DashboardActivityItem 仪表盘「最近活动」条目——结构化字段，文案由前端统一渲染
+// （ActivityItem 组件；Go 不拼文案，见 ADR-0004 前后端无共享类型包的约束）。
 type DashboardActivityItem struct {
-	ID   string `json:"id"`
-	Text string `json:"text"`
-	Time string `json:"time"`
+	ID          string `json:"id"`
+	ProjectName string `json:"projectName"`
+	Action      string `json:"action"`
+	CreatedAt   string `json:"createdAt"`
 }
 
 // DashboardTrendPoint 某一天的创建/完成任务数（跨全部工作区）。
@@ -177,14 +161,11 @@ func (s *Service) GetDashboard(ctx context.Context) (DashboardData, error) {
 		if i >= 8 {
 			break
 		}
-		label := actionLabels[a.Action]
-		if label == "" {
-			label = a.Action
-		}
 		recent = append(recent, DashboardActivityItem{
-			ID:   a.ID,
-			Text: fmt.Sprintf("在 %s 中，你 %s", a.ProjectName, label),
-			Time: a.CreatedAt,
+			ID:          a.ID,
+			ProjectName: a.ProjectName,
+			Action:      a.Action,
+			CreatedAt:   a.CreatedAt,
 		})
 	}
 

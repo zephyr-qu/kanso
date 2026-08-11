@@ -1,15 +1,15 @@
 // 全局活动页：跨项目活动时间线，按日分组（今天/昨天/更早），组内时间倒序。
 // 数据来自 /api/activity（mock 与仪表盘共用拍平逻辑；对接后由真实端点提供）。
-// 文案与仪表盘最近活动共用 formatActivityText（ticket 04：无重复实现）。
+// 条目渲染与仪表盘最近活动共用 ActivityItem（活动文案与高亮一处定义）。
 import { useQuery } from "@tanstack/react-query";
 import { Spinner } from "@/components/ui/spinner";
+import ActivityItem from "@/components/activity-item";
 import { api } from "@/lib/api";
 import {
 	groupActivitiesByDay,
 	type FlatActivity,
 } from "@/lib/activity";
 import { queryKeys } from "@/hooks/query-keys";
-import { ACTION_LABELS } from "@/lib/events";
 
 function formatTime(iso: string): string {
 	const d = new Date(iso);
@@ -61,14 +61,10 @@ export default function ActivityPage() {
 											className="flex items-baseline gap-2.5 rounded-lg px-2 py-2 text-[13px] leading-[1.5] transition-colors hover:bg-[rgba(24,24,27,0.04)]"
 										>
 											<span className="mt-[6px] size-[7px] shrink-0 self-start rounded-full bg-border" />
-											<span className="min-w-0 flex-1 truncate text-muted-foreground">
-												{"在 "}
-												<span className="font-medium text-primary">{a.projectName}</span>
-												{" 中，"}
-												<span className="font-medium text-foreground">你</span>
-												{" "}
-												{ACTION_LABELS[a.action] ?? a.action}
-											</span>
+											<ActivityItem
+												projectName={a.projectName}
+												action={a.action}
+											/>
 											<span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
 												{formatTime(a.createdAt)}
 											</span>

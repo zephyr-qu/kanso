@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { Spinner } from "@/components/ui/spinner";
+import ActivityItem from "@/components/activity-item";
 import { api } from "@/lib/api";
 import { queryKeys } from "@/hooks/query-keys";
 import { getRecentProjectsAll } from "@/lib/recent-projects";
@@ -43,7 +44,9 @@ export default function DashboardPage() {
 	}
 
 	// 项目速览：全部工作区最近打开的 5 个（打开记录在进入看板时写入 localStorage）。
-	const recentProjects = getRecentProjectsAll(5)
+	// 一次求值，map 内复用（此前 map 内二次调用 getRecentProjectsAll）。
+	const recentProjectEntries = getRecentProjectsAll(5);
+	const recentProjects = recentProjectEntries
 		.map((r) => data.projects.find((p) => p.id === r.projectId))
 		.filter((p) => p !== undefined);
 
@@ -199,7 +202,7 @@ export default function DashboardPage() {
 						) : (
 							recentProjects.map((p) => {
 								const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
-								const entry = getRecentProjectsAll(5).find(
+								const entry = recentProjectEntries.find(
 									(r) => r.projectId === p.id,
 								);
 								const wsId = entry?.workspaceId ?? "";
@@ -242,11 +245,12 @@ export default function DashboardPage() {
 										className="flex items-baseline gap-2.5 py-1.5"
 									>
 										<span className="size-[7px] shrink-0 rounded-full bg-border" />
-										<span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
-											{a.text}
-										</span>
+										<ActivityItem
+											projectName={a.projectName}
+											action={a.action}
+										/>
 										<span className="shrink-0 text-xs text-muted-foreground/70">
-											{formatTime(a.time)}
+											{formatTime(a.createdAt)}
 										</span>
 									</div>
 								))}

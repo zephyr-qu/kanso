@@ -1248,17 +1248,18 @@ func TestDashboardContract(t *testing.T) {
 	if focus := d["focus"].([]any); len(focus) != 1 || focus[0].(map[string]any)["title"] != "待办任务" {
 		t.Fatalf("focus 应含待办任务，实际 %v", focus)
 	}
-	// 最近活动含 task.created（文案为「在 X 中，你 创建了任务」）。
+	// 最近活动含 task.created（结构化字段 projectName/action/createdAt；文案由前端渲染）。
 	recent := d["recentActivity"].([]any)
 	foundCreated := false
 	for _, item := range recent {
-		if strings.Contains(item.(map[string]any)["text"].(string), "创建了任务") {
+		m := item.(map[string]any)
+		if m["action"] == "task.created" && m["projectName"] != "" {
 			foundCreated = true
 			break
 		}
 	}
 	if !foundCreated {
-		t.Fatalf("recentActivity 应含 task.created 文案，实际 %v", recent)
+		t.Fatalf("recentActivity 应含 task.created 结构化条目，实际 %v", recent)
 	}
 }
 

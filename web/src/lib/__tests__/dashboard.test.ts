@@ -167,11 +167,13 @@ describe("computeDashboard", () => {
 		expect(d2.trend[d2.trend.length - 1].created).toBe(1);
 	});
 
-	it("最近活动按时间倒序并带项目名", () => {
+	it("最近活动按时间倒序并带结构化字段", () => {
 		expect(d.recentActivity).toHaveLength(2);
-		expect(d.recentActivity[0].text).toContain("在 P 中");
-		expect(d.recentActivity[0].text).toContain("更新了任务");
-		expect(d.recentActivity[0].time > d.recentActivity[1].time).toBe(true);
+		expect(d.recentActivity[0].projectName).toBe("P");
+		expect(d.recentActivity[0].action).toBe("task.updated");
+		expect(
+			d.recentActivity[0].createdAt > d.recentActivity[1].createdAt,
+		).toBe(true);
 	});
 
 	it("空数据不崩溃", () => {
