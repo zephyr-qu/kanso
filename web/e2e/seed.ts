@@ -1,14 +1,10 @@
-// E2E 数据重置与种子：真后端是共享库，mock 模式下每个测试有独立内存数据，
-// 这里在测试前通过 API 把库重置为已知状态，复现「每测试干净起点」。
-// 种子数据对齐 src/mocks/seed-data.ts 中 E2E 依赖的命名项目（原型演示/看板冒烟/标签冒烟）。
+// E2E 数据重置与种子：真后端是共享库，这里在测试前通过 API 把库重置为已知状态，
+// 复现「每测试干净起点」。
 import type { Page } from "@playwright/test";
 
 const BASE = process.env.KANSO_API_URL ?? "http://localhost:8080";
 
-// mock 模式下（VITE_USE_MOCK=true 启动）每测试有独立内存种子数据，
-// 不需要（也不能）走真后端重置；只有对接模式（默认）才重置共享库。
-const USE_MOCK = process.env.VITE_USE_MOCK === "true";
-// 命名种子：E2E 各 spec 依赖的项目名（对齐 mock seed-data.ts）。
+// 命名种子：E2E 各 spec 依赖的项目名。
 // 任务对象支持 description：原型 demo board 的卡片含描述，种子需对齐才能让
 // visual-compare 的 cardH/colH 尺寸对比达标（差异 ≤2px）。
 const SEED_PROJECTS = [
@@ -66,8 +62,6 @@ async function api(path: string, init?: RequestInit): Promise<Response> {
 
 // 重置：删除所有工作区（级联项目/列/任务/标签/活动），重建默认工作区与种子数据。
 export async function resetAndSeed(): Promise<void> {
-	// mock 模式：每个测试浏览器上下文独立加载内存种子，无需重置。
-	if (USE_MOCK) return;
 	// 1. 删除全部工作区。
 	const wsRes = await api("/api/workspaces");
 	if (wsRes.ok) {

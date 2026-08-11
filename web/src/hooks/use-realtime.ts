@@ -4,15 +4,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getAccessKey } from "@/lib/api";
 import { invalidateBoardScope } from "@/hooks/query-keys";
 
-// mock 模式（MSW）无 WebSocket 源，跳过订阅（对接后端后自动恢复）。
-const isMock = import.meta.env.DEV && import.meta.env.VITE_USE_MOCK !== "false";
-
+// 直接订阅后端 WebSocket（mock 层已删，见架构审查候选 4）。
 export function useRealtime(projectId: string | undefined) {
 	const queryClient = useQueryClient();
 
 	useEffect(() => {
 		if (!projectId) return;
-		if (isMock) return;
 		const key = getAccessKey();
 		if (!key) return;
 
