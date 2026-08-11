@@ -10,16 +10,8 @@ import {
 	type FlatActivity,
 } from "@/lib/activity";
 import { queryKeys } from "@/hooks/query-keys";
+import { formatClock } from "@/lib/format-relative";
 
-function formatTime(iso: string): string {
-	const d = new Date(iso);
-	const now = new Date();
-	const pad = (n: number) => String(n).padStart(2, "0");
-	if (d.toDateString() === now.toDateString()) {
-		return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-	}
-	return `${d.getMonth() + 1}月${d.getDate()}日 ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 export default function ActivityPage() {
 	const { data, isLoading, isError } = useQuery({
@@ -66,7 +58,7 @@ export default function ActivityPage() {
 												action={a.action}
 											/>
 											<span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
-												{formatTime(a.createdAt)}
+												{formatClock(a.createdAt)}
 											</span>
 										</li>
 									))}

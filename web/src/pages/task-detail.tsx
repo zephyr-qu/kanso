@@ -12,29 +12,10 @@ import { useRealtime } from "@/hooks/use-realtime";
 import { api } from "@/lib/api";
 import { invalidateTask, queryKeys } from "@/hooks/query-keys";
 import { ACTION_LABELS } from "@/lib/events";
+import { formatDateTime } from "@/lib/format-relative";
 import type { Comment, TaskDetail } from "@/types/task-detail";
 import type { Task } from "@/types/task";
 
-// 相对时间：对齐原型 #detail（"今天 14:32 / 昨天 18:05 / M月D日 HH:mm"），
-// 与仪表盘/活动页的相对格式保持一致。
-function formatTime(iso: string): string {
-	const date = new Date(iso);
-	if (Number.isNaN(date.getTime())) return iso;
-	const hhmm = date.toLocaleTimeString("zh-CN", {
-		hour: "2-digit",
-		minute: "2-digit",
-	});
-	const now = new Date();
-	const startOfToday = new Date(
-		now.getFullYear(),
-		now.getMonth(),
-		now.getDate(),
-	).getTime();
-	const t = date.getTime();
-	if (t >= startOfToday) return `今天 ${hhmm}`;
-	if (t >= startOfToday - 86_400_000) return `昨天 ${hhmm}`;
-	return `${date.getMonth() + 1}月${date.getDate()}日 ${hhmm}`;
-}
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
 	return (
@@ -276,7 +257,7 @@ export default function TaskDetailPage() {
 										删除按钮固定整卡右侧（hover 显示），不遮挡评论内容。 */}
 									<div className="min-w-0 flex-1">
 										<p className="mb-1 text-xs text-muted-foreground/70">
-											Admin · {formatTime(c.createdAt)}
+											Admin · {formatDateTime(c.createdAt)}
 										</p>
 										<p className="whitespace-pre-wrap text-sm leading-[1.6]">
 											{c.content}
@@ -318,7 +299,7 @@ export default function TaskDetailPage() {
 									</p>
 									{/* 原型 .a-time：12px / #9ca3af。 */}
 									<p className="mt-0.5 text-xs text-muted-foreground/70">
-										{formatTime(a.createdAt)}
+										{formatDateTime(a.createdAt)}
 									</p>
 								</li>
 							))}

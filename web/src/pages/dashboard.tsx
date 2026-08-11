@@ -8,19 +8,8 @@ import { api } from "@/lib/api";
 import { queryKeys } from "@/hooks/query-keys";
 import { getRecentProjectsAll } from "@/lib/recent-projects";
 import type { DashboardData } from "@/lib/dashboard";
+import { formatDateTime } from "@/lib/format-relative";
 
-function formatTime(iso: string): string {
-	const d = new Date(iso);
-	if (Number.isNaN(d.getTime())) return iso;
-	const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
-	const hhmm = d.toLocaleTimeString("zh-CN", {
-		hour: "2-digit",
-		minute: "2-digit",
-	});
-	if (days <= 0) return `今天 ${hhmm}`;
-	if (days === 1) return `昨天 ${hhmm}`;
-	return `${d.toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" })} ${hhmm}`;
-}
 
 export default function DashboardPage() {
 	const { data, isLoading, isError } = useQuery({
@@ -250,7 +239,7 @@ export default function DashboardPage() {
 											action={a.action}
 										/>
 										<span className="shrink-0 text-xs text-muted-foreground/70">
-											{formatTime(a.createdAt)}
+											{formatDateTime(a.createdAt)}
 										</span>
 									</div>
 								))}
