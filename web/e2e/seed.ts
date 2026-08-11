@@ -58,7 +58,7 @@ async function api(path: string, init?: RequestInit): Promise<Response> {
 			...(init?.headers ?? {}),
 		},
 	});
-	if (!res.ok && res.status < 400) {
+	if (!res.ok) {
 		throw new Error(`API ${path} → ${res.status}: ${await res.text()}`);
 	}
 	return res;

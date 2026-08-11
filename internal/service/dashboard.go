@@ -11,22 +11,23 @@ import (
 )
 
 // actionLabels 活动文案（与前端 lib/events.ts 的 ACTION_LABELS 对齐；未识别动作回退原始字符串）。
+// key 复用 events.go 的事件常量——动作字符串只在 events.go 定义一次。
 var actionLabels = map[string]string{
-	"task.created":    "创建了任务",
-	"task.updated":    "更新了任务",
-	"task.moved":      "移动了任务",
-	"task.deleted":    "删除了任务",
-	"column.created":  "创建了列",
-	"column.updated":  "重命名了列",
-	"column.moved":    "移动了列",
-	"column.deleted":  "删除了列",
-	"label.created":   "创建了标签",
-	"label.updated":   "重命名了标签",
-	"label.deleted":   "删除了标签",
-	"label.attached":  "贴了标签",
-	"label.detached":  "移除了标签",
-	"comment.created": "发表了评论",
-	"comment.deleted": "删除了评论",
+	EventTaskCreated:    "创建了任务",
+	EventTaskUpdated:    "更新了任务",
+	EventTaskMoved:      "移动了任务",
+	EventTaskDeleted:    "删除了任务",
+	EventColumnCreated:  "创建了列",
+	EventColumnUpdated:  "重命名了列",
+	EventColumnMoved:    "移动了列",
+	EventColumnDeleted:  "删除了列",
+	EventLabelCreated:   "创建了标签",
+	EventLabelUpdated:   "重命名了标签",
+	EventLabelDeleted:   "删除了标签",
+	EventLabelAttached:  "贴了标签",
+	EventLabelDetached:  "移除了标签",
+	EventCommentCreated: "发表了评论",
+	EventCommentDeleted: "删除了评论",
 }
 
 type DashboardColumnStat struct {
@@ -189,7 +190,8 @@ func (s *Service) GetDashboard(ctx context.Context) (DashboardData, error) {
 
 	completion := int64(0)
 	if total > 0 {
-		completion = done * 100 / total
+		// 与前端 mock 的 Math.round 对齐（整数截断会与 mock 差 1 个百分点）。
+		completion = (done*100 + total/2) / total
 	}
 
 	return DashboardData{

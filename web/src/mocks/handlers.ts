@@ -4,7 +4,7 @@
 import { delay, http, HttpResponse } from "msw";
 import { seed } from "./seed-data";
 import { computeDashboard } from "@/lib/dashboard";
-import type { Board } from "@/types/board";
+import type { Board, Column } from "@/types/board";
 import type { Label } from "@/types/label";
 import type { Project } from "@/types/project";
 import type { Task } from "@/types/task";
@@ -265,16 +265,54 @@ export const handlers = [
 		await delay();
 		return HttpResponse.json(flattenActivities());
 	}),
-	// 设置页备份导出（mock 下导出内存态快照；对接后端后由真实备份端点提供）。
+	// 设置页备份导出：mock 输出与真后端 BackupData 同构的平铺结构
+	// （exportedAt/workspaces/projects/columns/tasks/labels/taskLabels/comments/activities），
+	// 保证关闭 mock 后下载文件形状一致（契约对齐，见 m2-cutover 01 票）。
 	http.get("/api/settings/backup", async () => {
 		await delay();
+		const columns: Column[] = [];
+		const tasks: Task[] = [];
+		const taskLabels: { taskId: string; labelId: string }[] = [];
+		for (const board of Object.values(db.boards)) {
+			for (const col of board.columns) {
+				columns.push({
+					id: col.id,
+					projectId: col.projectId,
+					name: col.name,
+					position: col.position,
+					createdAt: col.createdAt,
+				});
+				for (const t of col.tasks) {
+					tasks.push({
+						id: t.id,
+						projectId: t.projectId,
+						columnId: t.columnId,
+						title: t.title,
+						description: t.description,
+						position: t.position,
+						createdAt: t.createdAt,
+						updatedAt: t.updatedAt,
+					});
+					for (const l of t.labels ?? []) {
+						taskLabels.push({ taskId: t.id, labelId: l.id });
+					}
+				}
+			}
+		}
+		const projects = Object.values(db.projects).flat();
+		const labels = Object.values(db.labels).flat();
+		const comments = Object.values(db.taskDetails).flatMap((d) => d.comments);
+		const activities = Object.values(db.taskDetails).flatMap((d) => d.activity);
 		return HttpResponse.json({
 			exportedAt: now(),
 			workspaces: db.workspaces,
-			projects: db.projects,
-			boards: db.boards,
-			taskDetails: db.taskDetails,
-			labels: db.labels,
+			projects,
+			columns,
+			tasks,
+			labels,
+			taskLabels,
+			comments,
+			activities,
 		});
 	}),
 
