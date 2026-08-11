@@ -3,6 +3,7 @@ package httpapi
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"io/fs"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -20,6 +21,12 @@ type API struct {
 }
 
 func NewRouter(cfg config.Config, svc *service.Service, hub *realtime.Hub) http.Handler {
+	return NewRouterWithAssets(cfg, svc, hub, nil)
+}
+
+// NewRouterWithAssets builds the application router and optionally serves the
+// embedded production frontend for non-API paths.
+func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.Hub, assets fs.FS) http.Handler {
 	a := &API{cfg: cfg, svc: svc}
 	svc.SetBroadcaster(hub)
 	r := chi.NewRouter()
@@ -65,6 +72,7 @@ func NewRouter(cfg config.Config, svc *service.Service, hub *realtime.Hub) http.
 		pr.Post("/api/tasks/{id}/comments", a.createComment)
 		pr.Delete("/api/comments/{id}", a.deleteComment)
 	})
+	r.NotFound(staticHandler(assets).ServeHTTP)
 
 	return r
 }

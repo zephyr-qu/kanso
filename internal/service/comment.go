@@ -34,7 +34,12 @@ func (s *Service) ListComments(ctx context.Context, taskID string) ([]gen.Commen
 
 // CreateComment 发表评论并记录活动（评论即活动，见 spec）。
 func (s *Service) CreateComment(ctx context.Context, taskID, content string) (gen.Comment, error) {
-	q := gen.New(s.db)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return gen.Comment{}, fmt.Errorf("开启事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := gen.New(tx)
 	task, err := q.GetTask(ctx, taskID)
 	if err != nil {
 		return gen.Comment{}, mapNoRows(err)
@@ -53,15 +58,20 @@ func (s *Service) CreateComment(ctx context.Context, taskID, content string) (ge
 	if err != nil {
 		return gen.Comment{}, fmt.Errorf("发表评论失败: %w", err)
 	}
-	if err := s.dispatch(ctx, Event{
+	event := Event{
 		Action:         EventCommentCreated,
 		ProjectID:      task.ProjectID,
 		EntityID:       comment.ID,
 		ActivityTaskID: taskID,
 		RecordActivity: true,
-	}); err != nil {
+	}
+	if err := s.recordEvent(ctx, q, event); err != nil {
 		return gen.Comment{}, err
 	}
+	if err := tx.Commit(); err != nil {
+		return gen.Comment{}, fmt.Errorf("提交事务失败: %w", err)
+	}
+	s.broadcastEvent(event)
 	return comment, nil
 }
 
@@ -138,6 +148,10 @@ func (s *Service) GetTaskDetail(ctx context.Context, taskID string) (TaskDetail,
 
 // recordActivity 在任务下记录一条活动（写操作副作用，spec：写操作统一记录）。
 func (s *Service) recordActivity(ctx context.Context, taskID, action string, data any) error {
+	return recordActivityWithQueries(ctx, gen.New(s.db), taskID, action, data)
+}
+
+func recordActivityWithQueries(ctx context.Context, q *gen.Queries, taskID, action string, data any) error {
 	var dataStr *string
 	if data != nil {
 		encoded, err := json.Marshal(data)
@@ -151,14 +165,14 @@ func (s *Service) recordActivity(ctx context.Context, taskID, action string, dat
 	if err != nil {
 		return err
 	}
-	_, err = gen.New(s.db).CreateActivity(ctx, gen.CreateActivityParams{
+	_, err = q.CreateActivity(ctx, gen.CreateActivityParams{
 		ID:           activityID,
 		ResourceType: "task",
 		ResourceID:   taskID,
 		Action:       action,
 		Data:         dataStr,
 		// 纳秒精度保证同秒内操作仍可按时间倒序。
-		CreatedAt:    time.Now().UTC().Format(time.RFC3339Nano),
+		CreatedAt: time.Now().UTC().Format(time.RFC3339Nano),
 	})
 	if err != nil {
 		return fmt.Errorf("记录活动失败: %w", err)

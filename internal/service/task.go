@@ -12,7 +12,12 @@ import (
 // CreateTask 在列末尾创建任务（position 取 MAX+1，删除留洞也不会冲突）。
 // 返回任务与所属项目 ID。
 func (s *Service) CreateTask(ctx context.Context, columnID, title, description string) (gen.Task, string, error) {
-	q := gen.New(s.db)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return gen.Task{}, "", fmt.Errorf("开启事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := gen.New(tx)
 
 	column, err := q.GetColumn(ctx, columnID)
 	if err != nil {
@@ -42,21 +47,32 @@ func (s *Service) CreateTask(ctx context.Context, columnID, title, description s
 	if err != nil {
 		return gen.Task{}, "", fmt.Errorf("创建任务失败: %w", err)
 	}
-	if err := s.dispatch(ctx, Event{
+	event := Event{
 		Action:         EventTaskCreated,
 		ProjectID:      column.ProjectID,
 		EntityID:       task.ID,
 		Data:           map[string]string{"title": title},
 		RecordActivity: true,
-	}); err != nil {
+	}
+	if err := s.recordEvent(ctx, q, event); err != nil {
 		return gen.Task{}, "", err
 	}
+	if err := tx.Commit(); err != nil {
+		return gen.Task{}, "", fmt.Errorf("提交事务失败: %w", err)
+	}
+	s.broadcastEvent(event)
 	return task, column.ProjectID, nil
 }
 
 // UpdateTask 更新任务标题与描述（指针字段为空表示不改）；不存在时返回 ErrNotFound。
 func (s *Service) UpdateTask(ctx context.Context, taskID string, title, description *string) (gen.Task, error) {
-	current, err := gen.New(s.db).GetTask(ctx, taskID)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return gen.Task{}, fmt.Errorf("开启事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := gen.New(tx)
+	current, err := q.GetTask(ctx, taskID)
 	if err != nil {
 		return gen.Task{}, mapNoRows(err)
 	}
@@ -66,7 +82,7 @@ func (s *Service) UpdateTask(ctx context.Context, taskID string, title, descript
 	if description == nil {
 		description = current.Description
 	}
-	task, err := gen.New(s.db).UpdateTask(ctx, gen.UpdateTaskParams{
+	task, err := q.UpdateTask(ctx, gen.UpdateTaskParams{
 		ID:          taskID,
 		Title:       *title,
 		Description: description,
@@ -75,15 +91,20 @@ func (s *Service) UpdateTask(ctx context.Context, taskID string, title, descript
 	if err != nil {
 		return gen.Task{}, fmt.Errorf("更新任务失败: %w", err)
 	}
-	if err := s.dispatch(ctx, Event{
+	event := Event{
 		Action:         EventTaskUpdated,
 		ProjectID:      task.ProjectID,
 		EntityID:       task.ID,
 		Data:           map[string]string{"title": task.Title},
 		RecordActivity: true,
-	}); err != nil {
+	}
+	if err := s.recordEvent(ctx, q, event); err != nil {
 		return gen.Task{}, err
 	}
+	if err := tx.Commit(); err != nil {
+		return gen.Task{}, fmt.Errorf("提交事务失败: %w", err)
+	}
+	s.broadcastEvent(event)
 	return task, nil
 }
 
@@ -175,19 +196,24 @@ func (s *Service) MoveTask(ctx context.Context, taskID string, targetColumnID *s
 			return err
 		}
 	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("提交事务失败: %w", err)
-	}
-	return s.dispatch(ctx, Event{
-		Action:         EventTaskMoved,
-		ProjectID:      task.ProjectID,
-		EntityID:       taskID,
+	event := Event{
+		Action:    EventTaskMoved,
+		ProjectID: task.ProjectID,
+		EntityID:  taskID,
 		Data: map[string]string{
 			"from": sourceColumnID,
 			"to":   destColumnID,
 		},
 		RecordActivity: true,
-	})
+	}
+	if err := s.recordEvent(ctx, q, event); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交事务失败: %w", err)
+	}
+	s.broadcastEvent(event)
+	return nil
 }
 
 // removeTask 从列表中移除指定任务。

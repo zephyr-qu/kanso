@@ -87,7 +87,12 @@ func (s *Service) DeleteLabel(ctx context.Context, labelID string) error {
 
 // AttachLabel 给任务贴标签（幂等）；任务或标签不存在时返回 ErrNotFound。
 func (s *Service) AttachLabel(ctx context.Context, taskID, labelID string) error {
-	q := gen.New(s.db)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("开启事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := gen.New(tx)
 	task, err := q.GetTask(ctx, taskID)
 	if err != nil {
 		return mapNoRows(err)
@@ -99,29 +104,51 @@ func (s *Service) AttachLabel(ctx context.Context, taskID, labelID string) error
 	if err := q.AttachLabel(ctx, gen.AttachLabelParams{TaskID: taskID, LabelID: labelID}); err != nil {
 		return fmt.Errorf("贴标签失败: %w", err)
 	}
-	return s.dispatch(ctx, Event{
+	event := Event{
 		Action:         EventLabelAttached,
 		ProjectID:      task.ProjectID,
 		EntityID:       taskID,
 		Data:           map[string]string{"label": label.Name},
 		RecordActivity: true,
-	})
+	}
+	if err := s.recordEvent(ctx, q, event); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交事务失败: %w", err)
+	}
+	s.broadcastEvent(event)
+	return nil
 }
 
 // DetachLabel 从任务移除标签（幂等）。
 func (s *Service) DetachLabel(ctx context.Context, taskID, labelID string) error {
-	task, err := gen.New(s.db).GetTask(ctx, taskID)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("开启事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := gen.New(tx)
+	task, err := q.GetTask(ctx, taskID)
 	if err != nil {
 		return mapNoRows(err)
 	}
-	if err := gen.New(s.db).DetachLabel(ctx, gen.DetachLabelParams{TaskID: taskID, LabelID: labelID}); err != nil {
+	if err := q.DetachLabel(ctx, gen.DetachLabelParams{TaskID: taskID, LabelID: labelID}); err != nil {
 		return fmt.Errorf("移除标签失败: %w", err)
 	}
-	return s.dispatch(ctx, Event{
+	event := Event{
 		Action:         EventLabelDetached,
 		ProjectID:      task.ProjectID,
 		EntityID:       taskID,
 		Data:           map[string]string{"labelID": labelID},
 		RecordActivity: true,
-	})
+	}
+	if err := s.recordEvent(ctx, q, event); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交事务失败: %w", err)
+	}
+	s.broadcastEvent(event)
+	return nil
 }

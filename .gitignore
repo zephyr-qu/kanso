@@ -6,18 +6,24 @@ data/
 
 # 前端
 node_modules/
-web/dist/
+web/dist/*
+!web/dist/.gitkeep
 
 # 环境
 .env
+.env.*
+!.env.example
+!**/.env.example
 .pi-subagents/
 .agents/
-/kanso.exe
+/kanso
 
 # 本地产物与临时文件
 /kanas-new
 /kanso-new
 /kanso.exe
 temp/
+.gocache/
+*.log
 web/screenshots/
 web/test-results/

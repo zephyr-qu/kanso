@@ -1,6 +1,10 @@
 package service
 
-import "context"
+import (
+	"context"
+
+	"kanso/internal/db/gen"
+)
 
 // 事件动作常量（候选 4）：动作字符串只在此处定义，前端 lib/events.ts 与之对齐
 // （ADR-0004 无共享类型包——两侧各自枚举，字符串值即合约）。
@@ -32,7 +36,7 @@ type Event struct {
 	// ActivityTaskID 是活动归属的任务 ID（RecordActivity 时）；
 	// 为空时回退到 EntityID（任务类事件两者相同，评论类事件不同）。
 	ActivityTaskID string
-	Data        any // 活动 data（JSON）；仅 RecordActivity 时使用
+	Data           any // 活动 data（JSON）；仅 RecordActivity 时使用
 	// RecordActivity 表示是否写入所属任务的 activity 流（任务生命周期类事件）。
 	RecordActivity bool
 }
@@ -41,19 +45,33 @@ type Event struct {
 // 项目级事件：recordActivity（可选）→ 按项目广播。
 // 工作区级事件（标签 CRUD）：仅 BroadcastAll。
 func (s *Service) dispatch(ctx context.Context, e Event) error {
-	if e.ProjectID == "" {
-		s.emitAll(e.Action, e.WorkspaceID, e.EntityID)
+	if err := s.recordEvent(ctx, gen.New(s.db), e); err != nil {
+		return err
+	}
+	s.broadcastEvent(e)
+	return nil
+}
+
+// recordEvent writes the durable side effect using the supplied query handle.
+// Transactional mutations call this before commit so a failed activity write
+// rolls back the business mutation as well.
+func (s *Service) recordEvent(ctx context.Context, q *gen.Queries, e Event) error {
+	if !e.RecordActivity {
 		return nil
 	}
-	if e.RecordActivity {
-		resourceID := e.ActivityTaskID
-		if resourceID == "" {
-			resourceID = e.EntityID
-		}
-		if err := s.recordActivity(ctx, resourceID, e.Action, e.Data); err != nil {
-			return err
-		}
+	resourceID := e.ActivityTaskID
+	if resourceID == "" {
+		resourceID = e.EntityID
+	}
+	return recordActivityWithQueries(ctx, q, resourceID, e.Action, e.Data)
+}
+
+// broadcastEvent must run after the transaction commits. Broadcast failures
+// are intentionally non-fatal because clients re-fetch the source of truth.
+func (s *Service) broadcastEvent(e Event) {
+	if e.ProjectID == "" {
+		s.emitAll(e.Action, e.WorkspaceID, e.EntityID)
+		return
 	}
 	s.emit(e.ProjectID, e.Action, e.EntityID)
-	return nil
 }

@@ -3,6 +3,8 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
+const apiTarget = process.env.VITE_API_TARGET ?? "http://localhost:8080";
+
 export default defineConfig({
 	plugins: [react(), tailwindcss()],
 	resolve: {
@@ -11,7 +13,7 @@ export default defineConfig({
 	server: {
 		port: 5173,
 		// 开发时 API 走本地 Go 服务（默认 8080）；ws: true 让 WebSocket 升级也经代理。
-		proxy: { "/api": { target: "http://localhost:8080", ws: true } },
+		proxy: { "/api": { target: apiTarget, ws: true } },
 	},
 	test: {
 		// 纯函数单测，node 环境即可（无需 jsdom）。

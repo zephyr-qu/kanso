@@ -12,6 +12,7 @@ import (
 	"kanso/internal/httpapi"
 	"kanso/internal/realtime"
 	"kanso/internal/service"
+	"kanso/web"
 )
 
 func main() {
@@ -41,7 +42,7 @@ func main() {
 		log.Fatalf("初始化默认工作区失败: %v", err)
 	}
 
-	router := httpapi.NewRouter(cfg, svc, realtime.NewHub())
+	router := httpapi.NewRouterWithAssets(cfg, svc, realtime.NewHub(), web.DistFS())
 	log.Printf("Kanso 已启动: http://%s （健康检查 /api/health）", cfg.Addr)
 
 	server := &http.Server{Addr: cfg.Addr, Handler: router}
