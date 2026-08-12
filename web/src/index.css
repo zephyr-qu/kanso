@@ -10,16 +10,16 @@ input:-webkit-autofill:active {
 }
 
 @font-face {
-  font-family: "Zen Old Mincho";
-  src: url("./assets/fonts/zen-old-mincho-400.woff2") format("woff2");
+  font-family: "Noto Serif SC";
+  src: url("./assets/fonts/noto-serif-sc-400.woff2") format("woff2");
   font-display: swap;
   font-style: normal;
   font-weight: 400;
 }
 
 @font-face {
-  font-family: "Zen Old Mincho";
-  src: url("./assets/fonts/zen-old-mincho-600.woff2") format("woff2");
+  font-family: "Noto Serif SC";
+  src: url("./assets/fonts/noto-serif-sc-600.woff2") format("woff2");
   font-display: swap;
   font-style: normal;
   font-weight: 600;
@@ -70,6 +70,10 @@ input:-webkit-autofill:active {
   --font-sans: var(--font-sans);
   --font-heading: var(--font-heading);
   --font-mono: var(--font-mono);
+  /* 卡片层级阴影：card=看板卡基线，card-hover=悬停，lifted=统计卡/项目卡（无边框悬浮层） */
+  --shadow-card: 0 1px 2px rgba(36, 30, 22, 0.06);
+  --shadow-card-hover: 0 2px 6px rgba(36, 30, 22, 0.08), 0 12px 28px rgba(36, 30, 22, 0.1);
+  --shadow-lifted: 0 1px 2px rgba(36, 30, 22, 0.05), 0 8px 24px rgba(36, 30, 22, 0.07);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -123,14 +127,15 @@ input:-webkit-autofill:active {
 }
 
 :root {
-  /* 字体：黑体（正文与标题）+ 等宽（数字/编号） */
+  /* 字体：标题=思源宋体（明朝体，编辑出版感）+ 正文=黑体 + 等宽（数字/编号） */
   --font-display:
+    "Noto Serif SC",
     "PingFang SC",
     "Microsoft YaHei",
     "Noto Sans CJK SC",
-    ui-sans-serif,
-    system-ui,
-    sans-serif;
+    ui-serif,
+    Georgia,
+    serif;
   --font-sans:
     "PingFang SC",
     "Microsoft YaHei",
@@ -148,96 +153,97 @@ input:-webkit-autofill:active {
     Consolas,
     monospace;
 
-  /* 现代简约：6-12px 圆角系（sm=4 md=6 lg=8 xl=12） */
+  /* 暖色出版风：6-12px 圆角系（sm=4 md=6 lg=8 xl=12） */
   --radius: 0.5rem;
 
-  /* 现代简约 SaaS（借鉴原型骨架）：白卡片 × 浅灰边框 × 蓝主色 */
-  --background: #fafafa;
-  --foreground: #18181b;
-  --card: #ffffff;
-  --card-foreground: #18181b;
-  --popover: #ffffff;
-  --popover-foreground: #18181b;
-  --primary: #2563eb;
-  --primary-foreground: #ffffff;
-  --secondary: rgba(24, 24, 27, 0.05);
-  --secondary-foreground: #18181b;
-  --muted: rgba(24, 24, 27, 0.05);
-  --muted-foreground: #6b7280;
-  --accent: rgba(37, 99, 235, 0.08);
-  --accent-foreground: #1d4ed8;
-  --destructive: #e11d48;
+  /* 暖纸底 × 暖棕字 × 焦橙主色：单一暖色 accent，中性色全部带暖调 */
+  --background: #faf7f1;
+  --foreground: #221a10;
+  --card: #fffdf9;
+  --card-foreground: #221a10;
+  --popover: #fffdf9;
+  --popover-foreground: #221a10;
+  --primary: #c2410c;
+  --primary-foreground: #fff8f0;
+  --secondary: rgba(34, 26, 16, 0.05);
+  --secondary-foreground: #221a10;
+  --muted: rgba(34, 26, 16, 0.05);
+  --muted-foreground: #7c6f60;
+  --accent: rgba(194, 65, 12, 0.08);
+  --accent-foreground: #a13d0a;
+  --destructive: #dc2626;
   --destructive-foreground: #ffffff;
-  --info: #0ea5e9;
+  --info: #0e7490;
   --info-foreground: #ffffff;
-  --success: #10b981;
+  --success: #4d7c0f;
   --success-foreground: #ffffff;
-  --warning: #f59e0b;
+  --warning: #b45309;
   --warning-foreground: #ffffff;
-  --border: rgba(24, 24, 27, 0.08);
-  --input: rgba(24, 24, 27, 0.12);
-  --ring: #2563eb;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #3f3f46;
-  --sidebar-primary: #2563eb;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: rgba(37, 99, 235, 0.08);
-  --sidebar-accent-foreground: #1d4ed8;
-  --sidebar-border: rgba(24, 24, 27, 0.08);
-  --sidebar-ring: #2563eb;
-  --chart-1: #2563eb;
-  --chart-2: #0ea5e9;
-  --chart-3: #8b5cf6;
-  --chart-4: #f59e0b;
-  --chart-5: #10b981;
-  --code: #f8fafc;
-  --code-foreground: #18181b;
-  --code-highlight: rgba(24, 24, 27, 0.05);
+  --border: rgba(34, 26, 16, 0.1);
+  --input: rgba(34, 26, 16, 0.14);
+  --ring: #c2410c;
+  --sidebar: #f6f0e6;
+  --sidebar-foreground: #6f6252;
+  --sidebar-primary: #c2410c;
+  --sidebar-primary-foreground: #fff8f0;
+  --sidebar-accent: rgba(194, 65, 12, 0.08);
+  --sidebar-accent-foreground: #a13d0a;
+  --sidebar-border: rgba(34, 26, 16, 0.09);
+  --sidebar-ring: #c2410c;
+  /* 图表：暖色主导 + 少量冷色补对比 */
+  --chart-1: #c2410c;
+  --chart-2: #d97706;
+  --chart-3: #0e7490;
+  --chart-4: #be123c;
+  --chart-5: #65a30d;
+  --code: #f4ede2;
+  --code-foreground: #221a10;
+  --code-highlight: rgba(34, 26, 16, 0.05);
 }
 
 .dark {
-  /* 现代简约（暗）：深灰蓝底 */
-  --background: #0f1115;
-  --foreground: #e6e8eb;
-  --card: #171a1f;
-  --card-foreground: #e6e8eb;
-  --popover: #171a1f;
-  --popover-foreground: #e6e8eb;
-  --primary: #3b82f6;
-  --primary-foreground: #ffffff;
-  --secondary: rgba(230, 232, 235, 0.07);
-  --secondary-foreground: #e6e8eb;
-  --muted: rgba(230, 232, 235, 0.07);
-  --muted-foreground: #9aa1ab;
-  --accent: rgba(59, 130, 246, 0.14);
-  --accent-foreground: #dbeafe;
-  --destructive: #f43f5e;
-  --destructive-foreground: #ffffff;
+  /* 暖色出版（暗）：暖墨底 × 暖米字 × 琥珀主色 */
+  --background: #171310;
+  --foreground: #ece4d8;
+  --card: #201b15;
+  --card-foreground: #ece4d8;
+  --popover: #201b15;
+  --popover-foreground: #ece4d8;
+  --primary: #fbbf24;
+  --primary-foreground: #221a10;
+  --secondary: rgba(236, 228, 216, 0.07);
+  --secondary-foreground: #ece4d8;
+  --muted: rgba(236, 228, 216, 0.07);
+  --muted-foreground: #a89a88;
+  --accent: rgba(251, 191, 36, 0.12);
+  --accent-foreground: #fde68a;
+  --destructive: #f87171;
+  --destructive-foreground: #221a10;
   --info: #38bdf8;
-  --info-foreground: #0f1115;
-  --success: #34d399;
-  --success-foreground: #0f1115;
-  --warning: #fbbf24;
-  --warning-foreground: #0f1115;
-  --border: rgba(230, 232, 235, 0.12);
-  --input: rgba(230, 232, 235, 0.16);
-  --ring: #3b82f6;
-  --sidebar: #12141a;
-  --sidebar-foreground: #a7adb6;
-  --sidebar-primary: #3b82f6;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: rgba(59, 130, 246, 0.14);
-  --sidebar-accent-foreground: #dbeafe;
-  --sidebar-border: rgba(230, 232, 235, 0.1);
-  --sidebar-ring: #3b82f6;
-  --chart-1: #3b82f6;
-  --chart-2: #38bdf8;
-  --chart-3: #a78bfa;
-  --chart-4: #fbbf24;
-  --chart-5: #34d399;
-  --code: #171a1f;
-  --code-foreground: #e6e8eb;
-  --code-highlight: rgba(230, 232, 235, 0.07);
+  --info-foreground: #171310;
+  --success: #86efac;
+  --success-foreground: #171310;
+  --warning: #fcd34d;
+  --warning-foreground: #171310;
+  --border: rgba(236, 228, 216, 0.1);
+  --input: rgba(236, 228, 216, 0.15);
+  --ring: #fbbf24;
+  --sidebar: #1d1813;
+  --sidebar-foreground: #a89a88;
+  --sidebar-primary: #fbbf24;
+  --sidebar-primary-foreground: #221a10;
+  --sidebar-accent: rgba(251, 191, 36, 0.12);
+  --sidebar-accent-foreground: #fde68a;
+  --sidebar-border: rgba(236, 228, 216, 0.09);
+  --sidebar-ring: #fbbf24;
+  --chart-1: #fbbf24;
+  --chart-2: #fb923c;
+  --chart-3: #5eead4;
+  --chart-4: #fda4af;
+  --chart-5: #bef264;
+  --code: #201b15;
+  --code-foreground: #ece4d8;
+  --code-highlight: rgba(236, 228, 216, 0.07);
 }
 
 

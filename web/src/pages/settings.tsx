@@ -45,7 +45,7 @@ export default function SettingsPage() {
 
 			<div className="flex-1 overflow-auto px-8 pb-12 pt-7">
 				{/* 访问 */}
-				<div className="mb-3.5 rounded-xl border bg-card p-5 shadow-[0_1px_2px_rgba(24,24,27,0.04)]">
+				<div className="mb-3.5 rounded-xl border bg-card p-5">
 					<div className="mb-4 text-[13px] font-semibold text-foreground">
 						访问
 					</div>
@@ -58,7 +58,7 @@ export default function SettingsPage() {
 							</div>
 						</div>
 						<div className="flex shrink-0 items-center gap-2">
-							<span className="rounded-[6px] bg-[rgba(24,24,27,0.04)] px-2.5 py-[5px] font-mono text-[13px] text-muted-foreground">
+							<span className="rounded-[6px] bg-muted px-2.5 py-[5px] font-mono text-[13px] text-muted-foreground">
 								{showKey && accessKey
 									? accessKey
 									: maskKey(accessKey || "未设置密钥")}
@@ -76,7 +76,7 @@ export default function SettingsPage() {
 				</div>
 
 				{/* 数据 */}
-				<div className="mb-3.5 rounded-xl border bg-card p-5 shadow-[0_1px_2px_rgba(24,24,27,0.04)]">
+				<div className="mb-3.5 rounded-xl border bg-card p-5">
 					<div className="mb-4 text-[13px] font-semibold text-foreground">
 						数据
 					</div>
@@ -101,7 +101,7 @@ export default function SettingsPage() {
 				</div>
 
 				{/* 关于 */}
-				<div className="rounded-xl border bg-card p-5 shadow-[0_1px_2px_rgba(24,24,27,0.04)]">
+				<div className="rounded-xl border bg-card p-5">
 					<div className="mb-4 text-[13px] font-semibold text-foreground">
 						关于
 					</div>

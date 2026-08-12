@@ -211,7 +211,7 @@ export default function TaskDetailPage() {
 						</div>
 					) : (
 						<div
-							className="cursor-text rounded-[10px] border bg-card p-4 text-sm leading-[1.7] text-[#4b5563] transition-colors hover:border-[rgba(24,24,27,0.14)]"
+							className="cursor-text rounded-[10px] border bg-card p-4 text-sm leading-[1.7] text-muted-foreground transition-colors hover:border-foreground/15"
 							onClick={() => {
 								setDesc(data.task.description ?? "");
 								setEditingDesc(true);
@@ -289,15 +289,15 @@ export default function TaskDetailPage() {
 								<li key={a.id} className="relative">
 									<span
 										className={`absolute -left-6 top-[5px] size-[7px] rounded-full ${
-											i === 0 ? "bg-primary" : "bg-[#d1d5db]"
+											i === 0 ? "bg-primary" : "bg-border"
 										}`}
 									/>
-									{/* 原型 .a-text：13px / #4b5563；b 加粗 #18181b。 */}
-									<p className="text-[13px] leading-[1.5] text-[#4b5563]">
+									{/* 活动条目：正文灰、操作者与动作加粗。 */}
+									<p className="text-[13px] leading-[1.5] text-muted-foreground">
 										<span className="font-medium text-foreground">Admin · </span>
 										{ACTION_LABELS[a.action] ?? a.action}
 									</p>
-									{/* 原型 .a-time：12px / #9ca3af。 */}
+									{/* 时间戳：弱化的等宽数字。 */}
 									<p className="mt-0.5 text-xs text-muted-foreground/70">
 										{formatDateTime(a.createdAt)}
 									</p>

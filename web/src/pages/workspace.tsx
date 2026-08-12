@@ -152,7 +152,7 @@ export default function WorkspacePage() {
 						<Link
 							key={project.id}
 							to={`/w/${workspaceId}/p/${project.id}`}
-							className="group relative rounded-xl border bg-card p-5 shadow-[0_1px_2px_rgba(24,24,27,0.04)] transition-all duration-150 hover:-translate-y-px hover:border-[rgba(24,24,27,0.14)] hover:shadow-[0_6px_16px_rgba(24,24,27,0.08)]"
+						className="group relative rounded-xl border border-transparent bg-card p-5 shadow-lifted transition-all duration-150 hover:-translate-y-px hover:border-foreground/15 hover:shadow-card-hover"
 						>
 							<p className="truncate pr-12 text-[15px] font-semibold leading-[1.3]">
 								{project.name}
@@ -163,13 +163,13 @@ export default function WorkspacePage() {
 									: `${project.createdAt.slice(0, 10)} · 创建`}
 							</p>
 							<div className="mt-3.5 flex gap-2">
-								<span className="rounded-full bg-[rgba(24,24,27,0.05)] px-2 py-0.5 text-[11px] leading-[1.3] text-muted-foreground">
+								<span className="rounded-full bg-muted px-2 py-0.5 text-[11px] leading-[1.3] text-muted-foreground">
 									{project.columnCount ?? 0} 列
 								</span>
-								<span className="rounded-full bg-[rgba(24,24,27,0.05)] px-2 py-0.5 text-[11px] leading-[1.3] text-muted-foreground">
+								<span className="rounded-full bg-muted px-2 py-0.5 text-[11px] leading-[1.3] text-muted-foreground">
 									{project.taskCount ?? 0} 任务
 								</span>
-								<span className="rounded-full bg-[rgba(24,24,27,0.05)] px-2 py-0.5 text-[11px] leading-[1.3] text-muted-foreground">
+								<span className="rounded-full bg-muted px-2 py-0.5 text-[11px] leading-[1.3] text-muted-foreground">
 									{project.inProgressCount ?? 0} 进行中
 								</span>
 							</div>

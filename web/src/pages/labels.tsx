@@ -79,7 +79,7 @@ export default function LabelsPage() {
 
 			<div className="flex-1 overflow-auto px-8 pb-12 pt-7">
 				{/* 创建标签 */}
-				<div className="rounded-xl border bg-card p-5 shadow-[0_1px_2px_rgba(24,24,27,0.04)]">
+				<div className="rounded-xl border bg-card p-5">
 					<div className="mb-4 text-[13px] font-semibold text-foreground">
 						创建标签
 					</div>
@@ -120,7 +120,7 @@ export default function LabelsPage() {
 				</div>
 
 				{/* 标签库 */}
-				<div className="mt-3.5 rounded-xl border bg-card p-5 shadow-[0_1px_2px_rgba(24,24,27,0.04)]">
+				<div className="mt-3.5 rounded-xl border bg-card p-5">
 					<div className="mb-1 flex items-center justify-between">
 						<span className="text-[13px] font-semibold text-foreground">
 							标签库
@@ -139,7 +139,7 @@ export default function LabelsPage() {
 							{labels.map((label) => (
 								<div
 									key={label.id}
-									className="group flex items-center gap-2.5 rounded-lg px-2 py-2.5 transition-colors hover:bg-[rgba(24,24,27,0.04)]"
+									className="group flex items-center gap-2.5 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted"
 								>
 									<span
 										className="size-3 shrink-0 rounded-full"
@@ -164,7 +164,7 @@ export default function LabelsPage() {
 										<Button
 											variant="ghost"
 											size="icon"
-											className="size-6 text-destructive hover:bg-[rgba(24,24,27,0.06)]"
+											className="size-6 text-destructive hover:bg-muted"
 											aria-label={`删除 ${label.name}`}
 											onClick={() => setDeleting(label)}
 										>

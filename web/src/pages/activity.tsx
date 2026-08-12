@@ -50,7 +50,7 @@ export default function ActivityPage() {
 									{group.items.map((a) => (
 										<li
 											key={a.id}
-											className="flex items-baseline gap-2.5 rounded-lg px-2 py-2 text-[13px] leading-[1.5] transition-colors hover:bg-[rgba(24,24,27,0.04)]"
+											className="flex items-baseline gap-2.5 rounded-lg px-2 py-2 text-[13px] leading-[1.5] transition-colors hover:bg-muted"
 										>
 											<span className="mt-[6px] size-[7px] shrink-0 self-start rounded-full bg-border" />
 											<ActivityItem

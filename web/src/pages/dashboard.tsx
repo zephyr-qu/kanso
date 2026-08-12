@@ -76,13 +76,13 @@ export default function DashboardPage() {
 				{/* 面板网格 */}
 				<div className="mt-3.5 grid grid-cols-[repeat(auto-fit,minmax(360px,1fr))] gap-3.5">
 					{/* 完成进度 */}
-					<div className="rounded-xl border bg-card p-5 shadow-[0_1px_2px_rgba(24,24,27,0.04)]">
+					<div className="rounded-xl border bg-card p-5">
 						<PanelTitle>完成进度</PanelTitle>
 						<div className="flex items-center gap-5">
 							<div
 								className="relative size-[120px] shrink-0 rounded-full"
 								style={{
-									background: `conic-gradient(#2563eb ${data.completionPercent * 3.6}deg, rgba(24,24,27,0.06) 0)`,
+									background: `conic-gradient(var(--chart-1) ${data.completionPercent * 3.6}deg, color-mix(in srgb, var(--foreground) 6%, transparent) 0)`,
 								}}
 							>
 								<div className="absolute inset-3 flex flex-col items-center justify-center rounded-full bg-card">
@@ -110,7 +110,7 @@ export default function DashboardPage() {
 					</div>
 
 					{/* 需要关注 */}
-					<div className="rounded-xl border bg-card p-5 shadow-[0_1px_2px_rgba(24,24,27,0.04)]">
+					<div className="rounded-xl border bg-card p-5">
 						<PanelTitle>需要关注</PanelTitle>
 						{data.focus.length === 0 ? (
 							<p className="py-6 text-center text-xs text-muted-foreground">
@@ -121,7 +121,7 @@ export default function DashboardPage() {
 								{data.focus.map((f) => (
 									<div
 										key={f.id}
-										className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2.5 transition-colors hover:bg-[rgba(24,24,27,0.04)]"
+										className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted"
 									>
 										<span className="size-2 shrink-0 rounded-full bg-destructive" />
 										<span className="min-w-0 flex-1 truncate text-sm">
@@ -137,17 +137,17 @@ export default function DashboardPage() {
 					</div>
 
 					{/* 列分布 */}
-					<div className="rounded-xl border bg-card p-5 shadow-[0_1px_2px_rgba(24,24,27,0.04)]">
+					<div className="rounded-xl border bg-card p-5">
 						<PanelTitle>任务分布</PanelTitle>
 						{data.byColumn.map((c) => (
 							<div
 								key={c.name}
-								className="flex items-center gap-2.5 rounded-md px-1.5 py-1 transition-colors hover:bg-[rgba(24,24,27,0.03)]"
+								className="flex items-center gap-2.5 rounded-md px-1.5 py-1 transition-colors hover:bg-muted"
 							>
 								<span className="w-14 shrink-0 text-[13px] text-muted-foreground">
 									{c.name}
 								</span>
-								<div className="h-2 flex-1 overflow-hidden rounded-full bg-[rgba(24,24,27,0.05)]">
+								<div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
 									<div
 										className="h-full rounded-full bg-primary"
 										style={{ width: `${(c.count / maxColumn) * 100}%` }}
@@ -161,16 +161,16 @@ export default function DashboardPage() {
 					</div>
 
 					{/* 任务趋势 */}
-					<div className="rounded-xl border bg-card p-5 shadow-[0_1px_2px_rgba(24,24,27,0.04)]">
+					<div className="rounded-xl border bg-card p-5">
 						<PanelTitle
 							action={
 								<div className="flex items-center gap-3 text-[11px] text-muted-foreground">
 									<span className="flex items-center gap-1">
-										<span className="size-2 rounded-full bg-[#2563eb]" />
+										<span className="size-2 rounded-full bg-[var(--chart-1)]" />
 										新增
 									</span>
 									<span className="flex items-center gap-1">
-										<span className="size-2 rounded-full bg-[#10b981]" />
+										<span className="size-2 rounded-full bg-[var(--chart-5)]" />
 										完成
 									</span>
 								</div>
@@ -182,7 +182,7 @@ export default function DashboardPage() {
 					</div>
 
 					{/* 项目速览 */}
-					<div className="rounded-xl border bg-card p-5 shadow-[0_1px_2px_rgba(24,24,27,0.04)]">
+					<div className="rounded-xl border bg-card p-5">
 						<PanelTitle>项目速览</PanelTitle>
 						{recentProjects.length === 0 ? (
 							<p className="py-6 text-center text-xs text-muted-foreground">
@@ -199,12 +199,12 @@ export default function DashboardPage() {
 									<Link
 										key={p.id}
 										to={wsId ? `/w/${wsId}/p/${p.id}` : "#"}
-										className="flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-[rgba(24,24,27,0.04)]"
+										className="flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted"
 									>
 										<span className="min-w-0 flex-1 truncate text-sm font-medium">
 											{p.name}
 										</span>
-										<div className="h-1.5 w-[90px] shrink-0 overflow-hidden rounded-full bg-[rgba(24,24,27,0.05)]">
+										<div className="h-1.5 w-[90px] shrink-0 overflow-hidden rounded-full bg-muted">
 											<div
 												className="h-full rounded-full bg-primary"
 												style={{ width: `${pct}%` }}
@@ -220,7 +220,7 @@ export default function DashboardPage() {
 					</div>
 
 					{/* 最近活动 */}
-					<div className="rounded-xl border bg-card p-5 shadow-[0_1px_2px_rgba(24,24,27,0.04)]">
+					<div className="rounded-xl border bg-card p-5">
 						<PanelTitle>最近活动</PanelTitle>
 						{data.recentActivity.length === 0 ? (
 							<p className="py-6 text-center text-xs text-muted-foreground">
@@ -291,12 +291,12 @@ function TrendChart({ points }: { points: DashboardData["trend"] }) {
 		>
 			<defs>
 				<linearGradient id="trend-created" x1="0" y1="0" x2="0" y2="1">
-					<stop offset="0%" stopColor="#2563eb" stopOpacity="0.16" />
-					<stop offset="100%" stopColor="#2563eb" stopOpacity="0" />
+					<stop offset="0%" stopColor="var(--chart-1)" stopOpacity="0.16" />
+					<stop offset="100%" stopColor="var(--chart-1)" stopOpacity="0" />
 				</linearGradient>
 				<linearGradient id="trend-completed" x1="0" y1="0" x2="0" y2="1">
-					<stop offset="0%" stopColor="#10b981" stopOpacity="0.14" />
-					<stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+					<stop offset="0%" stopColor="var(--chart-5)" stopOpacity="0.14" />
+					<stop offset="100%" stopColor="var(--chart-5)" stopOpacity="0" />
 				</linearGradient>
 			</defs>
 			{[0.25, 0.5, 0.75].map((t) => (
@@ -316,7 +316,7 @@ function TrendChart({ points }: { points: DashboardData["trend"] }) {
 			<path
 				d={line("created")}
 				fill="none"
-				stroke="#2563eb"
+				stroke="var(--chart-1)"
 				strokeWidth="1.8"
 				strokeLinecap="round"
 				strokeLinejoin="round"
@@ -324,7 +324,7 @@ function TrendChart({ points }: { points: DashboardData["trend"] }) {
 			<path
 				d={line("completed")}
 				fill="none"
-				stroke="#10b981"
+				stroke="var(--chart-5)"
 				strokeWidth="1.8"
 				strokeLinecap="round"
 				strokeLinejoin="round"
@@ -374,7 +374,7 @@ function StatCard(props: {
 }) {
 	const { num, label, trend, bar, accent, warn } = props;
 	return (
-		<div className="rounded-xl border bg-card p-[18px_20px] shadow-[0_1px_2px_rgba(24,24,27,0.04)] transition-all duration-150 hover:-translate-y-px hover:border-[rgba(24,24,27,0.12)] hover:shadow-[0_6px_16px_rgba(24,24,27,0.08)]">
+		<div className="rounded-xl border border-transparent bg-card p-[18px_20px] shadow-lifted transition-all duration-150 hover:-translate-y-px hover:border-foreground/15 hover:shadow-card-hover">
 			<div
 				className={`text-[28px] font-bold tracking-tight tabular-nums ${
 					accent ? "text-primary" : warn ? "text-destructive" : ""
@@ -387,7 +387,7 @@ function StatCard(props: {
 			</div>
 			<div className="mt-0.5 text-[11px] text-muted-foreground">{trend}</div>
 			{bar !== undefined ? (
-				<div className="mt-2.5 h-1 overflow-hidden rounded-full bg-[rgba(24,24,27,0.06)]">
+				<div className="mt-2.5 h-1 overflow-hidden rounded-full bg-muted">
 					<div
 						className="h-full rounded-full bg-primary"
 						style={{ width: `${bar}%` }}

@@ -73,7 +73,7 @@ export default function SortableColumn(props: {
 				<span className="min-w-0 flex-1 truncate text-sm font-semibold">
 					{column.name}
 				</span>
-				<span className="shrink-0 rounded-full bg-[rgba(24,24,27,0.06)] px-[7px] py-0.5 text-[11px] tabular-nums text-muted-foreground">
+				<span className="shrink-0 rounded-full bg-muted px-[7px] py-0.5 text-[11px] tabular-nums text-muted-foreground">
 					{column.tasks.length}
 				</span>
 				<div

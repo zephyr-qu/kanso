@@ -41,7 +41,7 @@ export default function LoginPage() {
 			<div className="flex flex-1 flex-col justify-between p-12 md:px-14 md:py-12">
 				<div className="flex items-center gap-3 animate-[fadeIn_400ms_ease_both]">
 					<span
-						className="size-[26px] rounded-[7px] bg-primary shadow-[0_1px_4px_rgba(37,99,235,0.4)]"
+						className="size-[26px] rounded-[7px] bg-primary shadow-[0_1px_4px_color-mix(in_srgb,var(--primary)_40%,transparent)]"
 						aria-hidden
 					/>
 					<span className="text-[17px] font-bold tracking-[-0.01em]">Kanso</span>

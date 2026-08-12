@@ -38,7 +38,7 @@ export default function AppShell() {
 				{/* 品牌块：主色方块 mark + 字标 */}
 				<div className="flex h-14 shrink-0 items-center gap-2.5 border-b px-5">
 					<span
-						className="size-5 shrink-0 rounded-[5px] bg-primary shadow-[0_1px_3px_rgba(37,99,235,0.35)]"
+						className="size-5 shrink-0 rounded-[5px] bg-primary shadow-[0_1px_3px_color-mix(in_srgb,var(--primary)_35%,transparent)]"
 						aria-hidden
 					/>
 					<span className="text-[15px] font-bold tracking-tight">Kanso</span>
@@ -120,7 +120,7 @@ export default function AppShell() {
 				<div className="border-t p-3">
 					<button
 						type="button"
-						className="w-full rounded-md px-2 py-[7px] text-left text-[13px] text-muted-foreground transition-colors hover:bg-[rgba(24,24,27,0.05)] hover:text-foreground"
+						className="w-full rounded-md px-2 py-[7px] text-left text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
 						onClick={logout}
 					>
 						退出登录

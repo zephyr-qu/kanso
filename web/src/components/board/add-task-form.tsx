@@ -11,7 +11,7 @@ export default function AddTaskForm(props: { onAdd: (title: string) => void }) {
 		return (
 			<button
 				type="button"
-				className="flex w-full items-center gap-1.5 rounded-[6px] px-1.5 py-2 text-left text-[13px] text-muted-foreground/80 transition-colors hover:bg-[rgba(24,24,27,0.04)] hover:text-foreground"
+				className="flex w-full items-center gap-1.5 rounded-[6px] px-1.5 py-2 text-left text-[13px] text-muted-foreground/80 transition-colors hover:bg-muted hover:text-foreground"
 				onClick={() => setAdding(true)}
 			>
 				<PlusIcon className="size-3.5" /> 添加任务
