@@ -17,6 +17,7 @@ import type { Task } from "@/types/task";
 
 export default function SortableColumn(props: {
 	column: BoardColumn;
+	dragOver: boolean;
 	labels: Label[];
 	sortConfig: SortConfig;
 	onRename: (column: BoardColumn) => void;
@@ -29,6 +30,7 @@ export default function SortableColumn(props: {
 }) {
 	const {
 		column,
+		dragOver,
 		labels,
 		sortConfig,
 		onRename,
@@ -62,12 +64,19 @@ export default function SortableColumn(props: {
 		<div
 			ref={setNodeRef}
 			style={style}
-			className={`group/col flex w-[280px] shrink-0 flex-col px-3 ${isDragging ? "z-10 opacity-60" : ""}`}
+			className={`group/col flex w-[280px] shrink-0 px-1.5 ${isDragging ? "z-10 opacity-60" : ""}`}
 		>
+			<div
+				className={`flex flex-1 flex-col rounded-xl border p-2 transition-[border-color,background-color] duration-150 ${
+					dragOver
+						? "border-primary/35 bg-accent/50"
+						: "border-transparent bg-secondary/80"
+				}`}
+			>
 			<div
 				{...attributes}
 				{...listeners}
-				className="flex cursor-grab items-center gap-2 px-1 pb-3 pt-1 active:cursor-grabbing"
+				className="flex cursor-grab items-center gap-2 px-1 pb-2.5 pt-0.5 active:cursor-grabbing"
 			>
 				<GripVerticalIcon className="size-4 shrink-0 text-muted-foreground/40" />
 				<span className="min-w-0 flex-1 truncate text-sm font-semibold">
@@ -103,8 +112,8 @@ export default function SortableColumn(props: {
 
 				<div className="flex flex-1 flex-col gap-2">
 				{column.tasks.length === 0 ? (
-					<p className="rounded-[10px] border border-dashed p-4 text-center text-xs text-muted-foreground">
-						空列
+					<p className="rounded-[10px] border border-dashed p-4 text-center text-xs text-muted-foreground/80">
+						拖拽任务到这里
 					</p>
 				) : (
 					<SortableContext
@@ -126,6 +135,7 @@ export default function SortableColumn(props: {
 					</SortableContext>
 				)}
 				<AddTaskForm onAdd={(title) => onAddTask(column.id, title)} />
+			</div>
 			</div>
 		</div>
 	);

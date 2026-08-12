@@ -7,6 +7,7 @@ import {
 	useSensor,
 	useSensors,
 	type DragEndEvent,
+	type DragOverEvent,
 } from "@dnd-kit/core";
 import {
 	SortableContext,
@@ -46,6 +47,8 @@ export default function BoardPage() {
 	const navigate = useNavigate();
 
 	const [createOpen, setCreateOpen] = useState(false);
+	// 拖拽悬停的列 id（任务拖到任务上时解析回所属列），用于列容器高亮反馈。
+	const [dragOverId, setDragOverId] = useState<string | null>(null);
 	const [renaming, setRenaming] = useState<BoardColumn | null>(null);
 	const [deleting, setDeleting] = useState<BoardColumn | null>(null);
 	const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -65,6 +68,8 @@ export default function BoardPage() {
 	);
 
 	function handleDragEnd(event: DragEndEvent) {
+		// 结束拖拽即清除列悬停高亮，避免残留。
+		setDragOverId(null);
 		const { active, over } = event;
 		if (!over || active.id === over.id || !board) return;
 		const activeId = String(active.id);
@@ -112,6 +117,21 @@ export default function BoardPage() {
 			columnId: targetColumn.id,
 			position: targetIndex,
 		});
+	}
+
+	// 拖拽悬停反馈：over.id 可能是列，也可能是任务（需解析回所属列）。
+	function handleDragOver(event: DragOverEvent) {
+		const overId = event.over ? String(event.over.id) : "";
+		if (!overId || !board) {
+			setDragOverId(null);
+			return;
+		}
+		if (board.columns.some((c) => c.id === overId)) {
+			setDragOverId(overId);
+			return;
+		}
+		const owner = board.columns.find((c) => c.tasks.some((t) => t.id === overId));
+		setDragOverId(owner?.id ?? null);
 	}
 
 
@@ -197,6 +217,8 @@ export default function BoardPage() {
 						sensors={sensors}
 						collisionDetection={closestCorners}
 						onDragEnd={handleDragEnd}
+						onDragOver={handleDragOver}
+						onDragCancel={() => setDragOverId(null)}
 					>
 						<SortableContext
 							items={board.columns.map((c) => c.id)}
@@ -207,6 +229,7 @@ export default function BoardPage() {
 									<SortableColumn
 										key={column.id}
 										column={column}
+										dragOver={dragOverId === column.id}
 										labels={board.labels}
 										sortConfig={sortConfig}
 										onRename={setRenaming}

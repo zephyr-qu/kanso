@@ -44,8 +44,8 @@ export default function SortableTaskCard(props: {
 			style={style}
 			{...attributes}
 			{...listeners}
-			className={`group relative cursor-grab rounded-[10px] border bg-card p-3.5 shadow-card transition-all duration-150 hover:-translate-y-px hover:border-foreground/15 hover:shadow-card-hover active:cursor-grabbing ${
-				isDragging ? "z-10 opacity-60" : ""
+			className={`group relative animate-card-in cursor-grab rounded-[10px] border bg-card p-3.5 shadow-card transition-all duration-150 hover:-translate-y-px hover:border-foreground/15 hover:shadow-card-hover active:cursor-grabbing ${
+				isDragging ? "z-10 opacity-80 shadow-card-hover ring-1 ring-primary/20" : ""
 			}`}
 			onClick={() => onOpen(task)}
 		>
