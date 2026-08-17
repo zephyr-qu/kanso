@@ -1,0 +1,169 @@
+@layer components {
+  .kanso-shell {
+    display: flex;
+    min-width: 0;
+    height: 100dvh;
+    overflow: hidden;
+    background: var(--semantic-surface-page);
+    color: var(--semantic-content-primary);
+  }
+
+  .kanso-sidebar {
+    width: var(--component-shell-sidebar-width);
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--semantic-surface-sidebar);
+    border-right: 1px solid var(--semantic-border-sidebar);
+  }
+
+  .kanso-brand {
+    height: var(--component-shell-brand-height);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 18px;
+    border-bottom: 1px solid var(--semantic-border-sidebar);
+  }
+
+  .kanso-brand-mark {
+    display: inline-flex;
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    background: var(--semantic-action-primary);
+    color: var(--semantic-content-on-primary);
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--semantic-action-primary) 40%, transparent);
+    font-family: var(--font-serif, serif);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .kanso-brand-name {
+    color: var(--semantic-content-primary);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  .kanso-sidebar-nav {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--component-sidebar-padding-top) var(--component-sidebar-padding-x) var(--component-sidebar-padding-bottom);
+  }
+
+  .kanso-sidebar-group + .kanso-sidebar-group {
+    margin-top: var(--component-sidebar-group-gap);
+  }
+
+  .kanso-sidebar-group-label {
+    margin: 0 8px 6px;
+    color: var(--semantic-content-tertiary);
+    font-family: var(--font-mono);
+    font-size: var(--component-sidebar-label-font-size);
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    line-height: 1.3;
+    text-transform: uppercase;
+  }
+
+  .kanso-sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: var(--component-sidebar-item-gap);
+    width: 100%;
+    min-height: var(--component-sidebar-item-height);
+    padding: var(--component-sidebar-item-padding-y) var(--component-sidebar-item-padding-x);
+    border: 0;
+    border-radius: var(--component-sidebar-item-radius);
+    background: transparent;
+    color: var(--semantic-content-primary);
+    font-size: var(--component-sidebar-item-font-size);
+    line-height: 1.3;
+    text-align: left;
+    transition: background-color var(--primitive-duration-fast) ease, color var(--primitive-duration-fast) ease;
+  }
+
+  .kanso-sidebar-item svg {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    opacity: 0.85;
+  }
+
+  .kanso-sidebar-item:hover {
+    background: var(--semantic-sidebar-hover);
+    color: var(--semantic-content-primary);
+  }
+
+  .kanso-sidebar-item[aria-current="page"],
+  .kanso-sidebar-item.is-active {
+    background: var(--semantic-sidebar-active);
+    color: var(--semantic-action-primary-hover);
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--semantic-action-primary) 62%, transparent);
+  }
+
+  .kanso-sidebar-identity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+    padding: 6px 8px;
+    border-radius: var(--component-sidebar-item-radius);
+    color: var(--semantic-content-primary);
+    font-size: 13px;
+    line-height: 1.3;
+    transition: background-color var(--primitive-duration-fast) ease, color var(--primitive-duration-fast) ease;
+  }
+  .kanso-sidebar-identity:hover {
+    background: var(--semantic-sidebar-hover);
+  }
+  .kanso-sidebar-identity[aria-current="page"] {
+    background: var(--semantic-sidebar-active);
+    color: var(--semantic-action-primary-hover);
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--semantic-action-primary) 62%, transparent);
+  }
+  .kanso-sidebar-logout {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    border: 0;
+    border-radius: var(--component-sidebar-item-radius);
+    background: transparent;
+    color: var(--semantic-content-secondary);
+    cursor: pointer;
+    transition: background-color var(--primitive-duration-fast) ease, color var(--primitive-duration-fast) ease;
+  }
+  .kanso-sidebar-logout:hover {
+    background: var(--semantic-sidebar-hover);
+    color: var(--semantic-content-primary);
+  }
+  .kanso-sidebar-logout svg {
+    width: 15px;
+    height: 15px;
+  }
+  .kanso-sidebar-footer {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 10px;
+    border-top: 1px solid var(--semantic-border-sidebar);
+  }
+
+  .kanso-main {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    background: var(--semantic-surface-page);
+  }
+}

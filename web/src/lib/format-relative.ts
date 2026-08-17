@@ -27,9 +27,25 @@ function dayBucket(
 	return "older";
 }
 
-// 日期时间：今天/昨天前缀 + HH:mm；更早含日期「M月D日 HH:mm」。
-// 任务详情活动流、仪表盘最近活动用（语义：跨天活动需要日期）。
-export function formatDateTime(iso: string, now = new Date()): string {
+// YYYY-MM-DD（或含时间 ISO）相对「now」的本地日历日差：0=今天、1=昨天；非法时间 NaN。
+function calendarDaysAgo(iso: string, now: Date): number {
+	const d = new Date(iso);
+	if (Number.isNaN(d.getTime())) return NaN;
+	const todayStart = startOfToday(now);
+	const dayStart = new Date(
+		d.getFullYear(),
+		d.getMonth(),
+		d.getDate(),
+	).getTime();
+	return Math.round((todayStart - dayStart) / DAY_MS);
+}
+
+// 共享：今天/昨天/更早 + HH:mm；olderWithDate 控制「更早」是否带日期（formatDateTime 带 / formatClock 不带）。
+function formatDayClock(
+	iso: string,
+	now: Date,
+	olderWithDate: boolean,
+): string {
 	const d = new Date(iso);
 	if (Number.isNaN(d.getTime())) return iso;
 	const time = hhmm(d);
@@ -39,33 +55,58 @@ export function formatDateTime(iso: string, now = new Date()): string {
 		case "yesterday":
 			return `昨天 ${time}`;
 		default:
-			return `${d.getMonth() + 1}月${d.getDate()}日 ${time}`;
+			return olderWithDate
+				? `${d.getMonth() + 1}月${d.getDate()}日 ${time}`
+				: time;
 	}
 }
 
-// 时钟：今天/昨天前缀 + HH:mm；更早仅 HH:mm（贴合原型 #activity 的 a-time）。
-// 活动页用。
+// 日期时间：今天/昨天前缀 + HH:mm；更早含日期「M月D日 HH:mm」（任务详情活动流、仪表盘最近活动）。
+export function formatDateTime(iso: string, now = new Date()): string {
+	return formatDayClock(iso, now, true);
+}
+
+// 时钟：今天/昨天前缀 + HH:mm；更早仅 HH:mm（活动页用）。
 export function formatClock(iso: string, now = new Date()): string {
-	const d = new Date(iso);
-	if (Number.isNaN(d.getTime())) return iso;
-	const time = hhmm(d);
-	switch (dayBucket(iso, now)) {
-		case "today":
-			return `今天 ${time}`;
-		case "yesterday":
-			return `昨天 ${time}`;
-		default:
-			return time;
-	}
+	return formatDayClock(iso, now, false);
+}
+
+// 共享：今天/昨天/N 天前（≤6 天）的带前缀文本；更早返回 null 由调用方补尾（周数 或 具体日期）。
+function dayLabel(iso: string, now: Date, prefix: string): string | null {
+	const days = calendarDaysAgo(iso, now);
+	if (Number.isNaN(days) || days <= 0) return `${prefix}今天`;
+	if (days === 1) return `${prefix}昨天`;
+	if (days < 7) return `${prefix} ${days} 天前`;
+	return null;
 }
 
 // 相对时间文案（原型项目卡片 meta："更新于今天 / 昨天 / N 天前 / N 周前"）。
 export function formatUpdated(iso: string, now = Date.now()): string {
+	const date = new Date(now);
+	const label = dayLabel(iso, date, "更新于");
+	if (label) return label;
+	return `更新于 ${Math.floor(calendarDaysAgo(iso, date) / 7)} 周前`;
+}
+
+// 任务卡底部的紧凑时间：优先级不抢空间，使用短相对日期（本地日历日口径）。
+export function formatTaskCardTime(iso: string, now = Date.now()): string {
+	const date = new Date(now);
+	const label = dayLabel(iso, date, "");
+	if (label) return label;
 	const d = new Date(iso);
-	if (Number.isNaN(d.getTime())) return "更新于今天";
-	const days = Math.floor((now - d.getTime()) / DAY_MS);
-	if (days <= 0) return "更新于今天";
-	if (days === 1) return "更新于昨天";
-	if (days < 7) return `更新于 ${days} 天前`;
-	return `更新于 ${Math.floor(days / 7)} 周前`;
+	return `${d.getMonth() + 1}月${d.getDate()}日`;
+}
+
+// 活动流相对时间：近期用滚动窗口（分钟/小时前），更早回到日历日口径（昨天 / M月D日）。
+export function formatActivityAge(iso: string): string {
+	const date = new Date(iso);
+	if (Number.isNaN(date.getTime())) return iso;
+	const diff = Math.max(0, Date.now() - date.getTime());
+	const minutes = Math.floor(diff / 60_000);
+	if (minutes < 1) return "刚刚";
+	if (minutes < 60) return `${minutes} 分钟前`;
+	if (minutes < 24 * 60) return `${Math.floor(minutes / 60)} 小时前`;
+	const days = calendarDaysAgo(iso, new Date());
+	if (days === 1) return `昨天 ${hhmm(date)}`;
+	return `${date.getMonth() + 1}月${date.getDate()}日 ${hhmm(date)}`;
 }

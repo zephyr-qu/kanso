@@ -34,8 +34,13 @@ func staticHandler(assets fs.FS) http.Handler {
 		}
 
 		// React Router owns application paths such as /dashboard and /w/:id.
-		fallback := r.Clone(r.Context())
-		fallback.URL.Path = "/index.html"
-		files.ServeHTTP(w, fallback)
+		// 不能经 http.FileServer 服务 /index.html——net/http 对以 index.html 结尾的
+		// 路径会 301 重定向到父目录，client-side 路由刷新会丢失路径。直接读文件输出。
+		if content, err := fs.ReadFile(assets, "index.html"); err == nil {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write(content)
+			return
+		}
+		http.NotFound(w, r)
 	})
 }

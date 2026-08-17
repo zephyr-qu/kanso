@@ -18,7 +18,8 @@ test("项目：创建 → 重命名 → 删除（确认框）", async ({ page })
 
 	// 创建。
 	const projName = `验收项目${Date.now() % 100000}`;
-	await page.getByRole("button", { name: "新建项目" }).click();
+	// 页头与项目网格末尾各有一个「新建项目」按钮，点页头那个（DOM 序首个）。
+	await page.getByRole("button", { name: "新建项目" }).first().click();
 	const dialog = page.getByRole("dialog");
 	await dialog.getByPlaceholder(/名称|项目/).fill(projName);
 	await dialog.getByRole("button", { name: "创建" }).click();

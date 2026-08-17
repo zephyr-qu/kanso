@@ -1,8 +1,8 @@
 package httpapi
 
 import (
-	"crypto/subtle"
 	"net/http"
+	"sync"
 
 	"github.com/coder/websocket"
 
@@ -21,13 +21,19 @@ func (a *API) handleWS(hub *realtime.Hub) http.HandlerFunc {
 			return
 		}
 		key := r.URL.Query().Get("key")
-		if subtle.ConstantTimeCompare([]byte(key), []byte(a.cfg.AccessKey)) != 1 {
+		// 按成员表校验密钥（personal = 单一 owner，owner.access_key = KANSO_ACCESS_KEY）。
+		authed := a.svc.VerifyKey(r.Context(), key)
+		if !authed {
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 
 		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			OriginPatterns: []string{"http://*", "https://*"},
+			// W-5 收紧：密钥经查询参数传输，不再接受任意 http(s) Origin（防跨站 WS 窃听）。
+			// coder/websocket 原生放行两类请求：无 Origin（非浏览器客户端，如测试/脚本）
+			// 与同源（Origin host == 请求 Host；浏览器直连或经 Vite 代理时 Host 保持浏览器 origin）。
+			// 其余跨源请求必须命中 KANSO_WS_ORIGINS 白名单（e2e 已配置 Vite dev origin）。
+			OriginPatterns: a.cfg.WSOrigins,
 		})
 		if err != nil {
 			return
@@ -39,8 +45,12 @@ func (a *API) handleWS(hub *realtime.Hub) http.HandlerFunc {
 		defer hub.Unsubscribe(projectID, send)
 
 		// 写协程：把 hub 事件写入连接，直到读侧断开。
+		// 写协程：把 hub 事件写入连接，直到读侧断开（S-13：WaitGroup 汇合，关闭确定）。
 		done := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			for {
 				select {
 				case <-done:
@@ -60,5 +70,6 @@ func (a *API) handleWS(hub *realtime.Hub) http.HandlerFunc {
 			}
 		}
 		close(done)
+		wg.Wait()
 	}
 }

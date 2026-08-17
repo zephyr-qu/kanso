@@ -7,8 +7,9 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVerticalIcon, PencilIcon, TrashIcon } from "lucide-react";
+import { Fragment } from "react";
 import AddTaskForm from "@/components/board/add-task-form";
-import SortableTaskCard from "@/components/board/sortable-task-card";
+import SortableTaskCard, { TaskCardView } from "@/components/board/sortable-task-card";
 import { Button } from "@/components/ui/button";
 import { sortTasks, type SortConfig } from "@/lib/sort-tasks";
 import type { BoardColumn } from "@/types/board";
@@ -17,115 +18,162 @@ import type { Task } from "@/types/task";
 
 export default function SortableColumn(props: {
 	column: BoardColumn;
+	dragOver: boolean;
+	/** 正在拖拽的任务 id（跨列动画用；非拖拽/列拖拽时为 null）。 */
+	dragActiveTaskId: string | null;
+	/** 被拖拽任务所在的源列 id。 */
+	activeTaskColumnId: string | null;
+	/** 任务跨列拖拽的临时落点（{columnId, index}），跨列中非 null；同列排序为 null。 */
+	dragPos: { columnId: string; index: number } | null;
+	/** 当前拖拽任务，用于在目标列渲染与真实卡片等高的占位。 */
+	draggedTask: Task | null;
 	labels: Label[];
 	sortConfig: SortConfig;
 	onRename: (column: BoardColumn) => void;
 	onDelete: (column: BoardColumn) => void;
 	onAddTask: (columnId: string, title: string) => void;
 	onOpenTask: (task: Task) => void;
-	onEditTask: (task: Task) => void;
-	onDeleteTask: (task: Task) => void;
+	onRenameTask: (task: Task, title: string) => void;
+	onArchiveTask: (task: Task) => void;
 	onToggleLabel: (task: Task, label: Label) => void;
 }) {
 	const {
 		column,
+		dragOver,
+		dragActiveTaskId,
+		activeTaskColumnId,
+		dragPos,
+		draggedTask,
 		labels,
 		sortConfig,
 		onRename,
 		onDelete,
 		onAddTask,
 		onOpenTask,
-		onEditTask,
-		onDeleteTask,
+		onRenameTask,
+		onArchiveTask,
 		onToggleLabel,
 	} = props;
 	const {
 		attributes,
 		listeners,
+		setActivatorNodeRef,
 		setNodeRef,
 		transform,
 		transition,
 		isDragging,
 	} = useSortable({
 		id: column.id,
+		data: { type: "column", columnId: column.id },
 	});
 	const style = {
 		transform: CSS.Transform.toString(transform),
 		transition,
 	};
 	// 显示层排序：仅改变渲染顺序，不改写 position；排序视图下禁用任务拖拽（避免与 position 语义冲突）。
+	// 列内任务全部渲染——此前 10 条硬截断会让第 11+ 个任务不可见也不可达，已移除。
 	const sortActive = sortConfig.field !== "position";
 	const visibleTasks = sortActive ? sortTasks(column.tasks, sortConfig) : column.tasks;
 	const sortable = !sortActive;
+
+	// SortableContext 的 items 必须与实际渲染的 sortable 卡片一一对应。
+	// 跨列时仍保留源卡片作为布局占位（由 SortableTaskCard 隐藏），
+	// 目标列另外渲染一张不可拖拽的等高占位卡，避免只改 items 却没有真实空间。
+	const baseTaskIds = visibleTasks.map((t) => t.id);
+	const isCrossColumnTarget =
+		sortable &&
+		dragActiveTaskId !== null &&
+		activeTaskColumnId !== null &&
+		draggedTask !== null &&
+		dragPos?.columnId === column.id &&
+		activeTaskColumnId !== column.id;
+	const placeholderIndex = isCrossColumnTarget
+		? Math.min(dragPos?.index ?? visibleTasks.length, visibleTasks.length)
+		: -1;
+	const items = baseTaskIds;
+	const placeholder = isCrossColumnTarget ? (
+		<div
+			key={`drag-placeholder-${draggedTask.id}`}
+			aria-hidden="true"
+			className="kanso-drag-placeholder pointer-events-none"
+		>
+			<TaskCardView
+				task={draggedTask}
+				labels={labels}
+				style={{ visibility: "hidden" }}
+			/>
+		</div>
+	) : null;
+	const taskList = (
+		<>
+			{visibleTasks.map((task, index) => (
+				<Fragment key={task.id}>
+					{placeholderIndex === index ? placeholder : null}
+					<SortableTaskCard
+						task={task}
+						labels={labels}
+						onOpen={onOpenTask}
+						onRename={onRenameTask}
+						onArchive={onArchiveTask}
+						onToggleLabel={onToggleLabel}
+					/>
+				</Fragment>
+			))}
+			{placeholderIndex === visibleTasks.length ? placeholder : null}
+		</>
+	);
 
 	return (
 		<div
 			ref={setNodeRef}
 			style={style}
-			className={`group/col flex w-[280px] shrink-0 flex-col px-3 ${isDragging ? "z-10 opacity-60" : ""}`}
+			className={`group/col flex w-[282px] shrink-0 ${isDragging ? "z-10 opacity-60" : ""}`}
 		>
 			<div
-				{...attributes}
-				{...listeners}
-				className="flex cursor-grab items-center gap-2 px-1 pb-3 pt-1 active:cursor-grabbing"
+				// 对齐原型 .col：282px 列、3% 暖灰底、1px 边框、12px 圆角。
+				className="kanso-board-column flex flex-1 flex-col transition-[border-color,background-color] duration-150"
+				data-drag-over={dragOver || undefined}
 			>
-				<GripVerticalIcon className="size-4 shrink-0 text-muted-foreground/40" />
-				<span className="min-w-0 flex-1 truncate text-sm font-semibold">
-					{column.name}
-				</span>
-				<span className="shrink-0 rounded-full bg-[rgba(24,24,27,0.06)] px-[7px] py-0.5 text-[11px] tabular-nums text-muted-foreground">
-					{column.tasks.length}
-				</span>
+			<div className="kanso-board-column__header">
+				<div className="kanso-board-column__title">
+					<button
+						type="button"
+						ref={setActivatorNodeRef}
+						{...attributes}
+						{...listeners}
+						className="kanso-board-column__grip-button"
+						aria-label={`拖拽列 ${column.name}`}
+					>
+						<GripVerticalIcon className="kanso-board-column__grip" />
+					</button>
+					<span className="min-w-0 truncate">{column.name}</span>
+					<span className={`kanso-board-column__count ${column.wipLimit !== null && column.wipLimit !== undefined && column.tasks.length > column.wipLimit ? "kanso-wip-warning" : ""}`}>
+						{column.tasks.length}{column.wipLimit !== null && column.wipLimit !== undefined ? ` / ${column.wipLimit}` : ""}
+					</span>
+				</div>
 				<div
-					className="flex shrink-0 opacity-0 transition-opacity group-hover/col:opacity-100"
+					className="kanso-board-column__actions"
 					onPointerDown={(e) => e.stopPropagation()}
 				>
-					<Button
-						variant="ghost"
-						size="icon"
-						className="size-6"
-						aria-label={`重命名列 ${column.name}`}
-						onClick={() => onRename(column)}
-					>
-						<PencilIcon />
-					</Button>
-					<Button
-						variant="ghost"
-						size="icon"
-						className="size-6 text-destructive"
-						aria-label={`删除列 ${column.name}`}
-						onClick={() => onDelete(column)}
-					>
-						<TrashIcon />
-					</Button>
+					<Button variant="ghost" size="icon" className="size-6" aria-label={`重命名列 ${column.name}`} onClick={() => onRename(column)}><PencilIcon /></Button>
+					<Button variant="ghost" size="icon" className="size-6 text-destructive" aria-label={`删除列 ${column.name}`} onClick={() => onDelete(column)}><TrashIcon /></Button>
 				</div>
 			</div>
 
-				<div className="flex flex-1 flex-col gap-2">
-				{column.tasks.length === 0 ? (
-					<p className="rounded-[10px] border border-dashed p-4 text-center text-xs text-muted-foreground">
-						空列
-					</p>
-				) : (
-					<SortableContext
-						items={visibleTasks.map((t) => t.id)}
-						strategy={verticalListSortingStrategy}
-						disabled={!sortable}
-					>
-						{visibleTasks.map((task) => (
-							<SortableTaskCard
-								key={task.id}
-								task={task}
-								labels={labels}
-								onOpen={onOpenTask}
-								onEdit={onEditTask}
-								onDelete={onDeleteTask}
-								onToggleLabel={onToggleLabel}
-							/>
-						))}
-					</SortableContext>
-				)}
-				<AddTaskForm onAdd={(title) => onAddTask(column.id, title)} />
+			<div className="kanso-board-column__body flex flex-1 flex-col gap-2">
+			{visibleTasks.length === 0 && !isCrossColumnTarget ? (
+				<p className="kanso-column-empty text-xs">拖拽任务到这里</p>
+			) : (
+				<SortableContext
+					items={items}
+					strategy={verticalListSortingStrategy}
+					disabled={!sortable}
+				>
+					{taskList}
+				</SortableContext>
+			)}
+			<AddTaskForm onAdd={(title) => onAddTask(column.id, title)} />
+			</div>
 			</div>
 		</div>
 	);

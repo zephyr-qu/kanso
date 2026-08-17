@@ -12,8 +12,11 @@ import (
 const listActivitiesWithProject = `-- name: ListActivitiesWithProject :many
 SELECT
     a.id,
+    a.resource_id,
     a.action,
+    a.data,
     a.created_at,
+    a.actor,
     p.name AS project_name
 FROM activity AS a
 INNER JOIN task AS t ON a.resource_id = t.id
@@ -24,10 +27,13 @@ ORDER BY a.created_at DESC
 `
 
 type ListActivitiesWithProjectRow struct {
-	ID          string `json:"id"`
-	Action      string `json:"action"`
-	CreatedAt   string `json:"createdAt"`
-	ProjectName string `json:"projectName"`
+	ID          string  `json:"id"`
+	ResourceID  string  `json:"resourceId"`
+	Action      string  `json:"action"`
+	Data        *string `json:"data"`
+	CreatedAt   string  `json:"createdAt"`
+	Actor       string  `json:"actor"`
+	ProjectName string  `json:"projectName"`
 }
 
 func (q *Queries) ListActivitiesWithProject(ctx context.Context) ([]ListActivitiesWithProjectRow, error) {
@@ -41,8 +47,11 @@ func (q *Queries) ListActivitiesWithProject(ctx context.Context) ([]ListActiviti
 		var i ListActivitiesWithProjectRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.ResourceID,
 			&i.Action,
+			&i.Data,
 			&i.CreatedAt,
+			&i.Actor,
 			&i.ProjectName,
 		); err != nil {
 			return nil, err
@@ -61,12 +70,15 @@ func (q *Queries) ListActivitiesWithProject(ctx context.Context) ([]ListActiviti
 const listAllTasks = `-- name: ListAllTasks :many
 SELECT
     id,
+    priority,
     created_at
 FROM task
+WHERE archived_at IS NULL
 `
 
 type ListAllTasksRow struct {
 	ID        string `json:"id"`
+	Priority  string `json:"priority"`
 	CreatedAt string `json:"createdAt"`
 }
 
@@ -79,7 +91,7 @@ func (q *Queries) ListAllTasks(ctx context.Context) ([]ListAllTasksRow, error) {
 	var items []ListAllTasksRow
 	for rows.Next() {
 		var i ListAllTasksRow
-		if err := rows.Scan(&i.ID, &i.CreatedAt); err != nil {
+		if err := rows.Scan(&i.ID, &i.Priority, &i.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -98,7 +110,7 @@ SELECT
     c.name AS column_name,
     COUNT(t.id) AS task_count
 FROM column AS c
-LEFT JOIN task AS t ON c.id = t.column_id
+LEFT JOIN task AS t ON c.id = t.column_id AND t.archived_at IS NULL
 GROUP BY c.name
 ORDER BY task_count DESC
 `
@@ -108,6 +120,7 @@ type ListColumnDistributionsRow struct {
 	TaskCount  int64  `json:"taskCount"`
 }
 
+// Merge by column name across projects (frontend mock contract); count desc.
 func (q *Queries) ListColumnDistributions(ctx context.Context) ([]ListColumnDistributionsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listColumnDistributions)
 	if err != nil {
@@ -131,6 +144,113 @@ func (q *Queries) ListColumnDistributions(ctx context.Context) ([]ListColumnDist
 	return items, nil
 }
 
+const listFocusCandidates = `-- name: ListFocusCandidates :many
+SELECT
+    t.id,
+    t.title,
+    t.priority,
+    t.due_date,
+    c.name AS column_name,
+    c.position AS column_position,
+    p.id AS project_id,
+    p.name AS project_name
+FROM task AS t
+INNER JOIN column AS c ON t.column_id = c.id
+INNER JOIN project AS p ON c.project_id = p.id
+WHERE
+    t.archived_at IS NULL
+    AND (t.priority = 'urgent' OR t.due_date IS NOT NULL)
+ORDER BY t.updated_at DESC
+`
+
+type ListFocusCandidatesRow struct {
+	ID             string  `json:"id"`
+	Title          string  `json:"title"`
+	Priority       string  `json:"priority"`
+	DueDate        *string `json:"dueDate"`
+	ColumnName     string  `json:"columnName"`
+	ColumnPosition int64   `json:"columnPosition"`
+	ProjectID      string  `json:"projectId"`
+	ProjectName    string  `json:"projectName"`
+}
+
+// focus candidates: priority=urgent or due date set. Exclude last column and cap at 8 in Go.
+func (q *Queries) ListFocusCandidates(ctx context.Context) ([]ListFocusCandidatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFocusCandidates)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFocusCandidatesRow
+	for rows.Next() {
+		var i ListFocusCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Priority,
+			&i.DueDate,
+			&i.ColumnName,
+			&i.ColumnPosition,
+			&i.ProjectID,
+			&i.ProjectName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPriorityDistributions = `-- name: ListPriorityDistributions :many
+SELECT
+    priority,
+    COUNT(*) AS task_count
+FROM task
+WHERE archived_at IS NULL
+GROUP BY priority
+ORDER BY CASE priority
+    WHEN 'urgent' THEN 0
+    WHEN 'high' THEN 1
+    WHEN 'med' THEN 2
+    WHEN 'low' THEN 3
+    ELSE 4
+END, priority
+`
+
+type ListPriorityDistributionsRow struct {
+	Priority  string `json:"priority"`
+	TaskCount int64  `json:"taskCount"`
+}
+
+func (q *Queries) ListPriorityDistributions(ctx context.Context) ([]ListPriorityDistributionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPriorityDistributions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPriorityDistributionsRow
+	for rows.Next() {
+		var i ListPriorityDistributionsRow
+		if err := rows.Scan(&i.Priority, &i.TaskCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listProjectColumnCounts = `-- name: ListProjectColumnCounts :many
 SELECT
     p.id,
@@ -141,7 +261,7 @@ SELECT
     COUNT(t.id) AS task_count
 FROM project AS p
 LEFT JOIN column AS c ON p.id = c.project_id
-LEFT JOIN task AS t ON c.id = t.column_id
+LEFT JOIN task AS t ON c.id = t.column_id AND t.archived_at IS NULL
 GROUP BY p.id, c.id
 ORDER BY p.created_at, c.position
 `
@@ -185,40 +305,103 @@ func (q *Queries) ListProjectColumnCounts(ctx context.Context) ([]ListProjectCol
 	return items, nil
 }
 
-const listTaskLabels = `-- name: ListTaskLabels :many
+const listTaskCompletionTrend = `-- name: ListTaskCompletionTrend :many
 SELECT
-    t.id,
-    t.title,
-    c.name AS column_name,
-    l.name AS label_name
-FROM task AS t
-INNER JOIN task_label AS tl ON t.id = tl.task_id
-INNER JOIN label AS l ON tl.label_id = l.id
-INNER JOIN column AS c ON t.column_id = c.id
+    SUBSTR(a.created_at, 1, 10) AS day,
+    COUNT(*) AS count
+FROM activity AS a
+INNER JOIN task AS t ON a.resource_id = t.id
+WHERE
+    a.action = 'task.moved'
+    AND JSON_EXTRACT(a.data, '$.from') != JSON_EXTRACT(a.data, '$.to')
+    AND JSON_EXTRACT(a.data, '$.to') IN (
+        SELECT c.id
+        FROM column AS c
+        WHERE c.position = (
+            SELECT MAX(c2.position)
+            FROM column AS c2
+            WHERE c2.project_id = t.project_id
+        )
+    )
+GROUP BY day
+ORDER BY day
 `
 
-type ListTaskLabelsRow struct {
-	ID         string `json:"id"`
-	Title      string `json:"title"`
-	ColumnName string `json:"columnName"`
-	LabelName  string `json:"labelName"`
+type ListTaskCompletionTrendRow struct {
+	Day   string `json:"day"`
+	Count int64  `json:"count"`
 }
 
-func (q *Queries) ListTaskLabels(ctx context.Context) ([]ListTaskLabelsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTaskLabels)
+// Completion trend (1/2): tasks moved into the final column, counted on move day.
+// Final column = max position (name-independent), same basis as ListProjectColumnCounts.
+func (q *Queries) ListTaskCompletionTrend(ctx context.Context) ([]ListTaskCompletionTrendRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTaskCompletionTrend)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListTaskLabelsRow
+	var items []ListTaskCompletionTrendRow
 	for rows.Next() {
-		var i ListTaskLabelsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.ColumnName,
-			&i.LabelName,
-		); err != nil {
+		var i ListTaskCompletionTrendRow
+		if err := rows.Scan(&i.Day, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTaskCreatedInFinalColumnTrend = `-- name: ListTaskCreatedInFinalColumnTrend :many
+SELECT
+    SUBSTR(t.created_at, 1, 10) AS day,
+    COUNT(*) AS count
+FROM task AS t
+INNER JOIN column AS c ON t.column_id = c.id
+WHERE
+    c.position = (
+        SELECT MAX(c2.position)
+        FROM column AS c2
+        WHERE c2.project_id = t.project_id
+    )
+    AND t.archived_at IS NULL
+    AND NOT EXISTS (
+        SELECT 1
+        FROM activity AS a
+        WHERE
+            a.resource_id = t.id
+            AND a.action = 'task.moved'
+            AND JSON_EXTRACT(a.data, '$.from') != JSON_EXTRACT(a.data, '$.to')
+            AND JSON_EXTRACT(a.data, '$.to') = t.column_id
+    )
+GROUP BY day
+ORDER BY day
+`
+
+type ListTaskCreatedInFinalColumnTrendRow struct {
+	Day   string `json:"day"`
+	Count int64  `json:"count"`
+}
+
+// Completion trend (2/2): tasks created directly in the final column (never moved
+// into it from another column), counted on creation day. Merged with
+// ListTaskCompletionTrend to match doneTasks exactly.
+// Final column = max position (name-independent), same basis as ListProjectColumnCounts.
+func (q *Queries) ListTaskCreatedInFinalColumnTrend(ctx context.Context) ([]ListTaskCreatedInFinalColumnTrendRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTaskCreatedInFinalColumnTrend)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTaskCreatedInFinalColumnTrendRow
+	for rows.Next() {
+		var i ListTaskCreatedInFinalColumnTrendRow
+		if err := rows.Scan(&i.Day, &i.Count); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -234,7 +417,7 @@ func (q *Queries) ListTaskLabels(ctx context.Context) ([]ListTaskLabelsRow, erro
 
 const listTaskCreationTrend = `-- name: ListTaskCreationTrend :many
 SELECT
-    substr(a.created_at, 1, 10) AS day,
+    SUBSTR(a.created_at, 1, 10) AS day,
     COUNT(*) AS count
 FROM activity AS a
 WHERE a.action = 'task.created'
@@ -256,48 +439,6 @@ func (q *Queries) ListTaskCreationTrend(ctx context.Context) ([]ListTaskCreation
 	var items []ListTaskCreationTrendRow
 	for rows.Next() {
 		var i ListTaskCreationTrendRow
-		if err := rows.Scan(&i.Day, &i.Count); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listTaskCompletionTrend = `-- name: ListTaskCompletionTrend :many
-SELECT
-    substr(a.created_at, 1, 10) AS day,
-    COUNT(*) AS count
-FROM activity AS a
-INNER JOIN task AS t ON a.resource_id = t.id
-INNER JOIN column AS c ON t.column_id = c.id
-WHERE a.action = 'task.moved'
-  AND json_extract(a.data, '$.from') != json_extract(a.data, '$.to')
-  AND c.position = (SELECT MAX(position) FROM column WHERE project_id = c.project_id)
-GROUP BY day
-ORDER BY day
-`
-
-type ListTaskCompletionTrendRow struct {
-	Day   string `json:"day"`
-	Count int64  `json:"count"`
-}
-
-func (q *Queries) ListTaskCompletionTrend(ctx context.Context) ([]ListTaskCompletionTrendRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTaskCompletionTrend)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListTaskCompletionTrendRow
-	for rows.Next() {
-		var i ListTaskCompletionTrendRow
 		if err := rows.Scan(&i.Day, &i.Count); err != nil {
 			return nil, err
 		}

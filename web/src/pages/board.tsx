@@ -1,26 +1,51 @@
 // 看板页：编排与渲染。数据/缓存/乐观更新逻辑都在领域 hooks 里（架构候选 1）。
 import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	DndContext,
+	DragOverlay,
+	KeyboardSensor,
 	PointerSensor,
-	closestCorners,
+	closestCenter,
+	pointerWithin,
+	rectIntersection,
+	useDraggable,
+	useDroppable,
 	useSensor,
 	useSensors,
+	type CollisionDetection,
+	type DragOverEvent,
 	type DragEndEvent,
+	type Announcements,
 } from "@dnd-kit/core";
 import {
 	SortableContext,
 	horizontalListSortingStrategy,
+	sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
-import { ArrowDownIcon, ArrowUpIcon, PlusIcon, TagIcon } from "lucide-react";
+import { ArchiveIcon, ArrowDownIcon, ArrowUpIcon, CalendarIcon, MilestoneIcon, PlusIcon, TagIcon } from "lucide-react";
+import { CSS } from "@dnd-kit/utilities";
 import { Link, useNavigate, useParams } from "react-router";
 import ConfirmDialog from "@/components/confirm-dialog";
 import LabelManagerDialog from "@/components/label-manager";
 import NameDialog from "@/components/name-dialog";
 import SortableColumn from "@/components/board/sortable-column";
+import { TaskCardView } from "@/components/board/sortable-task-card";
 import { Button } from "@/components/ui/button";
+import {
+	Select,
+	SelectItem,
+	SelectPopup,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import { Dialog, DialogBackdrop, DialogDescription, DialogHeader, DialogPanel, DialogPopup, DialogPortal, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverPopup, PopoverTrigger } from "@/components/ui/popover";
 import { recordProjectOpen } from "@/lib/recent-projects";
-import { sortTasks, type SortConfig } from "@/lib/sort-tasks";
+import { api } from "@/lib/api";
+import { buildPath } from "@/lib/endpoints";
+import { queryKeys } from "@/hooks/query-keys";
+import { sortTasks, type SortConfig, type SortField } from "@/lib/sort-tasks";
 import {
 	Empty,
 	EmptyDescription,
@@ -29,12 +54,82 @@ import {
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
 import { useBoardData } from "@/hooks/use-board-data";
-import { useBoardSort } from "@/hooks/use-board-sort";
+import { useBoardSort, SORT_FIELDS } from "@/hooks/use-board-sort";
 import { useLabelMutations } from "@/hooks/use-label-mutations";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useTaskMutations } from "@/hooks/use-task-mutations";
-import type { BoardColumn } from "@/types/board";
+import { useBoardDrag, swimlaneGroups, type DragPlacement, type SwimlaneGroup } from "@/hooks/use-board-drag";
+import type { Board, BoardColumn, Milestone } from "@/types/board";
 import type { Task } from "@/types/task";
+import type { Workspace } from "@/types/workspace";
+import { PageContent, PageHeader, PrimaryButton, QuietButton } from "@/components/kanso-ui";
+
+const boardCollisionDetection: CollisionDetection = (args) => {
+	const activeType = args.active.data.current?.type;
+	const columns = args.droppableContainers.filter(
+		(container) => container.data.current?.type === "column",
+	);
+
+	if (activeType === "column") {
+		return closestCenter({ ...args, droppableContainers: columns });
+	}
+
+	const columnHits = pointerWithin({ ...args, droppableContainers: columns });
+	const fallbackColumnHits = columnHits.length
+		? columnHits
+		: rectIntersection({ ...args, droppableContainers: columns });
+	const targetColumnId = fallbackColumnHits[0]?.id;
+	if (targetColumnId) {
+		const tasks = args.droppableContainers.filter(
+			(container) =>
+				container.data.current?.type === "task" &&
+				container.data.current?.columnId === targetColumnId,
+		);
+		const taskHits = closestCenter({ ...args, droppableContainers: tasks });
+		if (taskHits.length > 0) return taskHits;
+		return fallbackColumnHits.slice(0, 1);
+	}
+
+	return closestCenter({ ...args, droppableContainers: columns });
+};
+
+function taskPlacement(event: DragOverEvent | DragEndEvent, board: Board | undefined): DragPlacement | undefined {
+	if (!board || event.active.data.current?.type !== "task" || !event.over) return undefined;
+
+	const overType = event.over.data.current?.type;
+	const targetColumnId = overType === "column"
+		? String(event.over.id)
+		: String(event.over.data.current?.columnId ?? "");
+	const targetColumn = board.columns.find((column) => column.id === targetColumnId);
+	if (!targetColumn) return undefined;
+
+	const targetTasks = targetColumn.tasks.filter((task) => !task.archivedAt);
+	const overIndex = overType === "task"
+		? targetTasks.findIndex((task) => task.id === String(event.over?.id))
+		: -1;
+	if (overIndex < 0) return { columnId: targetColumnId, index: targetTasks.length };
+
+	const activeRect = event.active.rect.current.translated ?? event.active.rect.current.initial;
+	const overRect = event.over.rect;
+	const activeCenter = activeRect ? activeRect.top + activeRect.height / 2 : overRect.top;
+	const overCenter = overRect.top + overRect.height / 2;
+	// 拖拽卡中心到达/越过目标卡中心 → 插入其后（= 落到目标卡上「放后面」，整卡拖拽时中心精确跟指针，
+	// 与手柄时代的既有手感一致：拖到目标卡中心即放其后，拖到末尾只需瞄准最后一张卡）。
+	let index = overIndex + (activeCenter >= overCenter ? 1 : 0);
+	const sourceColumn = board.columns.find((column) =>
+		column.tasks.some((task) => task.id === String(event.active.id)),
+	);
+	const sourceIndex = sourceColumn
+		? sourceColumn.tasks.filter((task) => !task.archivedAt).findIndex((task) => task.id === String(event.active.id))
+		: -1;
+	if (sourceColumn?.id === targetColumnId && sourceIndex >= 0 && sourceIndex < index) index -= 1;
+
+
+	return {
+		columnId: targetColumnId,
+		index: Math.max(0, Math.min(index, targetTasks.length - (sourceColumn?.id === targetColumnId ? 1 : 0))),
+	};
+}
 
 export default function BoardPage() {
 	const { projectId = "", workspaceId = "" } = useParams();
@@ -44,119 +139,161 @@ export default function BoardPage() {
 		if (workspaceId && projectId) recordProjectOpen(workspaceId, projectId);
 	}, [workspaceId, projectId]);
 	const navigate = useNavigate();
+	const { data: workspaces } = useQuery({
+		queryKey: queryKeys.workspaces(),
+		queryFn: () => api<Workspace[]>(buildPath("workspaces")),
+	});
+	const workspaceName =
+		workspaces?.find((workspace) => workspace.id === workspaceId)?.name ?? "工作区";
 
 	const [createOpen, setCreateOpen] = useState(false);
 	const [renaming, setRenaming] = useState<BoardColumn | null>(null);
 	const [deleting, setDeleting] = useState<BoardColumn | null>(null);
 	const [editingTask, setEditingTask] = useState<Task | null>(null);
-	const [deletingTask, setDeletingTask] = useState<Task | null>(null);
 	const [labelManagerOpen, setLabelManagerOpen] = useState(false);
+	const [archiveOpen, setArchiveOpen] = useState(false);
+	const [viewMode, setViewMode] = useState<"columns" | "swimlane">("columns");
+	const [milestoneOpen, setMilestoneOpen] = useState(false);
+	const [newMilestone, setNewMilestone] = useState("");
+	const [reducedMotion, setReducedMotion] = useState(false);
+	useEffect(() => {
+		const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+		const update = () => setReducedMotion(media.matches);
+		update();
+		media.addEventListener("change", update);
+		return () => media.removeEventListener("change", update);
+	}, []);
 	// 显示层排序（按项目持久化到 localStorage，刷新保持）：不改写 position。
 	const { sort: sortConfig, setSort: setSortConfig } = useBoardSort(projectId);
 	const { board, isLoading, isError, columnOps } = useBoardData(projectId);
 	const taskOps = useTaskMutations(projectId);
 	const labelOps = useLabelMutations(projectId);
+	// 拖拽状态机（useBoardDrag）：视觉状态 + dragend 提交计划，纯函数在 hooks/use-board-drag.ts。
+	const { dragState, activeTask, dragActiveTaskId, activeTaskColumnId, onDragStart, onDragOver, onDragEnd, onDragCancel } =
+		useBoardDrag(board, viewMode);
+	const archivedQuery = useQuery({
+		queryKey: queryKeys.archivedTasks(projectId),
+		queryFn: () => api<Task[]>(buildPath("projectArchivedTasks", { id: projectId })),
+		enabled: archiveOpen && projectId !== "",
+	});
+	const milestonesQuery = useQuery({
+		queryKey: queryKeys.milestones(projectId),
+		queryFn: () => api<Milestone[]>(buildPath("projectMilestones", { id: projectId })),
+		enabled: milestoneOpen && projectId !== "",
+	});
+	// 里程碑创建与其他 mutation 一致：成功失效列表查询（此前裸 api + refetch 风格不统一）。
+	const queryClient = useQueryClient();
+	const createMilestoneMutation = useMutation({
+		mutationFn: (name: string) =>
+			api<Milestone>(buildPath("projectMilestones", { id: projectId }), { method: "POST", body: JSON.stringify({ name }) }),
+		onSuccess: () => {
+			setNewMilestone("");
+			queryClient.invalidateQueries({ queryKey: queryKeys.milestones(projectId) });
+		},
+	});
 
 	// 实时：其他窗口的写操作经 WS 推送后 invalidate 本页查询。
-	useRealtime(projectId);
+	useRealtime(projectId, { deferInvalidation: dragState.activeId !== null });
 
 	const sensors = useSensors(
-		useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+		useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+		useSensor(KeyboardSensor, {
+			// Space 开始键盘拖拽；Enter 留给任务卡根节点打开详情（卡片同时是拖拽激活面）。
+			keyboardCodes: {
+				start: ["Space"],
+				cancel: ["Esc"],
+				end: ["Space", "Enter", "Tab"],
+			},
+			coordinateGetter: sortableKeyboardCoordinates,
+		}),
 	);
 
+	// dragend：状态机产出提交计划，这里只做 命令 → mutation 的映射（列/任务/标签各归其 hook）。
 	function handleDragEnd(event: DragEndEvent) {
-		const { active, over } = event;
-		if (!over || active.id === over.id || !board) return;
-		const activeId = String(active.id);
-		const overId = String(over.id);
-
-		// 列拖拽。
-		const oldColIndex = board.columns.findIndex((c) => c.id === activeId);
-		if (oldColIndex >= 0) {
-			const newColIndex = board.columns.findIndex((c) => c.id === overId);
-			if (newColIndex < 0) return;
-			columnOps.moveColumn.mutate({ id: activeId, position: newColIndex });
-			return;
-		}
-
-		// 任务拖拽：定位源列与目标列/位置（数组重排逻辑在 hook 内，这里只做事件映射）。
-		const dragged = board.columns
-			.flatMap((c) => c.tasks)
-			.find((t) => t.id === activeId);
-		if (!dragged) return;
-
-		let targetColumn = board.columns.find((c) => c.id === overId);
-		let targetIndex = targetColumn ? targetColumn.tasks.length : 0;
-		if (!targetColumn) {
-			for (const column of board.columns) {
-				const idx = column.tasks.findIndex((t) => t.id === overId);
-				if (idx >= 0) {
-					targetColumn = column;
-					targetIndex = idx;
-					break;
-				}
+		const overId = event.over ? String(event.over.id) : "";
+		const commands = onDragEnd(String(event.active.id), overId, taskPlacement(event, board));
+		for (const command of commands) {
+			if (command.type === "moveTask") {
+				taskOps.moveTask.mutate({ id: command.id, columnId: command.columnId, position: command.position });
+			} else if (command.type === "moveColumn") {
+				columnOps.moveColumn.mutate({ id: command.id, position: command.position });
+			} else if (command.type === "toggleLabel") {
+				labelOps.toggleLabel.mutate({ taskId: command.taskId, labelId: command.labelId, attach: command.attach });
 			}
 		}
-		if (!targetColumn) return;
-		// 同列且位置没变则跳过。
-		const sourceColumn = board.columns.find((c) => c.id === dragged.columnId);
-		if (
-			sourceColumn?.id === targetColumn.id &&
-			sourceColumn.tasks.indexOf(dragged) === targetIndex
-		) {
-			return;
-		}
-
-		taskOps.moveTask.mutate({
-			id: dragged.id,
-			columnId: targetColumn.id,
-			position: targetIndex,
-		});
 	}
-
-
+	const announcements: Announcements = {
+		onDragStart: ({ active }) => {
+			const task = board?.columns.flatMap((column) => column.tasks).find((item) => item.id === String(active.id));
+			const column = board?.columns.find((item) => item.id === String(active.id));
+			return task ? `已抓取任务「${task.title}」，按方向键移动，按空格放下，按 Escape 取消。` : column ? `已抓取列「${column.name}」，按左右方向键移动，按空格放下，按 Escape 取消。` : "已开始拖拽。";
+		},
+		onDragOver: ({ active, over }) => {
+			if (!over) return "已离开放置区域。";
+			const targetColumn = board?.columns.find((column) =>
+				column.id === String(over.id) || column.tasks.some((task) => task.id === String(over.id)),
+			);
+			const task = board?.columns.flatMap((column) => column.tasks).find((item) => item.id === String(active.id));
+			return targetColumn ? `任务「${task?.title ?? String(active.id)}」已移动到「${targetColumn.name}」。` : `已移动到「${String(over.id)}」。`;
+		},
+		onDragEnd: ({ active, over }) => {
+			if (!over) return "拖拽已结束，未改变位置。";
+			const targetColumn = board?.columns.find((column) =>
+				column.id === String(over.id) || column.tasks.some((task) => task.id === String(over.id)),
+			);
+			const task = board?.columns.flatMap((column) => column.tasks).find((item) => item.id === String(active.id));
+			return targetColumn ? `任务「${task?.title ?? String(active.id)}」已放入「${targetColumn.name}」。` : "拖拽已完成。";
+		},
+		onDragCancel: () => "拖拽已取消，任务位置未改变。",
+	};
 	return (
 		<div className="flex h-full flex-col">
-			<div className="flex h-14 shrink-0 items-center justify-between border-b px-6">
+			<PageHeader>
 				<div className="flex min-w-0 items-baseline gap-3">
 					<Link
 						to={`/w/${board?.project.workspaceId ?? ""}`}
-						className="text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+						className="kanso-board-breadcrumb__workspace"
 					>
-						← 项目
+						{workspaceName}
 					</Link>
-					<span className="text-muted-foreground/40">/</span>
+					<span className="kanso-board-breadcrumb__separator">/</span>
 					<h1 className="truncate text-[17px] font-[650] tracking-tight">
 						{board?.project.name ?? "看板"}
 					</h1>
 				</div>
-				<div className="flex gap-2">
-					{/* 显示层排序切换器：字段（原顺序/标题/创建时间）+ 方向；不改写 position。 */}
-					<div className="flex items-center gap-0.5 rounded-[6px] border bg-background px-1 py-0.5">
-						{(
-							[
-								{ value: "position", label: "原顺序" },
-								{ value: "title", label: "标题" },
-								{ value: "createdAt", label: "创建时间" },
-							] as const
-						).map((opt) => (
-							<Button
-								key={opt.value}
-								variant={sortConfig.field === opt.value ? "secondary" : "ghost"}
-								size="sm"
-								className="h-6 px-2 text-xs"
-								aria-pressed={sortConfig.field === opt.value}
-								onClick={() =>
-									setSortConfig((c) => ({ ...c, field: opt.value }))
-								}
-							>
-								{opt.label}
-							</Button>
-						))}
+				<div className="kanso-board-toolbar flex gap-2">
+					{/* 显示层排序切换器：字段（原顺序/标题/创建时间/优先级）+ 方向；不改写 position。 */}
+					<Select
+						value={sortConfig.field}
+						onValueChange={(value) => {
+							// S-17：与 use-board-sort 的 SORT_FIELD_MAP 单一来源比对（消除重复 switch）。
+							if (SORT_FIELDS.includes(value as SortField)) {
+								setSortConfig((current) => ({ ...current, field: value as SortField }));
+							}
+						}}
+					>
+						<SelectTrigger className="kanso-board-sort-trigger" aria-label="任务排序">
+							<SelectValue>
+								{sortConfig.field === "title"
+									? "标题"
+									: sortConfig.field === "createdAt"
+										? "创建时间"
+										: sortConfig.field === "priority"
+											? "优先级"
+											: "原顺序"}
+							</SelectValue>
+						</SelectTrigger>
+						<SelectPopup className="kanso-board-sort-popup">
+							<SelectItem value="position" className="kanso-board-sort-item">原顺序</SelectItem>
+							<SelectItem value="title" className="kanso-board-sort-item">标题</SelectItem>
+							<SelectItem value="createdAt" className="kanso-board-sort-item">创建时间</SelectItem>
+							<SelectItem value="priority" className="kanso-board-sort-item">优先级</SelectItem>
+						</SelectPopup>
+					</Select>
 						<Button
 							variant="ghost"
 							size="icon"
-							className="size-6"
+							className="kanso-board-sort-direction"
 							aria-label={
 								sortConfig.direction === "asc" ? "切换为降序" : "切换为升序"
 							}
@@ -173,15 +310,38 @@ export default function BoardPage() {
 								<ArrowDownIcon />
 							)}
 						</Button>
+					<QuietButton
+						size="icon"
+						aria-label="标签"
+						onClick={() => setLabelManagerOpen(true)}
+					>
+						<TagIcon />
+					</QuietButton>
+					<QuietButton
+						size="icon"
+						aria-label="归档"
+						onClick={() => setArchiveOpen(true)}
+					>
+						<ArchiveIcon />
+					</QuietButton>
+					{(milestonesQuery.data?.length ?? 0) > 0 ? (
+						<QuietButton
+							size="icon"
+							aria-label="里程碑"
+							onClick={() => setMilestoneOpen(true)}
+						>
+							<MilestoneIcon />
+						</QuietButton>
+					) : null}
+					<div className="kanso-view-toggle" role="group" aria-label="看板视图">
+						<button type="button" aria-pressed={viewMode === "columns"} onClick={() => setViewMode("columns")}>列</button>
+						<button type="button" aria-pressed={viewMode === "swimlane"} onClick={() => setViewMode("swimlane")}>泳</button>
 					</div>
-					<Button variant="outline" onClick={() => setLabelManagerOpen(true)}>
-						<TagIcon /> 标签
-					</Button>
-					<Button onClick={() => setCreateOpen(true)}>
+					<PrimaryButton onClick={() => setCreateOpen(true)}>
 						<PlusIcon /> 新建列
-					</Button>
+					</PrimaryButton>
 				</div>
-			</div>
+			</PageHeader>
 
 			{isLoading ? (
 				<div className="flex flex-1 items-center justify-center">
@@ -192,21 +352,35 @@ export default function BoardPage() {
 					加载看板失败
 				</p>
 			) : board && board.columns.length > 0 ? (
-				<div className="flex-1 overflow-auto py-6 pl-4 pr-7">
+				<PageContent className="kanso-board-content overflow-auto px-[26px] pb-7 pt-5">
 					<DndContext
+						accessibility={{
+							announcements,
+							screenReaderInstructions: {
+								draggable: "按空格或 Enter 抓取。使用方向键移动，按空格或 Enter 放下，按 Escape 取消。",
+							},
+						}}
 						sensors={sensors}
-						collisionDetection={closestCorners}
+						collisionDetection={boardCollisionDetection}
+						onDragStart={(event) => onDragStart(String(event.active.id))}
 						onDragEnd={handleDragEnd}
+						onDragOver={(event) => onDragOver(String(event.active.id), event.over ? String(event.over.id) : "", taskPlacement(event, board))}
+						onDragCancel={onDragCancel}
 					>
 						<SortableContext
 							items={board.columns.map((c) => c.id)}
 							strategy={horizontalListSortingStrategy}
 						>
-							<div className="flex items-start">
-								{board.columns.map((column) => (
+							{viewMode === "columns" ? <div className="kanso-board-row flex items-start">
+							{board.columns.map((column) => (
 									<SortableColumn
 										key={column.id}
-										column={column}
+									column={column}
+									dragOver={dragState.dragOverId === column.id}
+										dragActiveTaskId={dragActiveTaskId}
+										activeTaskColumnId={activeTaskColumnId}
+								dragPos={dragState.dragPos}
+										draggedTask={activeTask}
 										labels={board.labels}
 										sortConfig={sortConfig}
 										onRename={setRenaming}
@@ -219,17 +393,41 @@ export default function BoardPage() {
 												`/w/${board?.project.workspaceId ?? ""}/p/${projectId}/t/${task.id}`,
 											)
 										}
-										onEditTask={setEditingTask}
-										onDeleteTask={setDeletingTask}
+										onRenameTask={(task, title) =>
+											taskOps.updateTask.mutate({ id: task.id, title })
+										}
+										onArchiveTask={(task) => taskOps.setArchived.mutate({ id: task.id, archived: true })}
 										onToggleLabel={(task, label) =>
-											labelOps.toggleLabel.mutate({ task, label })
+											labelOps.toggleLabel.mutate({
+												taskId: task.id,
+												labelId: label.id,
+												attach: !(task.labels ?? []).some((item) => item.id === label.id),
+											})
 										}
 									/>
 								))}
-							</div>
-						</SortableContext>
-					</DndContext>
-				</div>
+							</div> : <div className="kanso-swimlanes">{swimlaneGroups(board).map((group) => <SwimlaneRow key={group.id} group={group} columns={board.columns} onOpen={task => navigate(`/w/${board.project.workspaceId}/p/${projectId}/t/${task.id}`)} onEdit={setEditingTask} onArchive={task => taskOps.setArchived.mutate({ id: task.id, archived: true })} />)}</div>}
+							</SortableContext>
+						{/* 拖拽副本：任务卡跟随光标（overlay 默认 drop 动画平滑归位）；列拖拽走原 transform 方式。 */}
+						{viewMode === "columns" && activeTask ? (
+							<DragOverlay
+								className="kanso-drag-overlay"
+								dropAnimation={reducedMotion ? null : {
+									duration: 180,
+									easing: "cubic-bezier(0.2, 0, 0, 1)",
+								}}
+							>
+								<div
+									className="pointer-events-none"
+									// 282 列宽 - 10*2 body padding - 1*2 列边框，与列内卡片同宽。
+									style={{ width: 260 }}
+								>
+									<TaskCardView task={activeTask} labels={board.labels} />
+								</div>
+							</DragOverlay>
+						) : null}
+						</DndContext>
+				</PageContent>
 			) : (
 				<Empty>
 					<EmptyHeader>
@@ -293,24 +491,12 @@ export default function BoardPage() {
 						});
 				}}
 			/>
-			<ConfirmDialog
-				open={deletingTask !== null}
-				onOpenChange={(open) => {
-					if (!open) setDeletingTask(null);
-				}}
-				title="删除任务"
-				description={`确定删除任务"${deletingTask?.title ?? ""}"吗？此操作不可撤销。`}
-				onConfirm={async () => {
-					if (deletingTask)
-						await taskOps.deleteTask.mutateAsync(deletingTask.id);
-				}}
-			/>
 			<LabelManagerDialog
 				open={labelManagerOpen}
 				onOpenChange={setLabelManagerOpen}
 				labels={board?.labels ?? []}
-				onCreate={async (name, color) => {
-					await labelOps.createLabel.mutateAsync({ name, color });
+				onCreate={async (name) => {
+					await labelOps.createLabel.mutateAsync({ name });
 				}}
 				onRename={async (id, name) => {
 					await labelOps.renameLabel.mutateAsync({ id, name });
@@ -319,6 +505,135 @@ export default function BoardPage() {
 					await labelOps.deleteLabel.mutateAsync(id);
 				}}
 			/>
+			<Dialog open={archiveOpen} onOpenChange={setArchiveOpen}>
+				<DialogPortal>
+					<DialogBackdrop />
+					<DialogPopup>
+						<DialogHeader>
+							<DialogTitle>归档任务</DialogTitle>
+							<DialogDescription>归档任务从看板隐藏，但仍可搜索和恢复。</DialogDescription>
+						</DialogHeader>
+						<DialogPanel>
+							{archivedQuery.isLoading ? <p className="kanso-loading py-8 text-center text-xs">加载归档任务…</p> : null}
+							{archivedQuery.isError ? <p className="kanso-error py-8 text-center text-xs">加载归档任务失败</p> : null}
+							{!archivedQuery.isLoading && !archivedQuery.isError && (archivedQuery.data?.length ?? 0) === 0 ? <div className="kanso-empty-state min-h-24 text-xs">暂无归档任务</div> : null}
+							<ul className="space-y-2">
+								{archivedQuery.data?.map((task) => (
+									<li key={task.id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
+										<ArchiveIcon className="size-4 shrink-0 text-muted-foreground" />
+										<span className="min-w-0 flex-1 truncate text-sm">{task.title}</span>
+																		<div className="flex items-center gap-2">
+																			<Button size="sm" variant="outline" onClick={() => taskOps.setArchived.mutate({ id: task.id, archived: false }, { onSuccess: () => void archivedQuery.refetch() })}>恢复</Button>
+																			<ArchiveDeleteButton task={task} onDelete={(t) => taskOps.deleteTask.mutate(t.id, { onSuccess: () => void archivedQuery.refetch() })} />
+																		</div>
+									</li>
+								))}
+							</ul>
+						</DialogPanel>
+					</DialogPopup>
+				</DialogPortal>
+			</Dialog>
+			<Dialog open={milestoneOpen} onOpenChange={setMilestoneOpen}>
+				<DialogPortal><DialogBackdrop /><DialogPopup>
+					<DialogHeader><DialogTitle>里程碑</DialogTitle><DialogDescription>项目阶段节点 · 进度按任务位置推导</DialogDescription></DialogHeader>
+					<DialogPanel>
+						<form className="mb-4 flex gap-2" onSubmit={(event) => { event.preventDefault(); if (newMilestone.trim()) void createMilestoneMutation.mutateAsync(newMilestone.trim()); }}>
+							<input className="kanso-input min-w-0 flex-1 rounded-md border px-3 text-sm" value={newMilestone} onChange={(event) => setNewMilestone(event.target.value)} placeholder="新里程碑名称" />
+							<Button type="submit">创建</Button>
+						</form>
+						<div className="space-y-2">
+							{milestonesQuery.data?.map((milestone) => {
+								const pct = milestone.progress && milestone.progress.total > 0 ? Math.round((milestone.progress.done / milestone.progress.total) * 100) : 0;
+								return (
+									<div key={milestone.id} className="flex items-center gap-3 rounded-md border border-border px-3 py-2">
+										<span className="min-w-0 flex-1 truncate text-sm">{milestone.name}</span>
+										<span className="h-1.5 w-28 overflow-hidden rounded-full bg-muted"><span className="block h-full rounded-full bg-primary" style={{ width: `${pct}%` }} /></span>
+										<span className="font-mono text-[11px] text-muted-foreground">{milestone.progress ? `${pct}%` : "—"}{milestone.dueDate ? ` · ${milestone.dueDate}` : ""}</span>
+									</div>
+								);
+							})}
+						</div>
+					</DialogPanel>
+				</DialogPopup></DialogPortal>
+			</Dialog>
 		</div>
+	);
+}
+
+
+function SwimlaneRow(props: {
+	group: SwimlaneGroup;
+	columns: BoardColumn[];
+	onOpen: (task: Task) => void;
+	onEdit: (task: Task) => void;
+	onArchive: (task: Task) => void;
+}) {
+	return (
+		<section className="kanso-swimlane">
+			<header className="kanso-swimlane__header">
+				<span className="kanso-label-chip">{props.group.name}</span>
+				<span className="text-xs text-muted-foreground">{props.group.tasks.length} 任务</span>
+			</header>
+			<div className="kanso-swimlane__grid">
+				{props.columns.map((column) => {
+					const tasks = props.group.tasks.filter((task) => task.columnId === column.id);
+					return <SwimlaneCell key={column.id} id={`swimlane:${props.group.id}:${column.id}`} columnName={column.name} tasks={tasks} onOpen={props.onOpen} onEdit={props.onEdit} onArchive={props.onArchive} />;
+				})}
+			</div>
+		</section>
+	);
+}
+
+function SwimlaneCell(props: { id: string; columnName: string; tasks: Task[]; onOpen: (task: Task) => void; onEdit: (task: Task) => void; onArchive: (task: Task) => void }) {
+	const { setNodeRef, isOver } = useDroppable({ id: props.id });
+	return <div ref={setNodeRef} className={`kanso-swimlane__cell ${isOver ? "is-over" : ""}`}>
+		<div className="kanso-swimlane__column-name">{props.columnName}</div>
+		{props.tasks.length === 0 ? <span className="kanso-swimlane__empty">无任务</span> : props.tasks.map((task) => <SwimlaneTask key={task.id} task={task} onOpen={props.onOpen} onEdit={props.onEdit} onArchive={props.onArchive} />)}
+	</div>;
+}
+
+function SwimlaneTask(props: { task: Task; onOpen: (task: Task) => void; onEdit: (task: Task) => void; onArchive: (task: Task) => void }) {
+	const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: props.task.id });
+	return <article ref={setNodeRef} {...attributes} {...listeners} style={{ transform: CSS.Transform.toString(transform) }} className="kanso-task-card kanso-swimlane__task" data-dragging={isDragging || undefined} onClick={() => props.onOpen(props.task)}>
+		<span className="kanso-task-card__title">{props.task.title}</span>
+		{props.task.dueDate ? <span className="kanso-due-badge text-muted-foreground"><CalendarIcon className="size-3" />{props.task.dueDate}</span> : null}
+		<div className="kanso-task-card__actions" onClick={(event) => event.stopPropagation()}>
+			<button type="button" className="kanso-icon-button" aria-label={`编辑任务 ${props.task.title}`} onClick={() => props.onEdit(props.task)}>✎</button>
+			<button type="button" className="kanso-icon-button" aria-label={`归档任务 ${props.task.title}`} onClick={() => props.onArchive(props.task)}>⌁</button>
+		</div>
+	</article>;
+}
+
+/** 归档列表里的删除：内联小弹窗确认（不叠第二个模态框）。 */
+function ArchiveDeleteButton(props: { task: Task; onDelete: (task: Task) => void }) {
+	const [open, setOpen] = useState(false);
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger
+				render={<Button size="sm" variant="destructive">删除</Button>}
+			/>
+			<PopoverPopup className="w-52 p-2" align="end">
+				<div className="space-y-2 p-1">
+					<p className="break-words text-xs leading-relaxed text-muted-foreground">
+						永久删除「{props.task.title}」？此操作不可撤销。
+					</p>
+					<div className="flex justify-end gap-2">
+						<Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+							取消
+						</Button>
+						<Button
+							size="sm"
+							variant="destructive"
+							onClick={() => {
+								setOpen(false);
+								props.onDelete(props.task);
+							}}
+						>
+							删除
+						</Button>
+					</div>
+				</div>
+			</PopoverPopup>
+		</Popover>
 	);
 }

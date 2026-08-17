@@ -25,7 +25,7 @@ test("添加任务乐观插入：refetch 挂起时任务仍即时出现", async 
 		await route.continue();
 	});
 
-	const firstCol = page.locator("div[class*='w-[280px]']").first();
+	const firstCol = page.locator("div[class*='w-[282px]']").first();
 	const title = `乐观任务${Date.now() % 100000}`;
 	const t0 = Date.now();
 	await firstCol.getByText("添加任务").click();
@@ -51,7 +51,7 @@ test("添加任务正常路径：数据最终一致", async ({ page }) => {
 	await page.locator('a[href*="/p/"]').first().click();
 	await page.waitForSelector("text=新建列");
 
-	const firstCol = page.locator("div[class*='w-[280px]']").first();
+	const firstCol = page.locator("div[class*='w-[282px]']").first();
 	const title = `正常任务${Date.now() % 100000}`;
 	await firstCol.getByText("添加任务").click();
 	await firstCol.locator("input").fill(title);

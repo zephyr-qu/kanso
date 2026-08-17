@@ -11,6 +11,7 @@ type Activity struct {
 	Action       string  `json:"action"`
 	Data         *string `json:"data"`
 	CreatedAt    string  `json:"createdAt"`
+	Actor        string  `json:"actor"`
 }
 
 type Column struct {
@@ -18,6 +19,7 @@ type Column struct {
 	ProjectID string `json:"projectId"`
 	Name      string `json:"name"`
 	Position  int64  `json:"position"`
+	WipLimit  *int64 `json:"wipLimit"`
 	CreatedAt string `json:"createdAt"`
 }
 
@@ -26,14 +28,33 @@ type Comment struct {
 	TaskID    string `json:"taskId"`
 	Content   string `json:"content"`
 	CreatedAt string `json:"createdAt"`
+	Author    string `json:"author"`
 }
 
 type Label struct {
-	ID          string `json:"id"`
-	WorkspaceID string `json:"workspaceId"`
-	Name        string `json:"name"`
-	Color       string `json:"color"`
-	CreatedAt   string `json:"createdAt"`
+	ID        string `json:"id"`
+	ProjectID string `json:"projectId"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"createdAt"`
+}
+
+type Member struct {
+	ID          string  `json:"id"`
+	WorkspaceID string  `json:"workspaceId"`
+	Name        string  `json:"name"`
+	Role        string  `json:"role"`
+	AvatarColor *string `json:"avatarColor"`
+	Avatar      *string `json:"avatar"`
+	AccessKey   *string `json:"accessKey"`
+	CreatedAt   string  `json:"createdAt"`
+}
+
+type Milestone struct {
+	ID        string  `json:"id"`
+	ProjectID string  `json:"projectId"`
+	Name      string  `json:"name"`
+	DueDate   *string `json:"dueDate"`
+	CreatedAt string  `json:"createdAt"`
 }
 
 type Project struct {
@@ -52,6 +73,9 @@ type Task struct {
 	Title       string  `json:"title"`
 	Description *string `json:"description"`
 	Position    int64   `json:"position"`
+	Priority    string  `json:"priority"`
+	DueDate     *string `json:"dueDate"`
+	ArchivedAt  *string `json:"archivedAt"`
 	CreatedAt   string  `json:"createdAt"`
 	UpdatedAt   string  `json:"updatedAt"`
 }
@@ -59,6 +83,11 @@ type Task struct {
 type TaskLabel struct {
 	TaskID  string `json:"taskId"`
 	LabelID string `json:"labelId"`
+}
+
+type TaskMilestone struct {
+	TaskID      string `json:"taskId"`
+	MilestoneID string `json:"milestoneId"`
 }
 
 type Workspace struct {

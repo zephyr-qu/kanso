@@ -1,34 +1,39 @@
+// 认证中间件：Authorization: Bearer <key> 命中某成员密钥（member.access_key）后注入成员身份。
+// 密钥即身份（ADR-0002 演进，见 0006 规划 Phase 1）：不再有单一共享密钥，每个成员独立密钥。
 package auth
 
 import (
 	"context"
-	"crypto/subtle"
 	"net/http"
 	"strings"
 )
 
 type ctxKey int
 
-const adminIDKey ctxKey = 0
+const memberIDKey ctxKey = 0
 
-// Middleware 校验共享访问密钥（Authorization: Bearer <key>），通过后注入固定 admin 身份。
-func Middleware(accessKey string) func(http.Handler) http.Handler {
+// MemberLookup 按访问密钥查找成员，命中返回 memberID；未命中返回 false。
+type MemberLookup func(ctx context.Context, key string) (string, bool)
+
+// Middleware 校验 Bearer 密钥命中成员密钥表，通过后注入该成员 ID。
+func Middleware(lookup MemberLookup) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := bearerToken(r)
-			if token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(accessKey)) != 1 {
+			memberID, ok := lookup(r.Context(), token)
+			if !ok {
 				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 				return
 			}
-			ctx := context.WithValue(r.Context(), adminIDKey, "admin")
+			ctx := context.WithValue(r.Context(), memberIDKey, memberID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-// AdminID 返回中间件注入的固定身份；未通过认证时为 ""。
-func AdminID(r *http.Request) string {
-	v, _ := r.Context().Value(adminIDKey).(string)
+// MemberID 返回中间件注入的成员 ID；未通过认证时为 ""。
+func MemberID(r *http.Request) string {
+	v, _ := r.Context().Value(memberIDKey).(string)
 	return v
 }
 

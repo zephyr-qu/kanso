@@ -1,9 +1,9 @@
 // 工作区页：项目卡片网格 + 创建/重命名/删除（删除经确认）。点击卡片进入看板。
 // 借鉴原型 proj-card：白卡 + 圆角 + hover 上浮；操作按钮 hover 显示（数据无列/任务计数，故省略 counts pills）。
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PencilIcon, PlusIcon, TagIcon, TrashIcon } from "lucide-react";
+import { ClockIcon, PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
 import ConfirmDialog from "@/components/confirm-dialog";
 import NameDialog from "@/components/name-dialog";
 import { Button } from "@/components/ui/button";
@@ -14,17 +14,25 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
+import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
+import { buildPath } from "@/lib/endpoints";
 import { formatUpdated } from "@/lib/format-relative";
 import { queryKeys } from "@/hooks/query-keys";
 import type { Project } from "@/types/project";
 import type { Workspace } from "@/types/workspace";
+import { PageContent, PageHeader, PrimaryButton } from "@/components/kanso-ui";
 
 export default function WorkspacePage() {
 	const { workspaceId = "" } = useParams();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const [createOpen, setCreateOpen] = useState(false);
+	// 新建项目模板：看板列 / 重要四象限（打开时重置为看板）。
+	const [projectTemplate, setProjectTemplate] = useState<"board" | "quadrant">("board");
+	useEffect(() => {
+		if (createOpen) setProjectTemplate("board");
+	}, [createOpen]);
 	const [renaming, setRenaming] = useState<Project | null>(null);
 	const [deleting, setDeleting] = useState<Project | null>(null);
 	const [wsRenaming, setWsRenaming] = useState(false);
@@ -33,7 +41,7 @@ export default function WorkspacePage() {
 	// 当前工作区名（来自工作区列表；重命名后同步）。
 	const { data: workspaces } = useQuery({
 		queryKey: queryKeys.workspaces(),
-		queryFn: () => api<Workspace[]>("/api/workspaces"),
+		queryFn: () => api<Workspace[]>(buildPath("workspaces")),
 	});
 	const workspaceName =
 		workspaces?.find((w) => w.id === workspaceId)?.name ?? "工作区";
@@ -48,7 +56,7 @@ export default function WorkspacePage() {
 
 	const wsRenameMutation = useMutation({
 		mutationFn: (name: string) =>
-			api<Workspace>(`/api/workspaces/${workspaceId}`, {
+			api<Workspace>(buildPath("workspace", { id: workspaceId }), {
 				method: "PATCH",
 				body: JSON.stringify({ name }),
 			}),
@@ -56,7 +64,7 @@ export default function WorkspacePage() {
 	});
 	const wsDeleteMutation = useMutation({
 		mutationFn: () =>
-			api<void>(`/api/workspaces/${workspaceId}`, { method: "DELETE" }),
+			api<void>(buildPath("workspace", { id: workspaceId }), { method: "DELETE" }),
 		onSuccess: () => {
 			invalidateWorkspaces();
 			navigate("/"); // RedirectHome 落到剩余工作区
@@ -69,22 +77,22 @@ export default function WorkspacePage() {
 		isError,
 	} = useQuery({
 		queryKey: queryKeys.projects(workspaceId),
-		queryFn: () => api<Project[]>(`/api/workspaces/${workspaceId}/projects`),
+		queryFn: () => api<Project[]>(buildPath("workspaceProjects", { workspaceId })),
 		enabled: workspaceId !== "",
 	});
 
 	const createMutation = useMutation({
 		mutationFn: (name: string) =>
-			api<Project>(`/api/workspaces/${workspaceId}/projects`, {
+			api<Project>(buildPath("workspaceProjects", { workspaceId }), {
 				method: "POST",
-				body: JSON.stringify({ name }),
+				body: JSON.stringify({ name, template: projectTemplate }),
 			}),
 		onSuccess: invalidateProjects,
 	});
 
 	const renameMutation = useMutation({
 		mutationFn: ({ id, name }: { id: string; name: string }) =>
-			api<Project>(`/api/projects/${id}`, {
+			api<Project>(buildPath("project", { id }), {
 				method: "PATCH",
 				body: JSON.stringify({ name }),
 			}),
@@ -93,13 +101,13 @@ export default function WorkspacePage() {
 
 	const deleteMutation = useMutation({
 		mutationFn: (id: string) =>
-			api<void>(`/api/projects/${id}`, { method: "DELETE" }),
+			api<void>(buildPath("project", { id }), { method: "DELETE" }),
 		onSuccess: invalidateProjects,
 	});
 
 	return (
-		<div className="flex h-full flex-col">
-			<div className="flex h-14 shrink-0 items-center justify-between border-b px-6">
+		<div className="kanso-workspace-page flex h-full flex-col">
+			<PageHeader>
 				<div className="flex min-w-0 items-center gap-2">
 					<h1 className="truncate text-[17px] font-[650] tracking-tight">
 						{workspaceName}
@@ -124,19 +132,13 @@ export default function WorkspacePage() {
 					</Button>
 				</div>
 				<div className="flex items-center gap-2">
-					<Button
-						variant="outline"
-						render={<Link to={`/w/${workspaceId}/labels`} />}
-					>
-						<TagIcon /> 标签
-					</Button>
-					<Button onClick={() => setCreateOpen(true)}>
+					<PrimaryButton onClick={() => setCreateOpen(true)}>
 						<PlusIcon /> 新建项目
-					</Button>
+					</PrimaryButton>
 				</div>
-			</div>
+			</PageHeader>
 
-			<div className="flex-1 overflow-auto px-8 py-7">
+			<PageContent className="kanso-workspace-content px-[30px] pb-11 pt-[26px]">
 
 			{isLoading ? (
 				<div className="flex justify-center py-16">
@@ -147,36 +149,38 @@ export default function WorkspacePage() {
 					加载项目失败
 				</p>
 			) : projects && projects.length > 0 ? (
-				<div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3.5">
+				<div className="kanso-workspace-grid">
 					{projects.map((project) => (
 						<Link
 							key={project.id}
 							to={`/w/${workspaceId}/p/${project.id}`}
-							className="group relative rounded-xl border bg-card p-5 shadow-[0_1px_2px_rgba(24,24,27,0.04)] transition-all duration-150 hover:-translate-y-px hover:border-[rgba(24,24,27,0.14)] hover:shadow-[0_6px_16px_rgba(24,24,27,0.08)]"
+					// 对齐原型 .project-card（方向 F）：8px 圆角、1px 边框、内边距 18/18/14、子元素 gap 10px、hover 上浮 3px。
+												className="kanso-project-card group"
 						>
-							<p className="truncate pr-12 text-[15px] font-semibold leading-[1.3]">
+							<p className="kanso-project-card__title truncate pr-12">
 								{project.name}
 							</p>
-							<p className="mt-1.5 text-xs leading-[1.3] text-muted-foreground/70">
-								{project.updatedAt
-									? `${project.createdAt.slice(0, 10)} · ${formatUpdated(project.updatedAt)}`
-									: `${project.createdAt.slice(0, 10)} · 创建`}
-							</p>
-							<div className="mt-3.5 flex gap-2">
-								<span className="rounded-full bg-[rgba(24,24,27,0.05)] px-2 py-0.5 text-[11px] leading-[1.3] text-muted-foreground">
-									{project.columnCount ?? 0} 列
-								</span>
-								<span className="rounded-full bg-[rgba(24,24,27,0.05)] px-2 py-0.5 text-[11px] leading-[1.3] text-muted-foreground">
-									{project.taskCount ?? 0} 任务
-								</span>
-								<span className="rounded-full bg-[rgba(24,24,27,0.05)] px-2 py-0.5 text-[11px] leading-[1.3] text-muted-foreground">
-									{project.inProgressCount ?? 0} 进行中
+							{/* 计数标签（对齐原型 proj-counts：gap 6px、chip 11px/500/1.5） */}
+											<div className="kanso-project-card__counts">
+												<span className="kanso-chip">
+													{project.taskCount ?? 0} 任务
+												</span>
+												<span className="kanso-chip">
+													{project.inProgressCount ?? 0} 进行中
 								</span>
 							</div>
+							{/* 时间（对齐原型 proj-meta：12px、gap 6px；未更新过显示创建时间，更新过显示更新时间） */}
+							<p className="kanso-project-card__meta">
+														<ClockIcon className="size-3 shrink-0" />
+								{project.updatedAt
+									? formatUpdated(project.updatedAt)
+									: `创建于 ${project.createdAt.slice(0, 10)}`}
+							</p>
 
 							{/* hover 操作：重命名 / 删除（阻止冒泡避免触发跳转） */}
 							<div
-								className="absolute right-2 top-2 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+							// 对齐原型 .proj-actions：右上角 12px、hover 显示。
+							className="kanso-project-card__actions"
 								onClick={(e) => e.preventDefault()}
 								onPointerDown={(e) => e.stopPropagation()}
 							>
@@ -201,6 +205,10 @@ export default function WorkspacePage() {
 							</div>
 						</Link>
 					))}
+					<button type="button" className="kanso-project-card kanso-new-project-card" onClick={() => setCreateOpen(true)}>
+						<PlusIcon className="size-5" />
+						<span>新建项目</span>
+					</button>
 				</div>
 			) : (
 				<Empty>
@@ -212,7 +220,7 @@ export default function WorkspacePage() {
 					</EmptyHeader>
 				</Empty>
 			)}
-			</div>
+			</PageContent>
 
 			<NameDialog
 				open={createOpen}
@@ -223,7 +231,38 @@ export default function WorkspacePage() {
 				onSubmit={async (name) => {
 					await createMutation.mutateAsync(name);
 				}}
-			/>
+			>
+				<div className="space-y-1.5">
+					<Label>模板</Label>
+					<div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="项目模板">
+						{[
+							{ value: "board", label: "看板", desc: "待办 / 进行中 / 已阻塞 / 已完成" },
+							{ value: "quadrant", label: "重要四象限", desc: "重要紧急 / 重要不紧急 / 紧急不重要 / 不重要不紧急" },
+						].map((option) => {
+							const selected = projectTemplate === option.value;
+							return (
+								<button
+									key={option.value}
+									type="button"
+									role="radio"
+									aria-checked={selected}
+									onClick={() => setProjectTemplate(option.value as "board" | "quadrant")}
+									className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+										selected
+											? "border-primary bg-primary/5 text-foreground"
+											: "border-input text-muted-foreground hover:border-primary/40"
+									}`}
+								>
+									<span className="block text-sm font-medium">{option.label}</span>
+									<span className="mt-0.5 block text-[11px] leading-relaxed opacity-80">
+										{option.desc}
+									</span>
+								</button>
+							);
+						})}
+					</div>
+				</div>
+			</NameDialog>
 			<NameDialog
 				open={renaming !== null}
 				onOpenChange={(open) => {

@@ -1,42 +1,91 @@
 // 任务详情页：描述编辑 / 评论 / 活动时间线（/w/:wid/p/:pid/t/:tid）。
 // 借鉴原型 #detail：面包屑 + 大标题 + 白卡描述框 + 评论卡 + 圆点时间线。
 import { useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MessageSquareIcon, SendIcon, TrashIcon } from "lucide-react";
+import {
+	CalendarIcon,
+	ArchiveIcon,
+	ArchiveRestoreIcon,
+	FlagIcon,
+	MessageSquareIcon,
+	SendIcon,
+	TagIcon,
+	Trash2Icon,
+	TrashIcon,
+} from "lucide-react";
+import ConfirmDialog from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useRealtime } from "@/hooks/use-realtime";
 import { api } from "@/lib/api";
+import { buildPath } from "@/lib/endpoints";
 import { invalidateTask, queryKeys } from "@/hooks/query-keys";
 import { ACTION_LABELS } from "@/lib/events";
+import { activityDetail } from "@/lib/activity";
 import { formatDateTime } from "@/lib/format-relative";
+import { dueState } from "@/lib/due";
+import { PageContent, PageHeader } from "@/components/kanso-ui";
+import DatePicker from "@/components/date-picker";
+import {
+	normalizePriority,
+	PRIORITY_LABEL,
+	priorityColor,
+} from "@/lib/priority";
 import type { Comment, TaskDetail } from "@/types/task-detail";
 import type { Task } from "@/types/task";
 
-
 function SectionLabel({ children }: { children: React.ReactNode }) {
+	return <h2 className="kanso-detail-section-title">{children}</h2>;
+}
+
+function DescriptionContent({ value }: { value: string | null }) {
+	const paragraphs = value?.trim()
+		? value.split(/\n\s*\n/)
+		: ["暂无描述，点击编辑添加。"];
+
 	return (
-		<h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
-			{children}
-		</h2>
+		<div className="kanso-task-detail__description">
+			{paragraphs.map((paragraph, index) => {
+				const lines = paragraph.split("\n");
+				return (
+					<div key={`${index}-${paragraph.slice(0, 12)}`}>
+						{lines.map((line, lineIndex) => {
+							const isBullet = line.startsWith("• ");
+							return (
+								<p
+									key={`${lineIndex}-${line}`}
+									className={
+										isBullet ? "kanso-task-detail__description-bullet" : undefined
+									}
+								>
+									{isBullet ? line.slice(2) : line}
+								</p>
+							);
+						})}
+					</div>
+				);
+			})}
+		</div>
 	);
 }
 
 export default function TaskDetailPage() {
 	const { workspaceId = "", projectId = "", taskId = "" } = useParams();
+	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const [title, setTitle] = useState("");
 	const [desc, setDesc] = useState("");
 	const [editingTitle, setEditingTitle] = useState(false);
 	const [editingDesc, setEditingDesc] = useState(false);
 	const [comment, setComment] = useState("");
+	const [deleteOpen, setDeleteOpen] = useState(false);
 
 	const { data, isLoading, isError } = useQuery({
 		queryKey: queryKeys.task(taskId),
-		queryFn: () => api<TaskDetail>(`/api/tasks/${taskId}`),
+		queryFn: () => api<TaskDetail>(buildPath("task", { id: taskId })),
 		enabled: taskId !== "",
 	});
 
@@ -44,8 +93,10 @@ export default function TaskDetailPage() {
 	useRealtime(projectId);
 
 	const updateTaskMutation = useMutation({
-		mutationFn: (patch: Partial<Pick<Task, "title" | "description">>) =>
-			api<Task>(`/api/tasks/${taskId}`, {
+		mutationFn: (
+			patch: Partial<Pick<Task, "title" | "description" | "priority" | "dueDate">>,
+		) =>
+			api<Task>(buildPath("task", { id: taskId }), {
 				method: "PATCH",
 				body: JSON.stringify(patch),
 			}),
@@ -54,7 +105,7 @@ export default function TaskDetailPage() {
 
 	const createCommentMutation = useMutation({
 		mutationFn: (content: string) =>
-			api<Comment>(`/api/tasks/${taskId}/comments`, {
+			api<Comment>(buildPath("taskComments", { id: taskId }), {
 				method: "POST",
 				body: JSON.stringify({ content }),
 			}),
@@ -66,27 +117,78 @@ export default function TaskDetailPage() {
 
 	const deleteCommentMutation = useMutation({
 		mutationFn: (id: string) =>
-			api<void>(`/api/comments/${id}`, { method: "DELETE" }),
+			api<void>(buildPath("comment", { id }), { method: "DELETE" }),
 		onSuccess: () => invalidateTask(queryClient, taskId),
+	});
+	const archiveMutation = useMutation({
+		mutationFn: (archived: boolean) =>
+			api<Task>(
+				buildPath(archived ? "taskArchive" : "taskRestore", { id: taskId }),
+				{ method: "POST" },
+			),
+		onSuccess: () => {
+			invalidateTask(queryClient, taskId);
+			queryClient.invalidateQueries({ queryKey: queryKeys.board(projectId) });
+			queryClient.invalidateQueries({ queryKey: queryKeys.dashboard() });
+		},
+	});
+	const deleteMutation = useMutation({
+		mutationFn: () =>
+			api<void>(buildPath("task", { id: taskId }), { method: "DELETE" }),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: queryKeys.board(projectId) });
+			navigate(`/w/${workspaceId}/p/${projectId}`);
+		},
 	});
 
 	return (
 		<div className="flex h-full flex-col">
 			{/* 顶部 header：← 看板 / 项目名（对齐原型 #detail .top 与其他页面头部）。 */}
-			<header className="flex h-14 shrink-0 items-center justify-between border-b px-6">
-				<div className="flex min-w-0 items-baseline gap-3">
+			<PageHeader>
+				<div className="kanso-task-detail__breadcrumb">
 					<Link
 						to={`/w/${workspaceId}/p/${projectId}`}
-						className="text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+						className="kanso-task-detail__breadcrumb-project kanso-task-detail__breadcrumb-link"
 					>
-						← 看板
-					</Link>
-					<span className="text-muted-foreground/40">/</span>
-					<h1 className="truncate text-[17px] font-[650] tracking-tight">
 						{data?.projectName || "看板"}
+					</Link>
+					<span className="kanso-task-detail__breadcrumb-separator">/</span>
+					<h1 className="kanso-task-detail__breadcrumb-task">
+						{data?.task.title || "任务详情"}
 					</h1>
+					{data?.task.archivedAt ? <span className="kanso-chip">已归档</span> : null}
 				</div>
-			</header>
+				{data ? (
+					<div className="kanso-task-detail__header-right">
+						<span className="kanso-task-detail__task-id">
+							TASK · {taskId.toUpperCase()}
+						</span>
+						<div className="kanso-task-detail__header-actions">
+							<Button
+								variant="ghost"
+								size="icon"
+								className="kanso-icon-button"
+								aria-label={data.task.archivedAt ? "恢复任务" : "归档任务"}
+								onClick={() => archiveMutation.mutate(!data.task.archivedAt)}
+							>
+								{data.task.archivedAt ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
+							</Button>
+							{data.task.archivedAt ? (
+								<Button
+									variant="ghost"
+									size="icon"
+									className="kanso-icon-button"
+									data-danger="true"
+									aria-label="永久删除任务"
+									onClick={() => setDeleteOpen(true)}
+								>
+									<Trash2Icon />
+								</Button>
+							) : null}
+						</div>
+					</div>
+				) : null}
+			</PageHeader>
 
 			{isLoading ? (
 				<div className="flex flex-1 items-center justify-center">
@@ -97,217 +199,267 @@ export default function TaskDetailPage() {
 					加载任务详情失败
 				</p>
 			) : (
-				<div className="flex-1 overflow-auto px-12 py-8">
-
-				{/* 标题（点击编辑） */}
-				<div className="mt-1">
-					{editingTitle ? (
-						<div
-							className="flex items-start gap-2"
-							onBlur={(e) => {
-								// 焦点移出编辑区（未点击内部按钮）时放弃编辑
-								if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-									setEditingTitle(false);
-								}
-							}}
-						>
-							<Input
-								value={title}
-								onChange={(e) => setTitle(e.target.value)}
-								className="text-lg font-semibold"
-								autoFocus
-								onKeyDown={(e) => {
-									if (e.key === "Enter" && title.trim()) {
-										updateTaskMutation.mutate({ title: title.trim() });
-										setEditingTitle(false);
-									}
-									if (e.key === "Escape") setEditingTitle(false);
-								}}
-							/>
-							<Button
-								size="sm"
-								disabled={!title.trim()}
-								onClick={() => {
-									updateTaskMutation.mutate({ title: title.trim() });
-									setEditingTitle(false);
-								}}
-							>
-								保存
-							</Button>
-						</div>
-					) : (
-						<h2
-							className="cursor-text text-2xl font-[650] tracking-tight"
-							onClick={() => {
-								setTitle(data.task.title);
-								setEditingTitle(true);
-							}}
-							title="点击编辑标题"
-						>
-							{data.task.title}
-						</h2>
-					)}
-				</div>
-
-				{/* 标签：小圆点 + 名称 */}
-				{data.labels.length > 0 ? (
-					<div className="mt-3 flex flex-wrap gap-x-2 gap-y-1.5">
-						{data.labels.map((label) => (
-							<span
-								key={label.id}
-								className="inline-flex items-center gap-[5px] text-xs text-muted-foreground"
-							>
-								<span
-									className="size-2 rounded-full"
-									style={{ backgroundColor: label.color }}
-								/>
-								{label.name}
-							</span>
-						))}
-					</div>
-				) : null}
-
-				{/* 描述 */}
-				<section className="mt-8">
-					<SectionLabel>描述</SectionLabel>
-					{editingDesc ? (
-						<div
-							className="space-y-2"
-							onBlur={(e) => {
-								// 焦点移出编辑区（未点击内部按钮）时放弃编辑
-								if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-									setEditingDesc(false);
-								}
-							}}
-						>
-							<Textarea
-								value={desc}
-								onChange={(e) => setDesc(e.target.value)}
-								rows={4}
-								autoFocus
-								onKeyDown={(e) => {
-									if (e.key === "Escape") setEditingDesc(false);
-								}}
-								placeholder="补充任务描述…"
-							/>
-							<div className="flex justify-end gap-2">
-								<Button
-									variant="ghost"
-									size="sm"
-									onClick={() => setEditingDesc(false)}
-								>
-									取消
-								</Button>
-								<Button
-									size="sm"
-									onClick={() => {
-										updateTaskMutation.mutate({ description: desc });
-										setEditingDesc(false);
-									}}
-								>
-									保存
-								</Button>
+				<PageContent className="kanso-task-detail px-[30px] pb-11 pt-[26px]">
+					<div className="kanso-task-detail__wrap">
+						{/* 标题（点击编辑） */}
+						<div className="kanso-task-detail__title-row">
+							<div className="min-w-0 flex-1">
+								{editingTitle ? (
+									<div
+										className="flex items-start gap-2"
+										onBlur={(e) => {
+											if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+												setEditingTitle(false);
+											}
+										}}
+									>
+										<Input
+											value={title}
+											onChange={(e) => setTitle(e.target.value)}
+											className="text-lg font-semibold"
+											autoFocus
+											onKeyDown={(e) => {
+												if (e.key === "Enter" && title.trim()) {
+													updateTaskMutation.mutate({ title: title.trim() });
+													setEditingTitle(false);
+												}
+												if (e.key === "Escape") setEditingTitle(false);
+											}}
+										/>
+										<Button
+											size="sm"
+											disabled={!title.trim()}
+											onClick={() => {
+												updateTaskMutation.mutate({ title: title.trim() });
+												setEditingTitle(false);
+											}}
+										>
+											保存
+										</Button>
+									</div>
+								) : (
+									<h2
+										className="kanso-task-detail__title cursor-text"
+										onClick={() => {
+											setTitle(data.task.title);
+											setEditingTitle(true);
+										}}
+										title="点击编辑标题"
+									>
+										{data.task.title}
+									</h2>
+								)}
+								<div className="kanso-task-detail__title-meta">
+									<span className="kanso-task-detail__priority">
+										<span
+											className="kanso-priority__dot"
+											style={{
+												backgroundColor: priorityColor(
+													normalizePriority(data.task.priority),
+												),
+											}}
+										/>
+										{PRIORITY_LABEL[normalizePriority(data.task.priority)]} 优先级
+									</span>
+									{data.labels.map((label) => (
+										<span key={label.id} className="kanso-task-detail__label-chip">
+											{label.name}
+										</span>
+									))}
+								</div>
 							</div>
 						</div>
-					) : (
-						<div
-							className="cursor-text rounded-[10px] border bg-card p-4 text-sm leading-[1.7] text-[#4b5563] transition-colors hover:border-[rgba(24,24,27,0.14)]"
-							onClick={() => {
-								setDesc(data.task.description ?? "");
-								setEditingDesc(true);
-							}}
-						>
-							{data.task.description || (
-								<span className="text-muted-foreground">添加描述…</span>
-							)}
+
+						{/* 元数据条（原型 d-meta-row）：截止日期 / 评论 / 标签 / 状态列名 */}
+						<div className="kanso-task-detail__meta">
+							<div className="kanso-detail-meta-item">
+								<CalendarIcon className="size-3.5 opacity-70" />
+								截止
+								<DatePicker
+									value={data.task.dueDate ?? ""}
+									onChange={(v) => updateTaskMutation.mutate({ dueDate: v })}
+									ariaLabel="截止日期"
+									showIcon={false}
+									placeholder="设置日期"
+								/>
+								{dueState(data.task.dueDate) === "soon" ? (
+									<span className="kanso-due-badge">临期</span>
+								) : null}
+							</div>
+							<span className="flex items-center gap-2 text-[13px] text-muted-foreground">
+								<MessageSquareIcon className="size-3.5 opacity-70" />
+								评论{" "}
+								<strong className="font-semibold text-foreground">
+									{data.comments.length}
+								</strong>
+							</span>
+							<span className="flex items-center gap-2 text-[13px] text-muted-foreground">
+								<TagIcon className="size-3.5 opacity-70" />
+								标签{" "}
+								<strong className="font-semibold text-foreground">
+									{data.labels.length}
+								</strong>
+							</span>
+							<span className="flex items-center gap-2 text-[13px] text-muted-foreground">
+								<FlagIcon className="size-3.5 opacity-70" />
+								状态{" "}
+								<strong className="font-semibold text-foreground">
+									{data.columnName || "未设列"}
+								</strong>
+							</span>
 						</div>
-					)}
-				</section>
 
-				{/* 评论 */}
-				<section className="mt-8">
-					<SectionLabel>评论（{data.comments.length}）</SectionLabel>
-					<form
-						className="mb-[14px] flex gap-2"
-						onSubmit={(e) => {
-							e.preventDefault();
-							if (comment.trim()) createCommentMutation.mutate(comment.trim());
-						}}
-					>
-						<Input
-							value={comment}
-							onChange={(e) => setComment(e.target.value)}
-							placeholder="写评论…"
-							className="h-[38px] sm:h-[38px]"
-						/>
-						<Button type="submit" size="icon" disabled={!comment.trim()}>
-							<SendIcon />
-						</Button>
-					</form>
-					{data.comments.length === 0 ? (
-						<p className="text-xs text-muted-foreground">还没有评论</p>
-					) : (
-						<ul className="space-y-2.5">
-							{data.comments.map((c) => (
-								<li
-									key={c.id}
-									className="group flex items-start gap-2 rounded-[10px] border bg-card px-3.5 py-3"
+						{/* 描述 */}
+						<section className="kanso-task-detail__section">
+							<SectionLabel>描述</SectionLabel>
+							{editingDesc ? (
+								<div
+									className="space-y-2"
+									onBlur={(e) => {
+										// 焦点移出编辑区（未点击内部按钮）时放弃编辑
+										if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+											setEditingDesc(false);
+										}
+									}}
 								>
-									{/* 对齐原型 .comment：cm-meta(12px/mb 4px) + cm-body(14px/1.6 无 margin)。
-										删除按钮固定整卡右侧（hover 显示），不遮挡评论内容。 */}
-									<div className="min-w-0 flex-1">
-										<p className="mb-1 text-xs text-muted-foreground/70">
-											Admin · {formatDateTime(c.createdAt)}
-										</p>
-										<p className="whitespace-pre-wrap text-sm leading-[1.6]">
-											{c.content}
-										</p>
-									</div>
-									<Button
-										variant="ghost"
-										size="icon"
-										className="size-5 shrink-0 rounded-[6px] opacity-0 transition-opacity group-hover:opacity-100"
-										aria-label="删除评论"
-										onClick={() => deleteCommentMutation.mutate(c.id)}
-									>
-										<TrashIcon />
-									</Button>
-								</li>
-							))}
-						</ul>
-					)}
-				</section>
-
-				{/* 活动时间线 */}
-				<section className="mt-8">
-					<SectionLabel>活动</SectionLabel>
-					{data.activity.length === 0 ? (
-						<p className="text-xs text-muted-foreground">暂无活动</p>
-					) : (
-						<ol className="relative ml-1.5 space-y-3.5 border-l pl-5">
-							{data.activity.map((a, i) => (
-								<li key={a.id} className="relative">
-									<span
-										className={`absolute -left-6 top-[5px] size-[7px] rounded-full ${
-											i === 0 ? "bg-primary" : "bg-[#d1d5db]"
-										}`}
+									<Textarea
+										value={desc}
+										onChange={(e) => setDesc(e.target.value)}
+										rows={4}
+										autoFocus
+										onKeyDown={(e) => {
+											if (e.key === "Escape") setEditingDesc(false);
+										}}
+										placeholder="补充任务描述…"
 									/>
-									{/* 原型 .a-text：13px / #4b5563；b 加粗 #18181b。 */}
-									<p className="text-[13px] leading-[1.5] text-[#4b5563]">
-										<span className="font-medium text-foreground">Admin · </span>
-										{ACTION_LABELS[a.action] ?? a.action}
-									</p>
-									{/* 原型 .a-time：12px / #9ca3af。 */}
-									<p className="mt-0.5 text-xs text-muted-foreground/70">
-										{formatDateTime(a.createdAt)}
-									</p>
-								</li>
-							))}
-						</ol>
-					)}
-				</section>
+									<div className="flex justify-end gap-2">
+										<Button
+											variant="ghost"
+											size="sm"
+											onClick={() => setEditingDesc(false)}
+										>
+											取消
+										</Button>
+										<Button
+											size="sm"
+											onClick={() => {
+												updateTaskMutation.mutate({ description: desc });
+												setEditingDesc(false);
+											}}
+										>
+											保存描述
+										</Button>
+									</div>
+								</div>
+							) : (
+								<div
+									className="cursor-text rounded-[10px] border bg-card p-4 text-sm leading-[1.7] text-muted-foreground transition-colors hover:border-foreground/15"
+									onClick={() => {
+										setDesc(data.task.description ?? "");
+										setEditingDesc(true);
+									}}
+								>
+									<DescriptionContent value={data.task.description} />
+								</div>
+							)}
+						</section>
+
+						{/* 评论 */}
+						<section className="kanso-task-detail__section">
+							<SectionLabel>评论</SectionLabel>
+							<form
+								className="kanso-comment-composer"
+								onSubmit={(e) => {
+									e.preventDefault();
+									if (comment.trim()) createCommentMutation.mutate(comment.trim());
+								}}
+							>
+								<Textarea
+									value={comment}
+									onChange={(e) => setComment(e.target.value)}
+									placeholder="写下评论…"
+									className="kanso-comment-input"
+									unstyled
+									rows={3}
+								/>
+								<div className="kanso-comment-composer__actions">
+									<Button type="submit" size="sm" disabled={!comment.trim()}>
+										<SendIcon /> 发表评论
+									</Button>
+								</div>
+							</form>
+							{data.comments.length === 0 ? (
+								<p className="text-xs text-muted-foreground">还没有评论</p>
+							) : (
+								<ul className="kanso-comment-list">
+									{data.comments.map((c) => (
+										<li key={c.id} className="kanso-comment">
+											<span className="kanso-comment__avatar">Ad</span>
+											<div className="kanso-comment__body">
+												<div className="kanso-comment__head">
+													<span className="font-semibold">{c.author || "—"}</span>
+													<span>{formatDateTime(c.createdAt)}</span>
+													<Button
+														variant="ghost"
+														size="icon"
+														className="kanso-comment__delete"
+														aria-label="删除评论"
+														onClick={() => deleteCommentMutation.mutate(c.id)}
+													>
+														<TrashIcon />
+													</Button>
+												</div>
+												<div className="kanso-comment__text">{c.content}</div>
+											</div>
+										</li>
+									))}
+								</ul>
+							)}
+						</section>
+
+						{/* 活动时间线 */}
+						<section className="kanso-task-detail__section">
+							<SectionLabel>活动记录</SectionLabel>
+							{data.activity.length === 0 ? (
+								<p className="text-xs text-muted-foreground">暂无活动</p>
+							) : (
+								<ol className="kanso-detail-timeline">
+									{data.activity.map((a, i) => (
+										<li key={a.id} className="kanso-detail-timeline__item">
+											<span
+												className={`kanso-detail-timeline__dot ${i === 0 ? "is-current" : ""}`}
+											/>
+											<div className="kanso-detail-timeline__body">
+												<div className="kanso-detail-timeline__text">
+													<span>在 </span>
+													<strong>{a.projectName || data.projectName || "—"}</strong>
+													<span>
+														{" "}
+														中，{a.actor || "—"} {ACTION_LABELS[a.action] ?? a.action}
+														{activityDetail(a.action, a.data)}
+													</span>
+												</div>
+												<div className="kanso-detail-timeline__time">
+													{formatDateTime(a.createdAt)}
+												</div>
+											</div>
+										</li>
+									))}
+								</ol>
+							)}
+						</section>
 					</div>
-				)}
-			</div>
-		);
-	}
+				</PageContent>
+			)}
+			<ConfirmDialog
+				open={deleteOpen}
+				onOpenChange={setDeleteOpen}
+				title="永久删除任务"
+				description={`确定永久删除任务"${data?.task.title ?? ""}"吗？此操作不可撤销。`}
+				onConfirm={async () => {
+					await deleteMutation.mutateAsync();
+				}}
+			/>
+		</div>
+	);
+}

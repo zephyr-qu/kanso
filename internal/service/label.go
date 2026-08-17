@@ -1,3 +1,5 @@
+// 标签领域服务（0006 Phase 2：标签项目级）。
+// 事务纪律与 task/comment 一致：变更 + 活动记录同事务提交（BeginTx + recordEvent）。
 package service
 
 import (
@@ -9,90 +11,109 @@ import (
 	"kanso/internal/id"
 )
 
-// ListLabels 返回工作区下的标签库（按创建时间排序）。
-func (s *Service) ListLabels(ctx context.Context, workspaceID string) ([]gen.Label, error) {
-	labels, err := gen.New(s.db).ListLabelsByWorkspace(ctx, workspaceID)
+// CreateLabel 创建项目级标签；项目不存在时返回 ErrNotFound（此前 FK 违约映射 500）。
+func (s *Service) CreateLabel(ctx context.Context, projectID, name string) (gen.Label, error) {
+	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
-		return nil, fmt.Errorf("查询标签失败: %w", err)
+		return gen.Label{}, err
 	}
-	if labels == nil {
-		return []gen.Label{}, nil
-	}
-	return labels, nil
-}
+	defer func() { _ = tx.Rollback() }()
 
-// CreateLabel 创建工作区级标签。
-func (s *Service) CreateLabel(ctx context.Context, workspaceID, name, color string) (gen.Label, error) {
+	if _, err := q.GetProject(ctx, projectID); err != nil {
+		return gen.Label{}, mapNoRows(err)
+	}
 	labelID, err := id.New()
 	if err != nil {
 		return gen.Label{}, err
 	}
-	label, err := gen.New(s.db).CreateLabel(ctx, gen.CreateLabelParams{
-		ID:          labelID,
-		WorkspaceID: workspaceID,
-		Name:        name,
-		Color:       color,
-		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+	label, err := q.CreateLabel(ctx, gen.CreateLabelParams{
+		ID:        labelID,
+		ProjectID: projectID,
+		Name:      name,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	})
 	if err != nil {
 		return gen.Label{}, fmt.Errorf("创建标签失败: %w", err)
 	}
-	if err := s.dispatch(ctx, Event{Action: EventLabelCreated, WorkspaceID: workspaceID, EntityID: label.ID}); err != nil {
+	event := Event{Action: EventLabelCreated, ProjectID: projectID, EntityID: label.ID}
+	if err := s.recordEvent(ctx, q, event); err != nil {
 		return gen.Label{}, err
 	}
+	if err := tx.Commit(); err != nil {
+		return gen.Label{}, fmt.Errorf("提交事务失败: %w", err)
+	}
+	s.broadcastEvent(event)
 	return label, nil
 }
 
-// UpdateLabel 更新标签名称与颜色（指针字段为空表示不改）；不存在时返回 ErrNotFound。
-func (s *Service) UpdateLabel(ctx context.Context, labelID string, name, color *string) (gen.Label, error) {
-	current, err := gen.New(s.db).GetLabel(ctx, labelID)
+// UpdateLabel 更新标签名称；不存在时返回 ErrNotFound。
+func (s *Service) UpdateLabel(ctx context.Context, labelID string, name *string) (gen.Label, error) {
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return gen.Label{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	current, err := q.GetLabel(ctx, labelID)
 	if err != nil {
 		return gen.Label{}, mapNoRows(err)
 	}
-	if name == nil {
-		name = &current.Name
+	newName := current.Name
+	if name != nil {
+		newName = *name
 	}
-	if color == nil {
-		color = &current.Color
-	}
-	label, err := gen.New(s.db).UpdateLabel(ctx, gen.UpdateLabelParams{
-		ID:    labelID,
-		Name:  *name,
-		Color: *color,
-	})
+	label, err := q.UpdateLabel(ctx, gen.UpdateLabelParams{ID: labelID, Name: newName})
 	if err != nil {
 		return gen.Label{}, fmt.Errorf("更新标签失败: %w", err)
 	}
-	if err := s.dispatch(ctx, Event{Action: EventLabelUpdated, WorkspaceID: label.WorkspaceID, EntityID: label.ID}); err != nil {
+	event := Event{Action: EventLabelUpdated, ProjectID: label.ProjectID, EntityID: label.ID}
+	if err := s.recordEvent(ctx, q, event); err != nil {
 		return gen.Label{}, err
 	}
+	if err := tx.Commit(); err != nil {
+		return gen.Label{}, fmt.Errorf("提交事务失败: %w", err)
+	}
+	s.broadcastEvent(event)
 	return label, nil
 }
 
-// DeleteLabel 删除标签（任务上的关联由外键级联清除）。
+// DeleteLabel 删除标签（任务上的关联由外键级联清除）；不存在时返回 ErrNotFound。
 func (s *Service) DeleteLabel(ctx context.Context, labelID string) error {
-	label, err := gen.New(s.db).GetLabel(ctx, labelID)
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	label, err := q.GetLabel(ctx, labelID)
 	if err != nil {
 		return mapNoRows(err)
 	}
-	n, err := gen.New(s.db).DeleteLabel(ctx, labelID)
+	n, err := q.DeleteLabel(ctx, labelID)
 	if err != nil {
 		return fmt.Errorf("删除标签失败: %w", err)
 	}
 	if n == 0 {
 		return ErrNotFound
 	}
-	return s.dispatch(ctx, Event{Action: EventLabelDeleted, WorkspaceID: label.WorkspaceID, EntityID: labelID})
+	event := Event{Action: EventLabelDeleted, ProjectID: label.ProjectID, EntityID: labelID}
+	if err := s.recordEvent(ctx, q, event); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交事务失败: %w", err)
+	}
+	s.broadcastEvent(event)
+	return nil
 }
 
 // AttachLabel 给任务贴标签（幂等）；任务或标签不存在时返回 ErrNotFound。
 func (s *Service) AttachLabel(ctx context.Context, taskID, labelID string) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
-		return fmt.Errorf("开启事务失败: %w", err)
+		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	q := gen.New(tx)
 	task, err := q.GetTask(ctx, taskID)
 	if err != nil {
 		return mapNoRows(err)
@@ -101,8 +122,15 @@ func (s *Service) AttachLabel(ctx context.Context, taskID, labelID string) error
 	if err != nil {
 		return mapNoRows(err)
 	}
-	if err := q.AttachLabel(ctx, gen.AttachLabelParams{TaskID: taskID, LabelID: labelID}); err != nil {
+	if label.ProjectID != task.ProjectID {
+		return ErrCrossProjectMove
+	}
+	inserted, err := q.AttachLabel(ctx, gen.AttachLabelParams{TaskID: taskID, LabelID: labelID})
+	if err != nil {
 		return fmt.Errorf("贴标签失败: %w", err)
+	}
+	if inserted == 0 {
+		return tx.Commit()
 	}
 	event := Event{
 		Action:         EventLabelAttached,
@@ -121,26 +149,37 @@ func (s *Service) AttachLabel(ctx context.Context, taskID, labelID string) error
 	return nil
 }
 
-// DetachLabel 从任务移除标签（幂等）。
+// DetachLabel 从任务移除标签（幂等）；data 带标签名（0006 Phase 3 任务 3.5：
+// 与 events.ts 契约一致，此前误用 labelID 导致前端活动文案空白）。
 func (s *Service) DetachLabel(ctx context.Context, taskID, labelID string) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
-		return fmt.Errorf("开启事务失败: %w", err)
+		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	q := gen.New(tx)
 	task, err := q.GetTask(ctx, taskID)
 	if err != nil {
 		return mapNoRows(err)
 	}
-	if err := q.DetachLabel(ctx, gen.DetachLabelParams{TaskID: taskID, LabelID: labelID}); err != nil {
+	label, err := q.GetLabel(ctx, labelID)
+	if err != nil {
+		return mapNoRows(err)
+	}
+	if label.ProjectID != task.ProjectID {
+		return ErrCrossProjectMove
+	}
+	deleted, err := q.DetachLabel(ctx, gen.DetachLabelParams{TaskID: taskID, LabelID: labelID})
+	if err != nil {
 		return fmt.Errorf("移除标签失败: %w", err)
+	}
+	if deleted == 0 {
+		return tx.Commit()
 	}
 	event := Event{
 		Action:         EventLabelDetached,
 		ProjectID:      task.ProjectID,
 		EntityID:       taskID,
-		Data:           map[string]string{"labelID": labelID},
+		Data:           map[string]string{"label": label.Name},
 		RecordActivity: true,
 	}
 	if err := s.recordEvent(ctx, q, event); err != nil {

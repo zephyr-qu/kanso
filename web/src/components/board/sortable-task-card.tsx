@@ -1,8 +1,20 @@
 // 可拖拽的任务卡片（借鉴原型 .card：白卡 + 圆角 + hover 上浮；标签=小圆点+灰字）。
-// 保留右上 hover 操作（标签/编辑/删除，按钮不触发拖拽与跳转）。
+// 整卡即拖拽面（无独立手柄）：点击打开详情；按住移动 ≥8px（PointerSensor）开始拖拽，
+// 拖拽激活后 dnd-kit 在捕获阶段拦截 click，不会误触打开详情。右上 hover 操作按钮不触发拖拽与跳转。
+
+// TaskCardView 是纯展示层：SortableTaskCard（useSortable）与看板页 DragOverlay 复用同一张卡。
+import { forwardRef, useState, type CSSProperties } from "react";
+import type { DraggableAttributes } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { PencilIcon, TagIcon, TrashIcon } from "lucide-react";
+import {
+	ArchiveIcon,
+	CalendarIcon,
+	ClockIcon,
+
+	PencilIcon,
+	TagIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
 	Popover,
@@ -10,18 +22,248 @@ import {
 	PopoverTitle,
 	PopoverTrigger,
 } from "@/components/ui/popover";
+import { dueDisplay, dueState } from "@/lib/due";
+import { formatTaskCardTime } from "@/lib/format-relative";
+import {
+	normalizePriority,
+	PRIORITY_LABEL,
+	priorityColor,
+} from "@/lib/priority";
 import type { Label } from "@/types/label";
 import type { Task } from "@/types/task";
+
+export type TaskCardViewProps = {
+	task: Task;
+	labels: Label[];
+	onOpen?: (task: Task) => void;
+	onRename?: (task: Task, title: string) => void;
+	onArchive?: (task: Task) => void;
+	onToggleLabel?: (task: Task, label: Label) => void;
+	className?: string;
+	style?: CSSProperties;
+	/** 拖拽中标记：驱动 data-dragging 样式（原卡片半透明，让 DragOverlay 副本成为主视觉）。 */
+	dragging?: boolean;
+	/** useSortable 的可访问性属性（role/tabIndex/aria-*），需透传到根节点。 */
+	attributes?: DraggableAttributes;
+	/** useSortable 的指针/键盘监听器（onPointerDown 等），拖拽激活依赖它。 */
+	listeners?: Record<string, Function> | undefined;
+	/** 键盘拖拽焦点与传感器激活节点。 */
+	activatorNodeRef?: (element: HTMLElement | null) => void;
+};
+
+/** 任务卡片纯展示层：无拖拽 hooks，供 SortableTaskCard 与 DragOverlay 复用。 */
+export const TaskCardView = forwardRef<HTMLDivElement, TaskCardViewProps>(
+	function TaskCardView(
+		{
+			task,
+			labels,
+			onOpen,
+			onRename,
+			onArchive,
+			onToggleLabel,
+			attributes,
+			listeners,
+			activatorNodeRef,
+			className = "",
+			style,
+			dragging,
+		},
+		ref,
+	) {
+		const taskLabels = task.labels ?? [];
+		// 内联改标题（小操作不弹面板）：点铅笔进入编辑态，Enter 保存，Esc/失焦取消。
+		const [editingTitle, setEditingTitle] = useState(false);
+		const [draft, setDraft] = useState("");
+
+		return (
+			<div
+				ref={(node) => {
+					if (typeof ref === "function") ref(node);
+					else if (ref) ref.current = node;
+					activatorNodeRef?.(node);
+				}}
+				style={style}
+				// 对齐原型 .task-card（方向 F）：6px 圆角、无默认阴影、内边距 11/12/10、子元素 gap 9px。
+				className={`kanso-task-card group cursor-grab active:cursor-grabbing ${className}`}
+				{...attributes}
+				{...listeners}
+
+				data-dragging={dragging || undefined}
+				// 键盘可访问（W-6）：整卡挂 attributes，Tab 聚焦 + Enter 打开详情，Space 开始键盘拖拽；
+				// 仅响应根节点自身按键，避免吞掉内部输入框/按钮的事件。
+				role={onOpen ? "button" : undefined}
+				tabIndex={onOpen ? 0 : undefined}
+				aria-label={onOpen ? `打开任务 ${task.title}` : undefined}
+				onClick={() => onOpen?.(task)}
+				onKeyDown={(event) => {
+					if (!onOpen || event.target !== event.currentTarget) return;
+					// 拖拽进行中（含键盘拖拽收尾的 Space/Enter）交给 dnd-kit，不误触打开详情。
+					if (dragging) return;
+					// Enter 打开详情；Space 留给 KeyboardSensor 开始键盘拖拽。
+					if (event.key === "Enter") {
+						event.preventDefault();
+						onOpen(task);
+					}
+				}}
+
+			>
+				<div className="kanso-task-card__top">
+					{/* 整卡即拖拽面：无独立手柄；拖动交给根节点 listeners，点击打开详情。 */}
+
+					{/* 优先级（原型 .pri：11px/600/0.04em 字距，点 + 文字） */}
+					<span
+						className="kanso-priority tracking-[0.04em]"
+						style={{ color: priorityColor(task.priority) }}
+					>
+						<span className="kanso-priority__dot" />
+						{PRIORITY_LABEL[normalizePriority(task.priority)]}
+					</span>
+				</div>
+
+				{/* 标题（原型 .t-title：13.5px/500/1.5）；编辑态内联为输入框 */}
+				{editingTitle ? (
+					<input
+						value={draft}
+						onChange={(e) => setDraft(e.target.value)}
+						autoFocus
+						onFocus={(e) => e.target.select()}
+						onPointerDown={(e) => e.stopPropagation()}
+						onClick={(e) => e.stopPropagation()}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" && draft.trim()) {
+								onRename?.(task, draft.trim());
+								setEditingTitle(false);
+							} else if (e.key === "Escape") {
+								setEditingTitle(false);
+							}
+						}}
+						onBlur={() => setEditingTitle(false)}
+						className="kanso-task-card__title-input"
+						aria-label="编辑任务标题"
+					/>
+				) : (
+					<p className="kanso-task-card__title break-words">{task.title}</p>
+				)}
+
+				{/* 标签（原型 .t-tags chip：圆角胶囊、12% 色底 + 色字、11px） */}
+				{taskLabels.length > 0 ? (
+					<div className="kanso-task-card__labels">
+						{taskLabels.map((label) => (
+							<span key={label.id} className="kanso-label-chip">
+								{label.name}
+							</span>
+						))}
+					</div>
+				) : null}
+
+				{/* 底部 meta（原型 t-meta）：左截止日期，右归档与头像 */}
+				<div className="kanso-task-card__meta">
+					<div className="flex min-w-0 items-center gap-3">
+						{task.dueDate ? (
+							<DueBadge due={task.dueDate} />
+						) : (
+							<span className="kanso-task-card__time">
+								<ClockIcon className="size-3" />
+								{formatTaskCardTime(task.createdAt)}
+							</span>
+						)}
+					</div>
+					<div
+						className="kanso-task-card__bottom-actions"
+						onPointerDown={(event) => event.stopPropagation()}
+						onClick={(event) => event.stopPropagation()}
+					>
+						<span className="kanso-task-card__avatar" aria-label="当前用户">
+							Ad
+						</span>
+					</div>
+				</div>
+
+				<div
+					className="kanso-task-card__actions"
+					onPointerDown={(e) => e.stopPropagation()}
+					onClick={(e) => e.stopPropagation()}
+				>
+					<Popover>
+						<PopoverTrigger
+							render={
+								<Button
+									variant="ghost"
+									size="icon"
+									className="kanso-task-card__action"
+									aria-label={`标签 ${task.title}`}
+								>
+									<TagIcon />
+								</Button>
+							}
+						/>
+						<PopoverPopup className="w-52 p-2">
+							<PopoverTitle className="px-1 pb-1 text-xs font-medium text-muted-foreground">
+								标签
+							</PopoverTitle>
+							{labels.length === 0 ? (
+								<p className="px-1 py-2 text-xs text-muted-foreground">
+									暂无标签，可先在看板右上角创建
+								</p>
+							) : (
+								<ul className="space-y-0.5">
+									{labels.map((label) => {
+										const attached = taskLabels.some((l) => l.id === label.id);
+										return (
+											<li key={label.id}>
+												<button
+													type="button"
+													className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-xs hover:bg-muted"
+													onClick={() => onToggleLabel?.(task, label)}
+												>
+													<span className="flex-1">{label.name}</span>
+													{attached ? (
+														<span className="text-primary">✓</span>
+													) : null}
+												</button>
+											</li>
+										);
+									})}
+								</ul>
+							)}
+						</PopoverPopup>
+					</Popover>
+					<Button
+						variant="ghost"
+						size="icon"
+						className="kanso-task-card__action"
+						aria-label={`编辑任务 ${task.title}`}
+						onClick={() => {
+							setDraft(task.title);
+							setEditingTitle(true);
+						}}
+					>
+						<PencilIcon />
+					</Button>
+					<Button
+						variant="ghost"
+						size="icon"
+						className="kanso-task-card__action"
+						aria-label={`归档任务 ${task.title}`}
+						onClick={() => onArchive?.(task)}
+					>
+						<ArchiveIcon />
+					</Button>
+				</div>
+			</div>
+		);
+	},
+);
 
 export default function SortableTaskCard(props: {
 	task: Task;
 	labels: Label[];
 	onOpen: (task: Task) => void;
-	onEdit: (task: Task) => void;
-	onDelete: (task: Task) => void;
+	onRename: (task: Task, title: string) => void;
+	onArchive: (task: Task) => void;
 	onToggleLabel: (task: Task, label: Label) => void;
 }) {
-	const { task, labels, onOpen, onEdit, onDelete, onToggleLabel } = props;
+	const { task, labels, onOpen, onRename, onArchive, onToggleLabel } = props;
 	const {
 		attributes,
 		listeners,
@@ -31,119 +273,53 @@ export default function SortableTaskCard(props: {
 		isDragging,
 	} = useSortable({
 		id: task.id,
+		data: { type: "task", taskId: task.id, columnId: task.columnId },
 	});
 	const style = {
 		transform: CSS.Transform.toString(transform),
 		transition,
+		// DragOverlay is the visible copy. Keep the sortable source as a layout
+		// placeholder; rendering its transformed copy makes it cover neighbors
+		// while the pointer moves up/down through the list.
+		opacity: isDragging ? 0 : undefined,
 	};
-	const taskLabels = task.labels ?? [];
 
 	return (
-		<div
+		<TaskCardView
 			ref={setNodeRef}
 			style={style}
-			{...attributes}
-			{...listeners}
-			className={`group relative cursor-grab rounded-[10px] border bg-card p-3.5 shadow-[0_1px_2px_rgba(24,24,27,0.04)] transition-all duration-150 hover:-translate-y-px hover:border-[rgba(24,24,27,0.14)] hover:shadow-[0_6px_16px_rgba(24,24,27,0.08)] active:cursor-grabbing ${
-				isDragging ? "z-10 opacity-60" : ""
-			}`}
-			onClick={() => onOpen(task)}
-		>
-			{taskLabels.length > 0 ? (
-				<div className="mb-2 flex flex-wrap gap-x-1.5 gap-y-1">
-					{taskLabels.map((label) => (
-						<span
-							key={label.id}
-							className="inline-flex items-center gap-[5px] text-xs text-muted-foreground"
-						>
-							<span
-								className="size-2 shrink-0 rounded-full"
-								style={{ backgroundColor: label.color }}
-							/>
-							{label.name}
-						</span>
-					))}
-				</div>
-			) : null}
-			<p className="break-words pr-12 text-sm leading-normal">{task.title}</p>
-			{task.description ? (
-				<p className="mt-1 line-clamp-2 text-xs leading-normal text-muted-foreground">
-					{task.description}
-				</p>
-			) : null}
+			attributes={attributes}
+			listeners={listeners}
+			activatorNodeRef={setNodeRef}
+			task={task}
+			labels={labels}
+			onOpen={onOpen}
+			onRename={onRename}
+			onArchive={onArchive}
+			onToggleLabel={onToggleLabel}
+			// 拖拽中由 DragOverlay 副本承担主视觉，原卡片弱化为占位残影（opacity 走 CSS data-dragging）。
+			className={`animate-card-in ${isDragging ? "z-10 shadow-card-hover ring-1 ring-primary/20" : ""}`}
+			dragging={isDragging}
+		/>
+	);
+}
 
-			<div
-				className="absolute right-1.5 top-1.5 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
-				onPointerDown={(e) => e.stopPropagation()}
-				onClick={(e) => e.stopPropagation()}
-			>
-				<Popover>
-					<PopoverTrigger
-						render={
-							<Button
-								variant="ghost"
-								size="icon"
-								className="size-6"
-								aria-label={`标签 ${task.title}`}
-							>
-								<TagIcon />
-							</Button>
-						}
-					/>
-					<PopoverPopup className="w-52 p-2">
-						<PopoverTitle className="px-1 pb-1 text-xs font-medium text-muted-foreground">
-							标签
-						</PopoverTitle>
-						{labels.length === 0 ? (
-							<p className="px-1 py-2 text-xs text-muted-foreground">
-								暂无标签，可先在看板右上角创建
-							</p>
-						) : (
-							<ul className="space-y-0.5">
-								{labels.map((label) => {
-									const attached = taskLabels.some((l) => l.id === label.id);
-									return (
-										<li key={label.id}>
-											<button
-												type="button"
-												className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-xs hover:bg-muted"
-												onClick={() => onToggleLabel(task, label)}
-											>
-												<span
-													className="size-2.5 shrink-0 rounded-full"
-													style={{ backgroundColor: label.color }}
-												/>
-												<span className="flex-1">{label.name}</span>
-												{attached ? (
-													<span className="text-primary">✓</span>
-												) : null}
-											</button>
-										</li>
-									);
-								})}
-							</ul>
-						)}
-					</PopoverPopup>
-				</Popover>
-				<Button
-					variant="ghost"
-					size="icon"
-					className="size-6"
-					aria-label={`编辑任务 ${task.title}`}
-					onClick={() => onEdit(task)}
-				>
-					<PencilIcon />
-				</Button>
-				<Button
-					variant="ghost"
-					size="icon"
-					className="size-6 text-destructive"
-					aria-label={`删除任务 ${task.title}`}
-					onClick={() => onDelete(task)}
-				>
-					<TrashIcon />
-				</Button>
-			</div>
-		</div>
+/** 截止日期徽章：过期/临期标红，正常弱灰（原型 due-badge）。 */
+function DueBadge({ due }: { due: string }) {
+	const state = dueState(due);
+	const color =
+		state === "overdue"
+			? "var(--destructive)"
+			: state === "soon"
+				? "var(--warning)"
+				: "var(--muted-foreground)";
+	return (
+		<span
+			className="inline-flex items-center gap-1 text-[11px] font-medium"
+			style={{ color }}
+		>
+			<CalendarIcon className="size-3" />
+			{dueDisplay(due)}
+		</span>
 	);
 }

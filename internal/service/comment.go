@@ -11,42 +11,54 @@ import (
 )
 
 // TaskDetail 是任务详情页单次拉取的聚合（任务 + 标签 + 评论 + 活动）。
-// ProjectName 供详情页顶部面包屑显示所属项目。
+// ProjectName/ColumnName 供详情页顶部面包屑与元数据条显示。
 type TaskDetail struct {
-	Task        gen.Task       `json:"task"`
+	Task        TaskDetailTask `json:"task"`
 	ProjectName string         `json:"projectName"`
+	ColumnName  string         `json:"columnName"`
 	Labels      []gen.Label    `json:"labels"`
-	Comments    []gen.Comment  `json:"comments"`
-	Activity    []gen.Activity `json:"activity"`
+	Comments    []TaskComment  `json:"comments"`
+	Activity    []TaskActivity `json:"activity"`
 }
 
-// ListComments 返回任务的评论（按时间正序）。
-func (s *Service) ListComments(ctx context.Context, taskID string) ([]gen.Comment, error) {
-	comments, err := gen.New(s.db).ListCommentsByTask(ctx, taskID)
-	if err != nil {
-		return nil, fmt.Errorf("查询评论失败: %w", err)
-	}
-	if comments == nil {
-		return []gen.Comment{}, nil
-	}
-	return comments, nil
+// TaskDetailTask is the task-detail DTO.
+type TaskDetailTask struct {
+	gen.Task
+}
+
+type TaskComment struct {
+	ID        string `json:"id"`
+	TaskID    string `json:"taskId"`
+	Author    string `json:"author"`
+	Content   string `json:"content"`
+	CreatedAt string `json:"createdAt"`
+}
+
+type TaskActivity struct {
+	ID           string  `json:"id"`
+	ResourceType string  `json:"resourceType"`
+	ResourceID   string  `json:"resourceId"`
+	Action       string  `json:"action"`
+	Actor        string  `json:"actor"`
+	ProjectName  string  `json:"projectName"`
+	Data         *string `json:"data"`
+	CreatedAt    string  `json:"createdAt"`
 }
 
 // CreateComment 发表评论并记录活动（评论即活动，见 spec）。
-func (s *Service) CreateComment(ctx context.Context, taskID, content string) (gen.Comment, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
+func (s *Service) CreateComment(ctx context.Context, taskID, content string) (TaskComment, error) {
+	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
-		return gen.Comment{}, fmt.Errorf("开启事务失败: %w", err)
+		return TaskComment{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	q := gen.New(tx)
 	task, err := q.GetTask(ctx, taskID)
 	if err != nil {
-		return gen.Comment{}, mapNoRows(err)
+		return TaskComment{}, mapNoRows(err)
 	}
 	commentID, err := id.New()
 	if err != nil {
-		return gen.Comment{}, err
+		return TaskComment{}, err
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	comment, err := q.CreateComment(ctx, gen.CreateCommentParams{
@@ -54,44 +66,71 @@ func (s *Service) CreateComment(ctx context.Context, taskID, content string) (ge
 		TaskID:    taskID,
 		Content:   content,
 		CreatedAt: now,
+		Author:    ActorFromContext(ctx),
 	})
 	if err != nil {
-		return gen.Comment{}, fmt.Errorf("发表评论失败: %w", err)
+		return TaskComment{}, fmt.Errorf("发表评论失败: %w", err)
 	}
 	event := Event{
 		Action:         EventCommentCreated,
 		ProjectID:      task.ProjectID,
 		EntityID:       comment.ID,
 		ActivityTaskID: taskID,
+		// 评论正文供活动文案展示「发表了评论『内容』」（与 comment.deleted 的 data 形状一致）。
+		Data:           map[string]string{"content": comment.Content},
 		RecordActivity: true,
+		Actor:          ActorFromContext(ctx),
 	}
 	if err := s.recordEvent(ctx, q, event); err != nil {
-		return gen.Comment{}, err
+		return TaskComment{}, err
 	}
 	if err := tx.Commit(); err != nil {
-		return gen.Comment{}, fmt.Errorf("提交事务失败: %w", err)
+		return TaskComment{}, fmt.Errorf("提交事务失败: %w", err)
 	}
 	s.broadcastEvent(event)
-	return comment, nil
+	return TaskComment{
+		ID: comment.ID, TaskID: comment.TaskID, Author: comment.Author,
+		Content: comment.Content, CreatedAt: comment.CreatedAt,
+	}, nil
 }
 
 // DeleteComment 删除评论；不存在时返回 ErrNotFound。
 func (s *Service) DeleteComment(ctx context.Context, commentID string) error {
-	comment, err := gen.New(s.db).GetComment(ctx, commentID)
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	comment, err := q.GetComment(ctx, commentID)
 	if err != nil {
 		return mapNoRows(err)
 	}
-	n, err := gen.New(s.db).DeleteComment(ctx, commentID)
+	task, err := q.GetTask(ctx, comment.TaskID)
+	if err != nil {
+		return mapNoRows(err)
+	}
+	n, err := q.DeleteComment(ctx, commentID)
 	if err != nil {
 		return fmt.Errorf("删除评论失败: %w", err)
 	}
 	if n == 0 {
 		return ErrNotFound
 	}
-	task, err := gen.New(s.db).GetTask(ctx, comment.TaskID)
-	if err == nil {
-		_ = s.dispatch(ctx, Event{Action: EventCommentDeleted, ProjectID: task.ProjectID, EntityID: commentID})
+	event := Event{
+		Action:         EventCommentDeleted,
+		ProjectID:      task.ProjectID,
+		EntityID:       commentID,
+		ActivityTaskID: comment.TaskID,
+		Data:           map[string]string{"content": comment.Content},
+		RecordActivity: true,
 	}
+	if err := s.recordEvent(ctx, q, event); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交事务失败: %w", err)
+	}
+	s.broadcastEvent(event)
 	return nil
 }
 
@@ -131,27 +170,43 @@ func (s *Service) GetTaskDetail(ctx context.Context, taskID string) (TaskDetail,
 		activity = []gen.Activity{}
 	}
 
-	// 项目名供详情页顶部面包屑使用；项目缺失时留空，不阻塞详情渲染。
+	// 项目名/列名供详情页顶部面包屑与元数据条使用；缺失时留空，不阻塞详情渲染。
 	projectName := ""
+	columnName := ""
 	if project, err := q.GetProject(ctx, task.ProjectID); err == nil {
 		projectName = project.Name
 	}
+	if column, err := q.GetColumn(ctx, task.ColumnID); err == nil {
+		columnName = column.Name
+	}
+
+	taskComments := make([]TaskComment, 0, len(comments))
+	for _, comment := range comments {
+		taskComments = append(taskComments, TaskComment{
+			ID: comment.ID, TaskID: comment.TaskID, Author: comment.Author,
+			Content: comment.Content, CreatedAt: comment.CreatedAt,
+		})
+	}
+	taskActivity := make([]TaskActivity, 0, len(activity))
+	for _, item := range activity {
+		taskActivity = append(taskActivity, TaskActivity{
+			ID: item.ID, ResourceType: item.ResourceType, ResourceID: item.ResourceID,
+			Action: item.Action, Actor: item.Actor, ProjectName: projectName,
+			Data: item.Data, CreatedAt: item.CreatedAt,
+		})
+	}
 
 	return TaskDetail{
-		Task:        task,
+		Task:        TaskDetailTask{Task: task},
 		ProjectName: projectName,
+		ColumnName:  columnName,
 		Labels:      labels,
-		Comments:    comments,
-		Activity:    activity,
+		Comments:    taskComments,
+		Activity:    taskActivity,
 	}, nil
 }
 
-// recordActivity 在任务下记录一条活动（写操作副作用，spec：写操作统一记录）。
-func (s *Service) recordActivity(ctx context.Context, taskID, action string, data any) error {
-	return recordActivityWithQueries(ctx, gen.New(s.db), taskID, action, data)
-}
-
-func recordActivityWithQueries(ctx context.Context, q *gen.Queries, taskID, action string, data any) error {
+func recordActivityWithQueries(ctx context.Context, q *gen.Queries, taskID, action string, data any, actor string) error {
 	var dataStr *string
 	if data != nil {
 		encoded, err := json.Marshal(data)
@@ -171,6 +226,7 @@ func recordActivityWithQueries(ctx context.Context, q *gen.Queries, taskID, acti
 		ResourceID:   taskID,
 		Action:       action,
 		Data:         dataStr,
+		Actor:        actor,
 		// 纳秒精度保证同秒内操作仍可按时间倒序。
 		CreatedAt: time.Now().UTC().Format(time.RFC3339Nano),
 	})

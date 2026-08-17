@@ -10,16 +10,16 @@ input:-webkit-autofill:active {
 }
 
 @font-face {
-  font-family: "Zen Old Mincho";
-  src: url("./assets/fonts/zen-old-mincho-400.woff2") format("woff2");
+  font-family: "Noto Serif SC";
+  src: url("./assets/fonts/noto-serif-sc-400.woff2") format("woff2");
   font-display: swap;
   font-style: normal;
   font-weight: 400;
 }
 
 @font-face {
-  font-family: "Zen Old Mincho";
-  src: url("./assets/fonts/zen-old-mincho-600.woff2") format("woff2");
+  font-family: "Noto Serif SC";
+  src: url("./assets/fonts/noto-serif-sc-600.woff2") format("woff2");
   font-display: swap;
   font-style: normal;
   font-weight: 600;
@@ -54,6 +54,13 @@ input:-webkit-autofill:active {
     transition-property: opacity !important;
   }
 
+  .kanso-task-card,
+  .kanso-drag-placeholder,
+  .kanso-board-column__grip-button {
+    animation: none !important;
+    transition: none !important;
+  }
+
   [data-slot="sidebar-gap"],
   [data-slot="sidebar-container"],
   [data-slot="sidebar-group-content"],
@@ -67,9 +74,35 @@ input:-webkit-autofill:active {
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --animate-skeleton: skeleton 2s -1s infinite linear;
-  --font-sans: var(--font-sans);
-  --font-heading: var(--font-heading);
-  --font-mono: var(--font-mono);
+  --animate-card-in: card-in 160ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  --font-sans: var(--semantic-font-sans);
+  --font-heading: var(--semantic-font-heading);
+  --font-mono: var(--semantic-font-mono);
+  /* 原型卡片层级阴影：基线、悬停抬升、弹层 */
+  --shadow-card: var(--semantic-shadow-card);
+  --shadow-card-hover: var(--semantic-shadow-lift);
+  --shadow-lifted: var(--semantic-shadow-lift);
+  --shadow-pop: var(--semantic-shadow-pop);
+  --color-kanso-page: var(--semantic-surface-page);
+  --color-kanso-sidebar: var(--semantic-surface-sidebar);
+  --color-kanso-card: var(--semantic-surface-card);
+  --color-kanso-muted: var(--semantic-surface-muted);
+  --color-kanso-text: var(--semantic-content-primary);
+  --color-kanso-text-soft: var(--semantic-content-secondary);
+  --color-kanso-text-faint: var(--semantic-content-tertiary);
+  --color-kanso-primary: var(--semantic-action-primary);
+  --color-kanso-primary-hover: var(--semantic-action-primary-hover);
+  --color-kanso-primary-soft: var(--semantic-action-primary-soft);
+  --color-kanso-border: var(--semantic-border-default);
+  --color-kanso-border-strong: var(--semantic-border-strong);
+  --radius-kanso-sm: var(--primitive-radius-sm);
+  --radius-kanso-md: var(--primitive-radius-md);
+  --radius-kanso-lg: var(--primitive-radius-lg);
+  --radius-kanso-xl: var(--primitive-radius-xl);
+  --shadow-kanso-card: var(--semantic-shadow-card);
+  --shadow-kanso-lift: var(--semantic-shadow-lift);
+  --shadow-kanso-pop: var(--semantic-shadow-pop);
+  --color-card-muted: var(--semantic-surface-muted);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -120,126 +153,12 @@ input:-webkit-autofill:active {
       background-position: -200% 0;
     }
   }
+  @keyframes card-in {
+    from {
+      opacity: 0;
+    }
+  }
 }
-
-:root {
-  /* 字体：黑体（正文与标题）+ 等宽（数字/编号） */
-  --font-display:
-    "PingFang SC",
-    "Microsoft YaHei",
-    "Noto Sans CJK SC",
-    ui-sans-serif,
-    system-ui,
-    sans-serif;
-  --font-sans:
-    "PingFang SC",
-    "Microsoft YaHei",
-    "Noto Sans CJK SC",
-    ui-sans-serif,
-    system-ui,
-    sans-serif;
-  --font-heading: var(--font-display);
-  --font-mono:
-    "IBM Plex Mono",
-    ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Monaco,
-    Consolas,
-    monospace;
-
-  /* 现代简约：6-12px 圆角系（sm=4 md=6 lg=8 xl=12） */
-  --radius: 0.5rem;
-
-  /* 现代简约 SaaS（借鉴原型骨架）：白卡片 × 浅灰边框 × 蓝主色 */
-  --background: #fafafa;
-  --foreground: #18181b;
-  --card: #ffffff;
-  --card-foreground: #18181b;
-  --popover: #ffffff;
-  --popover-foreground: #18181b;
-  --primary: #2563eb;
-  --primary-foreground: #ffffff;
-  --secondary: rgba(24, 24, 27, 0.05);
-  --secondary-foreground: #18181b;
-  --muted: rgba(24, 24, 27, 0.05);
-  --muted-foreground: #6b7280;
-  --accent: rgba(37, 99, 235, 0.08);
-  --accent-foreground: #1d4ed8;
-  --destructive: #e11d48;
-  --destructive-foreground: #ffffff;
-  --info: #0ea5e9;
-  --info-foreground: #ffffff;
-  --success: #10b981;
-  --success-foreground: #ffffff;
-  --warning: #f59e0b;
-  --warning-foreground: #ffffff;
-  --border: rgba(24, 24, 27, 0.08);
-  --input: rgba(24, 24, 27, 0.12);
-  --ring: #2563eb;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #3f3f46;
-  --sidebar-primary: #2563eb;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: rgba(37, 99, 235, 0.08);
-  --sidebar-accent-foreground: #1d4ed8;
-  --sidebar-border: rgba(24, 24, 27, 0.08);
-  --sidebar-ring: #2563eb;
-  --chart-1: #2563eb;
-  --chart-2: #0ea5e9;
-  --chart-3: #8b5cf6;
-  --chart-4: #f59e0b;
-  --chart-5: #10b981;
-  --code: #f8fafc;
-  --code-foreground: #18181b;
-  --code-highlight: rgba(24, 24, 27, 0.05);
-}
-
-.dark {
-  /* 现代简约（暗）：深灰蓝底 */
-  --background: #0f1115;
-  --foreground: #e6e8eb;
-  --card: #171a1f;
-  --card-foreground: #e6e8eb;
-  --popover: #171a1f;
-  --popover-foreground: #e6e8eb;
-  --primary: #3b82f6;
-  --primary-foreground: #ffffff;
-  --secondary: rgba(230, 232, 235, 0.07);
-  --secondary-foreground: #e6e8eb;
-  --muted: rgba(230, 232, 235, 0.07);
-  --muted-foreground: #9aa1ab;
-  --accent: rgba(59, 130, 246, 0.14);
-  --accent-foreground: #dbeafe;
-  --destructive: #f43f5e;
-  --destructive-foreground: #ffffff;
-  --info: #38bdf8;
-  --info-foreground: #0f1115;
-  --success: #34d399;
-  --success-foreground: #0f1115;
-  --warning: #fbbf24;
-  --warning-foreground: #0f1115;
-  --border: rgba(230, 232, 235, 0.12);
-  --input: rgba(230, 232, 235, 0.16);
-  --ring: #3b82f6;
-  --sidebar: #12141a;
-  --sidebar-foreground: #a7adb6;
-  --sidebar-primary: #3b82f6;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: rgba(59, 130, 246, 0.14);
-  --sidebar-accent-foreground: #dbeafe;
-  --sidebar-border: rgba(230, 232, 235, 0.1);
-  --sidebar-ring: #3b82f6;
-  --chart-1: #3b82f6;
-  --chart-2: #38bdf8;
-  --chart-3: #a78bfa;
-  --chart-4: #fbbf24;
-  --chart-5: #34d399;
-  --code: #171a1f;
-  --code-foreground: #e6e8eb;
-  --code-highlight: rgba(230, 232, 235, 0.07);
-}
-
 
 @layer base {
   html {
@@ -277,6 +196,145 @@ input:-webkit-autofill:active {
 }
 
 @layer components {
+  .activity-row + .activity-row {
+    border-top: 1px solid var(--border);
+  }
+
+  .setting-field {
+    padding: 1px 0 14px;
+  }
+
+  .setting-field + .setting-field {
+    padding-top: 1px;
+  }
+
+  .calendar-nav-button,
+  .calendar-today-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--muted-foreground);
+    font-size: 12px;
+    transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+  }
+
+  .calendar-nav-button {
+    width: 30px;
+  }
+
+  .calendar-today-button {
+    padding: 0 10px;
+    margin-left: 5px;
+  }
+
+  .calendar-nav-button:hover,
+  .calendar-today-button:hover {
+    border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(118px, 1fr));
+    min-width: 826px;
+  }
+
+  .calendar-weekday {
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--foreground) 3%, var(--card));
+    color: var(--muted-foreground);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    text-align: center;
+  }
+
+  .calendar-cell {
+    min-height: 128px;
+    padding: 8px;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+    transition: background-color 140ms ease;
+  }
+
+  .calendar-cell:nth-child(7n) {
+    border-right: 0;
+  }
+
+  .calendar-cell-empty {
+    background: color-mix(in srgb, var(--foreground) 2%, var(--card));
+  }
+
+  .calendar-cell-today,
+  .calendar-cell-over {
+    background: color-mix(in srgb, var(--primary) 7%, var(--card));
+  }
+
+  .calendar-cell-over {
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary) 28%, transparent);
+  }
+
+  .calendar-day-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    margin-bottom: 7px;
+    border-radius: 999px;
+    color: var(--muted-foreground);
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  .calendar-day-number-today {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-weight: 600;
+  }
+
+  .calendar-task {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    padding: 4px 6px;
+    border: 1px solid color-mix(in srgb, var(--primary) 18%, transparent);
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--primary) 8%, var(--card));
+    color: var(--foreground);
+    font-size: 11px;
+    line-height: 1.35;
+    text-align: left;
+    transition: transform 140ms ease, border-color 140ms ease, background-color 140ms ease;
+  }
+
+  .calendar-task:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--primary) 36%, transparent);
+    background: color-mix(in srgb, var(--primary) 13%, var(--card));
+  }
+
+  @media (max-width: 760px) {
+    .calendar-grid {
+      min-width: 700px;
+      grid-template-columns: repeat(7, minmax(100px, 1fr));
+    }
+
+    .calendar-cell {
+      min-height: 108px;
+      padding: 6px;
+    }
+  }
+
   .kaneo-tiptap-shell {
     position: relative;
   }

@@ -9,10 +9,14 @@ import (
 )
 
 type ActivityItem struct {
-	ID          string `json:"id"`
-	ProjectName string `json:"projectName"`
-	Action      string `json:"action"`
-	CreatedAt   string `json:"createdAt"`
+	ID           string  `json:"id"`
+	ResourceType string  `json:"resourceType"`
+	ResourceID   string  `json:"resourceId"`
+	ProjectName  string  `json:"projectName"`
+	Action       string  `json:"action"`
+	Actor        string  `json:"actor"`
+	Data         *string `json:"data"`
+	CreatedAt    string  `json:"createdAt"`
 }
 
 // GetActivities 返回全部任务活动流（按时间倒序）。
@@ -24,10 +28,14 @@ func (s *Service) GetActivities(ctx context.Context) ([]ActivityItem, error) {
 	items := make([]ActivityItem, 0, len(rows))
 	for _, r := range rows {
 		items = append(items, ActivityItem{
-			ID:          r.ID,
-			ProjectName: r.ProjectName,
-			Action:      r.Action,
-			CreatedAt:   r.CreatedAt,
+			ID:           r.ID,
+			ResourceType: "task",
+			ResourceID:   r.ResourceID,
+			ProjectName:  r.ProjectName,
+			Action:       r.Action,
+			Actor:        r.Actor,
+			Data:         r.Data,
+			CreatedAt:    r.CreatedAt,
 		})
 	}
 	return items, nil

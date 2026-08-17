@@ -1,28 +1,77 @@
 // 应用壳：左侧导航框架（借鉴原型 rail：品牌块 + 工作区导航 + 底部退出）。
-import { useState } from "react";
+// 全局浮动元素对齐原型 shell.jsx：⌘K 命令面板、Quick Capture FAB（Q 键）、底部键盘提示条。
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { NavLink, Outlet, useNavigate } from "react-router";
-import { PlusIcon } from "lucide-react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import {
+	CalendarDaysIcon,
+	GaugeIcon,
+	HistoryIcon,
+	LogOutIcon,
+	PlusIcon,
+	SettingsIcon,
+} from "lucide-react";
+import { CommandPalette } from "@/components/command-palette";
+import { MemberAvatar } from "@/components/member-avatar";
 import NameDialog from "@/components/name-dialog";
+import { QuickCapture, QuickCaptureFab } from "@/components/quick-capture";
 import { api } from "@/lib/api";
+import { buildPath } from "@/lib/endpoints";
 import { queryKeys } from "@/hooks/query-keys";
 import { useAuthStore } from "@/store/auth";
+import type { MeResponse } from "@/types/me";
 import type { Workspace } from "@/types/workspace";
 
 export default function AppShell() {
 	const logout = useAuthStore((s) => s.logout);
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
+	const location = useLocation();
 	const [createOpen, setCreateOpen] = useState(false);
+	const [cmdOpen, setCmdOpen] = useState(false);
+	const [qcOpen, setQcOpen] = useState(false);
 
+	// 快捷键：⌘K/Ctrl+K 命令面板；Q 快速捕获（非输入场景，避免与打字冲突）。
+	useEffect(() => {
+		function onKey(e: KeyboardEvent) {
+			if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+				e.preventDefault();
+				setCmdOpen((v) => !v);
+				return;
+			}
+			const target = e.target as HTMLElement | null;
+			const tag = target?.tagName?.toLowerCase() ?? "";
+			if (
+				e.key.toLowerCase() === "q" &&
+				tag !== "input" &&
+				tag !== "textarea" &&
+				tag !== "select" &&
+				!target?.isContentEditable
+			) {
+				setQcOpen((v) => !v);
+			}
+		}
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, []);
+
+	// 从当前 URL 解析项目 id（Quick Capture 默认落点）。仅匹配看板/任务详情路由。
+	const currentProjectId = location.pathname.match(
+		/^\/w\/[^/]+\/p\/([^/]+)/,
+	)?.[1];
 	const { data: workspaces } = useQuery({
 		queryKey: queryKeys.workspaces(),
-		queryFn: () => api<Workspace[]>("/api/workspaces"),
+		queryFn: () => api<Workspace[]>(buildPath("workspaces")),
 	});
+	const { data: meData } = useQuery({
+		queryKey: queryKeys.me(),
+		queryFn: () => api<MeResponse>(buildPath("me")),
+	});
+	const member = meData?.member;
 
 	const createMutation = useMutation({
 		mutationFn: (name: string) =>
-			api<Workspace>("/api/workspaces", {
+			api<Workspace>(buildPath("workspaces"), {
 				method: "POST",
 				body: JSON.stringify({ name }),
 			}),
@@ -33,48 +82,46 @@ export default function AppShell() {
 	});
 	return (
 		<>
-		<div className="flex h-dvh">
-			<aside className="flex w-[216px] shrink-0 flex-col border-r">
+		<div data-testid="app-shell" data-kanso-app className="kanso-shell">
+			<aside data-testid="sidebar" className="kanso-sidebar">
 				{/* 品牌块：主色方块 mark + 字标 */}
-				<div className="flex h-14 shrink-0 items-center gap-2.5 border-b px-5">
+				<div data-testid="brand" className="kanso-brand">
 					<span
-						className="size-5 shrink-0 rounded-[5px] bg-primary shadow-[0_1px_3px_rgba(37,99,235,0.35)]"
+						className="kanso-brand-mark"
 						aria-hidden
-					/>
-					<span className="text-[15px] font-bold tracking-tight">Kanso</span>
+					>
+						簡
+					</span>
+					<span className="kanso-brand-name">Kanso</span>
 				</div>
 
-				<nav className="flex-1 overflow-auto px-3 pb-3 pt-[18px]">
-					<p className="mb-1.5 px-2 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-						总览
-					</p>
+				<nav className="kanso-sidebar-nav">
+					<section className="kanso-sidebar-group">
+						<p className="kanso-sidebar-group-label">总览</p>
 					<NavLink
 						to="/dashboard"
-						className={({ isActive }) =>
-							`block rounded-md border-l-2 py-[7px] pl-2.5 pr-2 text-sm transition-colors duration-150 ${
-								isActive
-									? "border-primary bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-									: "border-transparent text-sidebar-foreground hover:bg-muted"
-							}`
-						}
+						className="kanso-sidebar-item"
 					>
+						<GaugeIcon />
 						仪表盘
 					</NavLink>
-					<p className="mb-1.5 mt-[18px] px-2 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-						工作区
-					</p>
-					<ul className="space-y-0.5">
+					<NavLink
+						to="/calendar"
+						className="kanso-sidebar-item"
+					>
+						<CalendarDaysIcon />
+						日历
+					</NavLink>
+					</section>
+
+					<section className="kanso-sidebar-group">
+						<p className="kanso-sidebar-group-label">工作区</p>
+					<ul>
 						{workspaces?.map((workspace) => (
 							<li key={workspace.id}>
 								<NavLink
 									to={`/w/${workspace.id}`}
-									className={({ isActive }) =>
-										`block rounded-md border-l-2 py-[7px] pl-2.5 pr-2 text-sm transition-colors duration-150 ${
-											isActive
-												? "border-primary bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-												: "border-transparent text-sidebar-foreground hover:bg-muted"
-										}`
-									}
+									className="kanso-sidebar-item"
 								>
 									{workspace.name}
 								</NavLink>
@@ -83,52 +130,59 @@ export default function AppShell() {
 					</ul>
 					<button
 						type="button"
-						className="mt-1 flex w-full items-center gap-1.5 rounded-md px-2.5 py-[7px] text-left text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+						className="kanso-sidebar-item"
 						onClick={() => setCreateOpen(true)}
 					>
 						<PlusIcon className="size-3.5" /> 新建工作区
 					</button>
-					<p className="mb-1.5 mt-[18px] px-2 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-						管理
-					</p>
+					</section>
+
+					<section className="kanso-sidebar-group">
+						<p className="kanso-sidebar-group-label">管理</p>
 					<NavLink
 						to="/activity"
-						className={({ isActive }) =>
-							`block rounded-md border-l-2 py-[7px] pl-2.5 pr-2 text-sm transition-colors duration-150 ${
-								isActive
-									? "border-primary bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-									: "border-transparent text-sidebar-foreground hover:bg-muted"
-							}`
-						}
+						className="kanso-sidebar-item"
 					>
+						<HistoryIcon />
 						活动
 					</NavLink>
 					<NavLink
 						to="/settings"
-						className={({ isActive }) =>
-							`block rounded-md border-l-2 py-[7px] pl-2.5 pr-2 text-sm transition-colors duration-150 ${
-								isActive
-									? "border-primary bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-									: "border-transparent text-sidebar-foreground hover:bg-muted"
-							}`
-						}
+						className="kanso-sidebar-item"
 					>
+						<SettingsIcon />
 						设置
 					</NavLink>
+					</section>
 				</nav>
 
-				<div className="border-t p-3">
+				<div className="kanso-sidebar-footer">
+					<NavLink
+						to="/profile"
+						aria-label="个人中心"
+						title="个人中心"
+						className="kanso-sidebar-identity"
+					>
+						{member ? (
+							<MemberAvatar member={member} className="size-7 text-[11px] font-semibold text-white" />
+						) : (
+							<span className="size-7 rounded-full bg-muted" aria-hidden />
+						)}
+						<span className="min-w-0 flex-1 truncate">{member?.name ?? "未登录"}</span>
+					</NavLink>
 					<button
 						type="button"
-						className="w-full rounded-md px-2 py-[7px] text-left text-[13px] text-muted-foreground transition-colors hover:bg-[rgba(24,24,27,0.05)] hover:text-foreground"
+						aria-label="退出登录"
+						title="退出登录"
+						className="kanso-sidebar-logout"
 						onClick={logout}
 					>
-						退出登录
+						<LogOutIcon />
 					</button>
 				</div>
 			</aside>
 
-			<main className="flex-1 overflow-auto">
+			<main data-testid="main-region" className="kanso-main">
 				<Outlet />
 			</main>
 		</div>
@@ -141,6 +195,33 @@ export default function AppShell() {
 			onSubmit={async (name) => {
 				await createMutation.mutateAsync(name);
 			}}
+		/>
+
+		{/* 全局浮动元素（原型 shell）：FAB + 键盘提示条 + 命令面板 + 快速捕获 */}
+		<QuickCaptureFab onClick={() => setQcOpen(true)} />
+		<div
+			className="kanso-keyboard-tip pointer-events-none fixed bottom-5 left-1/2 z-[85] -translate-x-1/2"
+			aria-hidden
+		>
+			<span>
+				<b className="mr-1 rounded-[4px] border bg-muted px-1.5 py-0.5 font-semibold text-foreground">
+					⌘K
+				</b>
+				搜索
+			</span>
+			<span className="ml-3">
+				<b className="mr-1 rounded-[4px] border bg-muted px-1.5 py-0.5 font-semibold text-foreground">
+					Q
+				</b>
+				快速捕获
+			</span>
+		</div>
+
+		<CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
+		<QuickCapture
+			open={qcOpen}
+			onClose={() => setQcOpen(false)}
+			defaultProjectId={currentProjectId}
 		/>
 		</>
 	);

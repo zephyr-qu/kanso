@@ -1,6 +1,7 @@
 // 任务操作 hook：建/改/删/移。移动（拖拽）含乐观更新与失败回滚（onMutate/onError）。
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { buildPath } from "@/lib/endpoints";
 import {
 	invalidateBoard,
 	invalidateBoardScope,
@@ -57,7 +58,7 @@ export function useTaskMutations(projectId: string) {
 
 	const createTask = useMutation({
 		mutationFn: ({ columnId, title }: { columnId: string; title: string }) =>
-			api<Task>(`/api/columns/${columnId}/tasks`, {
+			api<Task>(buildPath("columnTasks", { columnId }), {
 				method: "POST",
 				body: JSON.stringify({ title }),
 			}),
@@ -68,22 +69,41 @@ export function useTaskMutations(projectId: string) {
 				(old) => addTaskToBoard(old, task),
 			);
 			invalidateBoard(queryClient, projectId);
+			// 新任务可能带截止日期，日历视图需同步失效。
+			queryClient.invalidateQueries({ queryKey: queryKeys.calendar() });
 		},
 	});
 
 	const updateTask = useMutation({
 		mutationFn: ({ id, title }: { id: string; title: string }) =>
-			api<Task>(`/api/tasks/${id}`, {
+			api<Task>(buildPath("task", { id }), {
 				method: "PATCH",
 				body: JSON.stringify({ title }),
 			}),
-		onSuccess: () => invalidateBoard(queryClient, projectId),
+		onSuccess: () => {
+			invalidateBoard(queryClient, projectId);
+			// 标题/描述/优先级/截止日期都可能被改（含日历相关字段），日历视图同步失效。
+			queryClient.invalidateQueries({ queryKey: queryKeys.calendar() });
+		},
 	});
 
 	const deleteTask = useMutation({
 		mutationFn: (id: string) =>
-			api<void>(`/api/tasks/${id}`, { method: "DELETE" }),
-		onSuccess: () => invalidateBoard(queryClient, projectId),
+			api<void>(buildPath("task", { id }), { method: "DELETE" }),
+		onSuccess: () => {
+			invalidateBoard(queryClient, projectId);
+			queryClient.invalidateQueries({ queryKey: queryKeys.archivedTasks(projectId) });
+		},
+	});
+
+	const setArchived = useMutation({
+		mutationFn: ({ id, archived }: { id: string; archived: boolean }) =>
+			api<Task>(buildPath(archived ? "taskArchive" : "taskRestore", { id }), { method: "POST" }),
+		onSuccess: () => {
+			invalidateBoardScope(queryClient, projectId);
+			// 归档/恢复改变日历可见性（归档任务按 dueDate 不再展示），日历同步失效。
+			queryClient.invalidateQueries({ queryKey: queryKeys.calendar() });
+		},
 	});
 
 	// 任务拖拽：乐观写入看板缓存，失败恢复快照，成功以 invalidate 收敛服务端 reindex。
@@ -97,7 +117,7 @@ export function useTaskMutations(projectId: string) {
 			columnId: string;
 			position: number;
 		}) =>
-			api<void>(`/api/tasks/${id}`, {
+			api<void>(buildPath("task", { id }), {
 				method: "PATCH",
 				body: JSON.stringify({ columnId, position }),
 			}),
@@ -122,5 +142,5 @@ export function useTaskMutations(projectId: string) {
 		onSuccess: () => invalidateBoardScope(queryClient, projectId),
 	});
 
-	return { createTask, updateTask, deleteTask, moveTask };
+	return { createTask, updateTask, deleteTask, setArchived, moveTask };
 }

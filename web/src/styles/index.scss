@@ -1,0 +1,24 @@
+@use "primitives";
+@use "semantic";
+@use "component-tokens";
+@use "shell";
+@use "surfaces";
+@use "controls";
+@use "states";
+
+@layer base {
+  html {
+    background: var(--semantic-surface-page);
+    color-scheme: light;
+  }
+
+  body {
+    background: var(--semantic-surface-page);
+    color: var(--semantic-content-primary);
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--semantic-action-primary) 22%, transparent);
+    color: var(--semantic-content-primary);
+  }
+}

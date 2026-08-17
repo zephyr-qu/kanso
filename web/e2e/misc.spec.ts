@@ -1,8 +1,10 @@
-// 前端验收 F4：其余页面交互——看板标签弹窗、settings 备份下载、dashboard 统计渲染。
+// 前端验收 F4：其余页面交互——看板标签弹窗、settings 服务配置、dashboard 统计渲染。
 import { expect, test, type Page } from "@playwright/test";
 import { resetAndSeed } from "./seed";
 
-test.beforeEach(async () => { await resetAndSeed(); });
+test.beforeEach(async () => {
+	await resetAndSeed();
+});
 
 async function loginToApp(page: Page) {
 	const key = process.env.KANSO_ACCESS_KEY ?? "mock-key";
@@ -22,22 +24,27 @@ test("看板标签弹窗：打开可见创建区与标签库", async ({ page }) 
 	const dialog = page.getByRole("dialog");
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByText("标签管理")).toBeVisible();
-	await expect(dialog.getByText(/工作区/)).toBeVisible();
+	await expect(dialog.getByText(/当前项目/)).toBeVisible();
 });
 
-test("settings 备份下载：点击下载触发 JSON 文件下载", async ({ page }) => {
+test("settings 服务配置：可编辑保存，数据卡含备份导入导出", async ({ page }) => {
 	await loginToApp(page);
 	await page.waitForSelector('a[href*="/p/"]');
 
 	await page.getByRole("link", { name: "设置", exact: true }).click();
-	await page.waitForSelector("text=访问");
-
-	const downloadPromise = page.waitForEvent("download");
-	await page.getByRole("button", { name: /下载|备份/ }).click();
-	const download = await downloadPromise;
-	expect(download.suggestedFilename()).toMatch(
-		/^kanso-backup-\d{4}-\d{2}-\d{2}\.json$/,
-	);
+	// 页头副标题含「外观 · 服务配置 · 数据 · 关于」，用 exact 命中卡片标题。
+	await expect(page.getByText("服务配置", { exact: true })).toBeVisible();
+	// 字段说明展示（环境变量优先于配置文件）。
+	await expect(page.getByText("KANSO_ADDR · 默认值 :8080")).toBeVisible();
+	await expect(page.getByText("KANSO_DATA_DIR · 默认值 ./data")).toBeVisible();
+	await expect(
+		page.getByText("KANSO_ACCESS_KEY · 留空表示未设置（下次启动随机生成）"),
+	).toBeVisible();
+	// 可编辑保存（保存到配置文件，密钥热生效）。
+	await expect(page.getByRole("button", { name: "保存配置" })).toBeVisible();
+	// 数据卡：备份导出/导入入口。
+	await expect(page.getByRole("button", { name: "导出备份" })).toBeVisible();
+	await expect(page.getByRole("button", { name: "导入备份" })).toBeVisible();
 });
 
 test("dashboard 统计卡与面板渲染", async ({ page }) => {
@@ -49,5 +56,7 @@ test("dashboard 统计卡与面板渲染", async ({ page }) => {
 	await expect(page.getByText("待办", { exact: true }).first()).toBeVisible({
 		timeout: 5000,
 	});
-	await expect(page.getByText("需要关注").first()).toBeVisible({ timeout: 5000 });
+	await expect(page.getByText("需要关注").first()).toBeVisible({
+		timeout: 5000,
+	});
 });

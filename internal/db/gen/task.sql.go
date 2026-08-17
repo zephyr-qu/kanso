@@ -9,10 +9,40 @@ import (
 	"context"
 )
 
+const archiveTask = `-- name: ArchiveTask :one
+UPDATE task SET archived_at = ?, updated_at = ? WHERE id = ?
+RETURNING id, project_id, column_id, title, description, position, priority, due_date, archived_at, created_at, updated_at
+`
+
+type ArchiveTaskParams struct {
+	ArchivedAt *string `json:"archivedAt"`
+	UpdatedAt  string  `json:"updatedAt"`
+	ID         string  `json:"id"`
+}
+
+func (q *Queries) ArchiveTask(ctx context.Context, arg ArchiveTaskParams) (Task, error) {
+	row := q.db.QueryRowContext(ctx, archiveTask, arg.ArchivedAt, arg.UpdatedAt, arg.ID)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.ColumnID,
+		&i.Title,
+		&i.Description,
+		&i.Position,
+		&i.Priority,
+		&i.DueDate,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createTask = `-- name: CreateTask :one
-INSERT INTO task (id, project_id, column_id, title, description, position, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, project_id, column_id, title, description, position, created_at, updated_at
+INSERT INTO task (id, project_id, column_id, title, description, position, priority, due_date, archived_at, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+RETURNING id, project_id, column_id, title, description, position, priority, due_date, archived_at, created_at, updated_at
 `
 
 type CreateTaskParams struct {
@@ -22,6 +52,8 @@ type CreateTaskParams struct {
 	Title       string  `json:"title"`
 	Description *string `json:"description"`
 	Position    int64   `json:"position"`
+	Priority    string  `json:"priority"`
+	DueDate     *string `json:"dueDate"`
 	CreatedAt   string  `json:"createdAt"`
 	UpdatedAt   string  `json:"updatedAt"`
 }
@@ -34,6 +66,8 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		arg.Title,
 		arg.Description,
 		arg.Position,
+		arg.Priority,
+		arg.DueDate,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -45,6 +79,9 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.Title,
 		&i.Description,
 		&i.Position,
+		&i.Priority,
+		&i.DueDate,
+		&i.ArchivedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -64,7 +101,7 @@ func (q *Queries) DeleteTask(ctx context.Context, id string) (int64, error) {
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, project_id, column_id, title, description, position, created_at, updated_at FROM task WHERE id = ?
+SELECT id, project_id, column_id, title, description, position, priority, due_date, archived_at, created_at, updated_at FROM task WHERE id = ?
 `
 
 func (q *Queries) GetTask(ctx context.Context, id string) (Task, error) {
@@ -77,14 +114,56 @@ func (q *Queries) GetTask(ctx context.Context, id string) (Task, error) {
 		&i.Title,
 		&i.Description,
 		&i.Position,
+		&i.Priority,
+		&i.DueDate,
+		&i.ArchivedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
+const listArchivedTasksByProject = `-- name: ListArchivedTasksByProject :many
+SELECT id, project_id, column_id, title, description, position, priority, due_date, archived_at, created_at, updated_at FROM task WHERE project_id = ? AND archived_at IS NOT NULL ORDER BY archived_at DESC, updated_at DESC
+`
+
+func (q *Queries) ListArchivedTasksByProject(ctx context.Context, projectID string) ([]Task, error) {
+	rows, err := q.db.QueryContext(ctx, listArchivedTasksByProject, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Task
+	for rows.Next() {
+		var i Task
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.ColumnID,
+			&i.Title,
+			&i.Description,
+			&i.Position,
+			&i.Priority,
+			&i.DueDate,
+			&i.ArchivedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTasksByColumn = `-- name: ListTasksByColumn :many
-SELECT id, project_id, column_id, title, description, position, created_at, updated_at FROM task WHERE column_id = ? ORDER BY position, created_at
+SELECT id, project_id, column_id, title, description, position, priority, due_date, archived_at, created_at, updated_at FROM task WHERE column_id = ? AND archived_at IS NULL ORDER BY position, created_at
 `
 
 func (q *Queries) ListTasksByColumn(ctx context.Context, columnID string) ([]Task, error) {
@@ -103,6 +182,9 @@ func (q *Queries) ListTasksByColumn(ctx context.Context, columnID string) ([]Tas
 			&i.Title,
 			&i.Description,
 			&i.Position,
+			&i.Priority,
+			&i.DueDate,
+			&i.ArchivedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -120,7 +202,7 @@ func (q *Queries) ListTasksByColumn(ctx context.Context, columnID string) ([]Tas
 }
 
 const listTasksByProject = `-- name: ListTasksByProject :many
-SELECT id, project_id, column_id, title, description, position, created_at, updated_at FROM task WHERE project_id = ? ORDER BY position, created_at
+SELECT id, project_id, column_id, title, description, position, priority, due_date, archived_at, created_at, updated_at FROM task WHERE project_id = ? AND archived_at IS NULL ORDER BY position, created_at
 `
 
 func (q *Queries) ListTasksByProject(ctx context.Context, projectID string) ([]Task, error) {
@@ -139,6 +221,9 @@ func (q *Queries) ListTasksByProject(ctx context.Context, projectID string) ([]T
 			&i.Title,
 			&i.Description,
 			&i.Position,
+			&i.Priority,
+			&i.DueDate,
+			&i.ArchivedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -166,6 +251,87 @@ func (q *Queries) MaxTaskPositionByColumn(ctx context.Context, columnID string) 
 	return column_1, err
 }
 
+const searchTasks = `-- name: SearchTasks :many
+SELECT
+    t.id,
+    t.title,
+    t.column_id,
+    t.priority,
+    t.due_date,
+    p.id AS project_id,
+    p.name AS project_name,
+    p.workspace_id,
+    w.name AS workspace_name
+FROM task AS t
+INNER JOIN column AS c ON t.column_id = c.id
+INNER JOIN project AS p ON c.project_id = p.id
+INNER JOIN workspace AS w ON p.workspace_id = w.id
+WHERE (
+    t.title LIKE '%' || ? || '%'
+    OR COALESCE(t.description, '') LIKE '%' || ? || '%'
+    OR EXISTS (
+        SELECT 1
+        FROM comment AS cm
+        WHERE cm.task_id = t.id
+          AND cm.content LIKE '%' || ? || '%'
+    )
+)
+ORDER BY t.updated_at DESC
+LIMIT 20
+`
+
+type SearchTasksParams struct {
+	Column1 *string `json:"column1"`
+	Column2 *string `json:"column2"`
+	Column3 *string `json:"column3"`
+}
+
+type SearchTasksRow struct {
+	ID            string  `json:"id"`
+	Title         string  `json:"title"`
+	ColumnID      string  `json:"columnId"`
+	Priority      string  `json:"priority"`
+	DueDate       *string `json:"dueDate"`
+	ProjectID     string  `json:"projectId"`
+	ProjectName   string  `json:"projectName"`
+	WorkspaceID   string  `json:"workspaceId"`
+	WorkspaceName string  `json:"workspaceName"`
+}
+
+// Global search (command palette): title/description/comment substring match with project info.
+func (q *Queries) SearchTasks(ctx context.Context, arg SearchTasksParams) ([]SearchTasksRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchTasks, arg.Column1, arg.Column2, arg.Column3)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchTasksRow
+	for rows.Next() {
+		var i SearchTasksRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.ColumnID,
+			&i.Priority,
+			&i.DueDate,
+			&i.ProjectID,
+			&i.ProjectName,
+			&i.WorkspaceID,
+			&i.WorkspaceName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setTaskPosition = `-- name: SetTaskPosition :exec
 UPDATE task SET column_id = ?, position = ?, updated_at = ? WHERE id = ?
 `
@@ -188,12 +354,14 @@ func (q *Queries) SetTaskPosition(ctx context.Context, arg SetTaskPositionParams
 }
 
 const updateTask = `-- name: UpdateTask :one
-UPDATE task SET title = ?, description = ?, updated_at = ? WHERE id = ? RETURNING id, project_id, column_id, title, description, position, created_at, updated_at
+UPDATE task SET title = ?, description = ?, priority = ?, due_date = ?, updated_at = ? WHERE id = ? RETURNING id, project_id, column_id, title, description, position, priority, due_date, archived_at, created_at, updated_at
 `
 
 type UpdateTaskParams struct {
 	Title       string  `json:"title"`
 	Description *string `json:"description"`
+	Priority    string  `json:"priority"`
+	DueDate     *string `json:"dueDate"`
 	UpdatedAt   string  `json:"updatedAt"`
 	ID          string  `json:"id"`
 }
@@ -202,6 +370,8 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, e
 	row := q.db.QueryRowContext(ctx, updateTask,
 		arg.Title,
 		arg.Description,
+		arg.Priority,
+		arg.DueDate,
 		arg.UpdatedAt,
 		arg.ID,
 	)
@@ -213,6 +383,9 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, e
 		&i.Title,
 		&i.Description,
 		&i.Position,
+		&i.Priority,
+		&i.DueDate,
+		&i.ArchivedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

@@ -79,3 +79,52 @@ func TestBroadcastProjectIsolation(t *testing.T) {
 	default:
 	}
 }
+
+// TestBroadcastAllReachesEverySubscriber 校验工作区级广播（BroadcastAll）覆盖全部连接，无论订阅项目。
+func TestBroadcastAllReachesEverySubscriber(t *testing.T) {
+	hub := NewHub()
+	subA := hub.Subscribe("p1")
+	subB := hub.Subscribe("p2")
+
+	hub.BroadcastAll(Event{Type: "label.created", WorkspaceID: "w1", EntityID: "l1"})
+
+	for name, ch := range map[string]chan []byte{"A": subA, "B": subB} {
+		select {
+		case msg := <-ch:
+			var ev Event
+			if err := json.Unmarshal(msg, &ev); err != nil {
+				t.Fatalf("订阅者 %s 解析事件失败: %v", name, err)
+			}
+			if ev.Type != "label.created" || ev.WorkspaceID != "w1" {
+				t.Fatalf("订阅者 %s 收到事件不符: %+v", name, ev)
+			}
+		default:
+			t.Fatalf("订阅者 %s 应收到全广播事件", name)
+		}
+	}
+}
+
+// TestBroadcastNoSubscribersNoPanic 校验无订阅者时广播不 panic（空目标路径）。
+func TestBroadcastNoSubscribersNoPanic(t *testing.T) {
+	hub := NewHub()
+	hub.Broadcast("nobody", Event{Type: "task.created", ProjectID: "nobody"})
+	hub.BroadcastAll(Event{Type: "label.created", WorkspaceID: "w1"})
+}
+
+// TestSubscribeExistingProjectReuses 校验同一项目多个订阅者各自独立通道。
+func TestSubscribeExistingProjectReuses(t *testing.T) {
+	hub := NewHub()
+	c1 := hub.Subscribe("p1")
+	c2 := hub.Subscribe("p1")
+	if c1 == c2 {
+		t.Fatal("同一项目的两个订阅者应返回不同通道")
+	}
+	hub.Broadcast("p1", Event{Type: "task.created", ProjectID: "p1"})
+	for name, ch := range map[string]chan []byte{"1": c1, "2": c2} {
+		select {
+		case <-ch:
+		default:
+			t.Fatalf("订阅者 %s 应收到事件", name)
+		}
+	}
+}

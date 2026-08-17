@@ -2,7 +2,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { resetAndSeed } from "./seed";
 
-test.beforeEach(async () => { await resetAndSeed(); });
+test.beforeEach(async () => {
+	await resetAndSeed();
+});
 
 async function loginToApp(page: Page) {
 	const key = process.env.KANSO_ACCESS_KEY ?? "mock-key";
@@ -26,8 +28,9 @@ test("评论：发表后出现在列表，可删除", async ({ page }) => {
 	await openFirstTaskDetail(page);
 
 	const comment = `验收评论${Date.now() % 100000}`;
-	await page.getByPlaceholder("写评论…").fill(comment);
-	await page.getByPlaceholder("写评论…").press("Enter");
+	// 评论输入是 textarea（Enter 换行），点「发表评论」提交。
+	await page.getByPlaceholder("写下评论…").fill(comment);
+	await page.getByRole("button", { name: "发表评论" }).click();
 
 	// 评论出现在列表中。
 	await expect(page.locator("main").getByText(comment)).toBeVisible({
@@ -35,14 +38,11 @@ test("评论：发表后出现在列表，可删除", async ({ page }) => {
 	});
 
 	// 删除评论（评论行 hover 显示删除按钮）。
-	const row = page
-		.locator("main")
-		.locator("div", { hasText: comment })
-		.filter({ has: page.getByRole("button", { name: "删除评论" }) })
-		.last();
+	const row = page.locator("main .kanso-comment", { hasText: comment }).last();
 	await row.hover();
 	await row.getByRole("button", { name: "删除评论" }).click();
-	await expect(page.locator("main").getByText(comment)).toHaveCount(0);
+	// 限定评论列表：活动时间线会显示「删除了评论『内容』」，全 main 匹配会误命中。
+	await expect(page.locator("main .kanso-comment-list").getByText(comment)).toHaveCount(0);
 });
 
 test("任务标题与描述编辑生效", async ({ page }) => {
@@ -55,12 +55,14 @@ test("任务标题与描述编辑生效", async ({ page }) => {
 	const newTitle = `改名标题${Date.now() % 100000}`;
 	await titleInput.fill(newTitle);
 	await titleInput.press("Enter");
-	await expect(page.locator("main h2").first()).toHaveText(newTitle, { timeout: 5000 });
+	await expect(page.locator("main h2").first()).toHaveText(newTitle, {
+		timeout: 5000,
+	});
 
-	// 描述编辑：点击描述区，输入后保存。
+	// 描述编辑：点击描述区（空描述提示文案），输入后保存。
 	await page
 		.locator("main")
-		.getByText(/添加描述…/)
+		.getByText(/暂无描述，点击编辑添加。/)
 		.click();
 	const descInput = page.locator("main textarea").first();
 	const descText = `验收描述${Date.now() % 100000}`;
@@ -78,20 +80,20 @@ test("活动流渲染：含创建活动与动作文案", async ({ page }) => {
 	});
 });
 
-test("评论刷新后保留（mock localStorage 持久化）", async ({ page }) => {
+test("评论刷新后保留（真实后端 SQLite 持久化）", async ({ page }) => {
 	await openFirstTaskDetail(page);
 
 	const comment = `持久化评论${Date.now() % 100000}`;
-	await page.getByPlaceholder("写评论…").fill(comment);
-	await page.getByPlaceholder("写评论…").press("Enter");
-	await expect(page.locator("main").getByText(comment)).toBeVisible({
+	await page.getByPlaceholder("写下评论…").fill(comment);
+	await page.getByRole("button", { name: "发表评论" }).click();
+	await expect(page.locator("main").getByText(comment, { exact: true })).toBeVisible({
 		timeout: 5000,
 	});
 
-	// 刷新页面：mock 数据持久化到 localStorage，评论应保留。
+	// 刷新页面：真实后端 SQLite 持久化，评论应保留。
 	await page.reload();
-	await page.waitForSelector('main input[placeholder="写评论…"]');
-	await expect(page.locator("main").getByText(comment)).toBeVisible({
+	await page.waitForSelector('main textarea[placeholder="写下评论…"]');
+	await expect(page.locator("main").getByText(comment, { exact: true })).toBeVisible({
 		timeout: 5000,
 	});
 });

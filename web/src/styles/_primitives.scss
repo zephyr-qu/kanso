@@ -1,0 +1,82 @@
+/* Kanso design system: primitive values only. */
+:root {
+  --primitive-font-sans: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", ui-sans-serif, system-ui, sans-serif;
+  --primitive-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --primitive-font-serif: "Noto Serif SC", Georgia, serif;
+  --primitive-color-bg: #f7f5f0;
+  --primitive-color-bg-deep: #efece5;
+  --primitive-color-card: #fdfcf9;
+  --primitive-color-card-muted: #f3f0ea;
+  --primitive-color-text: #37352f;
+  --primitive-color-text-soft: #6f6b64;
+  --primitive-color-text-faint: #a29d95;
+  --primitive-color-coral-600: #c2410c;
+  --primitive-color-coral-700: #9a3412;
+  --primitive-color-white-warm: #fff8f0;
+  --primitive-color-success: #5b7a55;
+  --primitive-color-danger: #b3553e;
+  --primitive-color-info: #4a6d7c;
+
+  --primitive-alpha-border: rgba(55, 53, 47, 0.1);
+  --primitive-alpha-border-strong: rgba(55, 53, 47, 0.2);
+  --primitive-alpha-sidebar-border: rgba(55, 53, 47, 0.08);
+  --primitive-alpha-sidebar-hover: rgba(55, 53, 47, 0.06);
+  --primitive-alpha-sidebar-active: rgba(194, 65, 12, 0.09);
+  --primitive-alpha-primary-soft: rgba(194, 65, 12, 0.08);
+  --primitive-alpha-board-column: rgba(55, 53, 47, 0.03);
+
+  --primitive-space-1: 4px;
+  --primitive-space-2: 8px;
+  --primitive-space-3: 12px;
+  --primitive-space-4: 16px;
+  --primitive-space-5: 20px;
+  --primitive-space-6: 24px;
+  --primitive-space-7: 28px;
+  --primitive-space-8: 32px;
+  --primitive-space-10: 40px;
+  --primitive-space-12: 48px;
+
+  --primitive-radius-sm: 4px;
+  --primitive-radius-md: 6px;
+  --primitive-radius-lg: 8px;
+  --primitive-radius-xl: 12px;
+  --primitive-radius-full: 9999px;
+
+  --primitive-shadow-card: 0 1px 2px rgba(55, 53, 47, 0.05);
+  --primitive-shadow-lift: 0 2px 6px rgba(55, 53, 47, 0.06), 0 16px 32px rgba(55, 53, 47, 0.09);
+  --primitive-shadow-pop: 0 10px 26px rgba(55, 53, 47, 0.14), 0 2px 6px rgba(55, 53, 47, 0.07);
+
+  --primitive-duration-fast: 150ms;
+  --primitive-duration-normal: 200ms;
+  --primitive-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Kanso design system: dark palette (暖色出版风的暗色延续——深暖棕黑底 + 焦橙强调 + 暖白文字)。
+   html.dark 时覆盖全部颜色 token；semantic 层引用 primitive，自动跟随。 */
+html.dark {
+  --primitive-color-bg: #1d1b18;
+  --primitive-color-bg-deep: #161411;
+  --primitive-color-card: #272420;
+  --primitive-color-card-muted: #211f1c;
+  --primitive-color-text: #e8e3da;
+  --primitive-color-text-soft: #aaa39a;
+  --primitive-color-text-faint: #7e776e;
+  --primitive-color-coral-600: #e0601f;
+  --primitive-color-coral-700: #f07a35;
+  --primitive-color-white-warm: #fff8f0;
+  --primitive-color-success: #7aa574;
+  --primitive-color-danger: #cf7359;
+  --primitive-color-info: #6e9db3;
+
+  --primitive-alpha-border: rgba(232, 227, 218, 0.12);
+  --primitive-alpha-border-strong: rgba(232, 227, 218, 0.22);
+  --primitive-alpha-sidebar-border: rgba(232, 227, 218, 0.08);
+  --primitive-alpha-sidebar-hover: rgba(232, 227, 218, 0.07);
+  --primitive-alpha-sidebar-active: rgba(224, 96, 31, 0.18);
+  --primitive-alpha-primary-soft: rgba(224, 96, 31, 0.14);
+  --primitive-alpha-board-column: rgba(232, 227, 218, 0.04);
+
+  --primitive-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --primitive-shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.32), 0 16px 32px rgba(0, 0, 0, 0.42);
+  --primitive-shadow-pop: 0 10px 26px rgba(0, 0, 0, 0.48), 0 2px 6px rgba(0, 0, 0, 0.32);
+}

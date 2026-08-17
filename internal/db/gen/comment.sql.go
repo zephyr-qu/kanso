@@ -9,10 +9,46 @@ import (
 	"context"
 )
 
+const countCommentsByProject = `-- name: CountCommentsByProject :many
+SELECT task_id, COUNT(*) AS comment_count
+FROM comment
+WHERE task_id IN (SELECT id FROM task WHERE project_id = ?)
+GROUP BY task_id
+`
+
+type CountCommentsByProjectRow struct {
+	TaskID       string `json:"taskId"`
+	CommentCount int64  `json:"commentCount"`
+}
+
+// Comment counts per task within a project (board task card meta).
+func (q *Queries) CountCommentsByProject(ctx context.Context, projectID string) ([]CountCommentsByProjectRow, error) {
+	rows, err := q.db.QueryContext(ctx, countCommentsByProject, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountCommentsByProjectRow
+	for rows.Next() {
+		var i CountCommentsByProjectRow
+		if err := rows.Scan(&i.TaskID, &i.CommentCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createComment = `-- name: CreateComment :one
-INSERT INTO comment (id, task_id, content, created_at)
-VALUES (?, ?, ?, ?)
-RETURNING id, task_id, content, created_at
+INSERT INTO comment (id, task_id, content, created_at, author)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, task_id, content, created_at, author
 `
 
 type CreateCommentParams struct {
@@ -20,6 +56,7 @@ type CreateCommentParams struct {
 	TaskID    string `json:"taskId"`
 	Content   string `json:"content"`
 	CreatedAt string `json:"createdAt"`
+	Author    string `json:"author"`
 }
 
 func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (Comment, error) {
@@ -28,6 +65,7 @@ func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (C
 		arg.TaskID,
 		arg.Content,
 		arg.CreatedAt,
+		arg.Author,
 	)
 	var i Comment
 	err := row.Scan(
@@ -35,6 +73,7 @@ func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (C
 		&i.TaskID,
 		&i.Content,
 		&i.CreatedAt,
+		&i.Author,
 	)
 	return i, err
 }
@@ -52,7 +91,7 @@ func (q *Queries) DeleteComment(ctx context.Context, id string) (int64, error) {
 }
 
 const getComment = `-- name: GetComment :one
-SELECT id, task_id, content, created_at FROM comment WHERE id = ?
+SELECT id, task_id, content, created_at, author FROM comment WHERE id = ?
 `
 
 func (q *Queries) GetComment(ctx context.Context, id string) (Comment, error) {
@@ -63,12 +102,13 @@ func (q *Queries) GetComment(ctx context.Context, id string) (Comment, error) {
 		&i.TaskID,
 		&i.Content,
 		&i.CreatedAt,
+		&i.Author,
 	)
 	return i, err
 }
 
 const listCommentsByTask = `-- name: ListCommentsByTask :many
-SELECT id, task_id, content, created_at FROM comment WHERE task_id = ? ORDER BY created_at
+SELECT id, task_id, content, created_at, author FROM comment WHERE task_id = ? ORDER BY created_at
 `
 
 func (q *Queries) ListCommentsByTask(ctx context.Context, taskID string) ([]Comment, error) {
@@ -85,6 +125,7 @@ func (q *Queries) ListCommentsByTask(ctx context.Context, taskID string) ([]Comm
 			&i.TaskID,
 			&i.Content,
 			&i.CreatedAt,
+			&i.Author,
 		); err != nil {
 			return nil, err
 		}
@@ -97,4 +138,16 @@ func (q *Queries) ListCommentsByTask(ctx context.Context, taskID string) ([]Comm
 		return nil, err
 	}
 	return items, nil
+}
+
+const reownLegacyComments = `-- name: ReownLegacyComments :execrows
+UPDATE comment SET author = ? WHERE author = 'Admin'
+`
+
+func (q *Queries) ReownLegacyComments(ctx context.Context, author string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, reownLegacyComments, author)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

@@ -13,6 +13,17 @@ import (
 // 已完成列置于末列，与仪表盘"完成 = 末列（position 最大）"口径一致（2026-08 调整）。
 var defaultColumns = []string{"待办", "进行中", "已阻塞", "已完成"}
 
+// quadrantColumns 是 template=quadrant 的四象限列（0006 Phase 4 任务：项目模板）。
+var quadrantColumns = []string{"重要紧急", "重要不紧急", "紧急不重要", "不重要不紧急"}
+
+// columnsForTemplate 按模板名返回默认列；未知模板回退 board。
+func columnsForTemplate(template string) []string {
+	if template == "quadrant" {
+		return quadrantColumns
+	}
+	return defaultColumns
+}
+
 // ListProjects 返回工作区下的项目（按 position、创建时间排序）。
 // ProjectSummary 是项目列表条目 + 看板统计（列数 / 任务数 / 进行中列任务数）。
 // 内嵌 gen.Project 使 JSON 展平为平铺字段（前端 Project 类型加可选字段即可兼容）。
@@ -24,16 +35,21 @@ type ProjectSummary struct {
 }
 
 // listProjectStatsSQL 一次聚合工作区下全部项目的统计（避免 N+1）。
-// "进行中"按默认列名匹配；列被改名后该值为 0（前端显示兜底）。
+// "进行中"按列位置口径（0006 Phase 3 任务 3.3）：不在首列也不在末列，模板无关；
+// 与前端/Mock 一致（此前按列名 '进行中' 匹配，列改名后统计失真）。
 const listProjectStatsSQL = `
 SELECT
   p.id AS project_id,
   COUNT(DISTINCT c.id) AS column_count,
-  COUNT(DISTINCT t.id) AS task_count,
-  COUNT(DISTINCT CASE WHEN c.name = '进行中' THEN t.id END) AS in_progress_count
+  COUNT(DISTINCT CASE WHEN t.archived_at IS NULL THEN t.id END) AS task_count,
+  COUNT(DISTINCT CASE WHEN c.position > pc.min_pos AND c.position < pc.max_pos AND t.archived_at IS NULL THEN t.id END) AS in_progress_count
 FROM project p
 LEFT JOIN column c ON c.project_id = p.id
 LEFT JOIN task t ON t.project_id = p.id
+LEFT JOIN (
+  SELECT project_id, MIN(position) AS min_pos, MAX(position) AS max_pos
+  FROM column GROUP BY project_id
+) pc ON pc.project_id = p.id
 WHERE p.workspace_id = ?
 GROUP BY p.id
 `
@@ -81,15 +97,13 @@ func (s *Service) ListProjects(ctx context.Context, workspaceID string) ([]Proje
 	return summaries, nil
 }
 
-// CreateProject 创建项目并在同一事务内种子默认列（见 spec：建项目自动带待办/进行中/已阻塞/已完成）。
-func (s *Service) CreateProject(ctx context.Context, workspaceID, name string) (gen.Project, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
+// CreateProject 创建项目并在同一事务内按模板种子默认列（0006 Phase 4：template=board|quadrant；未知回退 board）。
+func (s *Service) CreateProject(ctx context.Context, workspaceID, name, template string) (gen.Project, error) {
+	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
-		return gen.Project{}, fmt.Errorf("开启事务失败: %w", err)
+		return gen.Project{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
-
-	q := gen.New(tx)
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	projectID, err := id.New()
@@ -107,8 +121,7 @@ func (s *Service) CreateProject(ctx context.Context, workspaceID, name string) (
 	if err != nil {
 		return gen.Project{}, fmt.Errorf("创建项目失败: %w", err)
 	}
-
-	for i, columnName := range defaultColumns {
+	for i, columnName := range columnsForTemplate(template) {
 		columnID, err := id.New()
 		if err != nil {
 			return gen.Project{}, err
@@ -145,7 +158,11 @@ func (s *Service) RenameProject(ctx context.Context, projectID, name string) (ge
 
 // DeleteProject 删除项目，其下列/任务/评论/活动由外键级联删除；不存在时返回 ErrNotFound。
 func (s *Service) DeleteProject(ctx context.Context, projectID string) error {
-	q := gen.New(s.db)
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
 	// 先清项目下任务的活动（activity 无外键，需显式清理）。
 	if err := q.DeleteActivitiesByProject(ctx, projectID); err != nil {
 		return fmt.Errorf("删除项目活动失败: %w", err)
@@ -156,6 +173,9 @@ func (s *Service) DeleteProject(ctx context.Context, projectID string) error {
 	}
 	if n == 0 {
 		return ErrNotFound
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交删除项目事务失败: %w", err)
 	}
 	return nil
 }

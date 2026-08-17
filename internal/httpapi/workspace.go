@@ -21,17 +21,11 @@ func (a *API) listWorkspaces(w http.ResponseWriter, r *http.Request) {
 
 // createWorkspace 创建新工作区。
 func (a *API) createWorkspace(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Name string `json:"name"`
-	}
-	if !decodeBody(w, r, &body) {
+	name, ok := decodeNameBody(w, r, "工作区名称")
+	if !ok {
 		return
 	}
-	if body.Name == "" {
-		writeError(w, http.StatusBadRequest, "工作区名称不能为空")
-		return
-	}
-	workspace, err := a.svc.CreateWorkspace(r.Context(), body.Name)
+	workspace, err := a.svc.CreateWorkspace(r.Context(), name)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "创建工作区失败")
 		return
@@ -41,17 +35,11 @@ func (a *API) createWorkspace(w http.ResponseWriter, r *http.Request) {
 
 // renameWorkspace 重命名工作区。
 func (a *API) renameWorkspace(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Name string `json:"name"`
-	}
-	if !decodeBody(w, r, &body) {
+	name, ok := decodeNameBody(w, r, "工作区名称")
+	if !ok {
 		return
 	}
-	if body.Name == "" {
-		writeError(w, http.StatusBadRequest, "工作区名称不能为空")
-		return
-	}
-	workspace, err := a.svc.RenameWorkspace(r.Context(), chi.URLParam(r, "id"), body.Name)
+	workspace, err := a.svc.RenameWorkspace(r.Context(), chi.URLParam(r, "id"), name)
 	if err != nil {
 		if errors.Is(err, service.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "工作区不存在")
@@ -65,9 +53,16 @@ func (a *API) renameWorkspace(w http.ResponseWriter, r *http.Request) {
 
 // deleteWorkspace 删除工作区（其下项目级联删除）。
 func (a *API) deleteWorkspace(w http.ResponseWriter, r *http.Request) {
+	if !a.requireOwnerInTeam(w, r) {
+		return
+	}
 	if err := a.svc.DeleteWorkspace(r.Context(), chi.URLParam(r, "id")); err != nil {
 		if errors.Is(err, service.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "工作区不存在")
+			return
+		}
+		if errors.Is(err, service.ErrLastWorkspace) {
+			writeError(w, http.StatusBadRequest, "至少保留一个工作区")
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "删除工作区失败")

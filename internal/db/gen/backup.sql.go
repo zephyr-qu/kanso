@@ -10,7 +10,7 @@ import (
 )
 
 const listAllActivities = `-- name: ListAllActivities :many
-SELECT id, resource_type, resource_id, "action", data, created_at FROM activity
+SELECT id, resource_type, resource_id, "action", data, created_at, actor FROM activity
 ORDER BY created_at
 `
 
@@ -30,6 +30,7 @@ func (q *Queries) ListAllActivities(ctx context.Context) ([]Activity, error) {
 			&i.Action,
 			&i.Data,
 			&i.CreatedAt,
+			&i.Actor,
 		); err != nil {
 			return nil, err
 		}
@@ -45,7 +46,7 @@ func (q *Queries) ListAllActivities(ctx context.Context) ([]Activity, error) {
 }
 
 const listAllColumns = `-- name: ListAllColumns :many
-SELECT id, project_id, name, position, created_at FROM column
+SELECT id, project_id, name, position, wip_limit, created_at FROM column
 ORDER BY position
 `
 
@@ -63,6 +64,7 @@ func (q *Queries) ListAllColumns(ctx context.Context) ([]Column, error) {
 			&i.ProjectID,
 			&i.Name,
 			&i.Position,
+			&i.WipLimit,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -79,7 +81,7 @@ func (q *Queries) ListAllColumns(ctx context.Context) ([]Column, error) {
 }
 
 const listAllComments = `-- name: ListAllComments :many
-SELECT id, task_id, content, created_at FROM comment
+SELECT id, task_id, content, created_at, author FROM comment
 ORDER BY created_at
 `
 
@@ -97,6 +99,7 @@ func (q *Queries) ListAllComments(ctx context.Context) ([]Comment, error) {
 			&i.TaskID,
 			&i.Content,
 			&i.CreatedAt,
+			&i.Author,
 		); err != nil {
 			return nil, err
 		}
@@ -112,7 +115,7 @@ func (q *Queries) ListAllComments(ctx context.Context) ([]Comment, error) {
 }
 
 const listAllLabels = `-- name: ListAllLabels :many
-SELECT id, workspace_id, name, color, created_at FROM label
+SELECT id, project_id, name, created_at FROM label
 ORDER BY created_at
 `
 
@@ -127,9 +130,79 @@ func (q *Queries) ListAllLabels(ctx context.Context) ([]Label, error) {
 		var i Label
 		if err := rows.Scan(
 			&i.ID,
+			&i.ProjectID,
+			&i.Name,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAllMembers = `-- name: ListAllMembers :many
+SELECT id, workspace_id, name, role, avatar_color, avatar, access_key, created_at FROM member
+ORDER BY created_at
+`
+
+func (q *Queries) ListAllMembers(ctx context.Context) ([]Member, error) {
+	rows, err := q.db.QueryContext(ctx, listAllMembers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Member
+	for rows.Next() {
+		var i Member
+		if err := rows.Scan(
+			&i.ID,
 			&i.WorkspaceID,
 			&i.Name,
-			&i.Color,
+			&i.Role,
+			&i.AvatarColor,
+			&i.Avatar,
+			&i.AccessKey,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAllMilestones = `-- name: ListAllMilestones :many
+SELECT id, project_id, name, due_date, created_at FROM milestone
+ORDER BY created_at
+`
+
+func (q *Queries) ListAllMilestones(ctx context.Context) ([]Milestone, error) {
+	rows, err := q.db.QueryContext(ctx, listAllMilestones)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Milestone
+	for rows.Next() {
+		var i Milestone
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.Name,
+			&i.DueDate,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -210,8 +283,38 @@ func (q *Queries) ListAllTaskLabels(ctx context.Context) ([]TaskLabel, error) {
 	return items, nil
 }
 
+const listAllTaskMilestones = `-- name: ListAllTaskMilestones :many
+SELECT
+    task_id,
+    milestone_id
+FROM task_milestone
+`
+
+func (q *Queries) ListAllTaskMilestones(ctx context.Context) ([]TaskMilestone, error) {
+	rows, err := q.db.QueryContext(ctx, listAllTaskMilestones)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TaskMilestone
+	for rows.Next() {
+		var i TaskMilestone
+		if err := rows.Scan(&i.TaskID, &i.MilestoneID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAllTasksFull = `-- name: ListAllTasksFull :many
-SELECT id, project_id, column_id, title, description, position, created_at, updated_at FROM task
+SELECT id, project_id, column_id, title, description, position, priority, due_date, archived_at, created_at, updated_at FROM task
 ORDER BY created_at
 `
 
@@ -231,6 +334,9 @@ func (q *Queries) ListAllTasksFull(ctx context.Context) ([]Task, error) {
 			&i.Title,
 			&i.Description,
 			&i.Position,
+			&i.Priority,
+			&i.DueDate,
+			&i.ArchivedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {

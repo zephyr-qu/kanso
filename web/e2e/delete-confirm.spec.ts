@@ -53,10 +53,9 @@ test("列删除：取消不删、确认后删除（含其下任务）", async ({
 	await page.locator('a[href*="/p/"]', { hasText: "看板冒烟" }).click();
 	await page.waitForSelector("text=新建列");
 
-	const firstCol = page.locator("div[class*='w-[280px]']").first();
+	const firstCol = page.locator("div[class*='w-[282px]']").first();
 	const colName = await firstCol
-		.locator("span.text-sm.font-semibold")
-		.first()
+		.locator(".kanso-board-column__title span.truncate")
 		.textContent();
 	// 取消路径。
 	await firstCol.getByRole("button", { name: `删除列 ${colName}`, exact: true }).click();
@@ -68,7 +67,7 @@ test("列删除：取消不删、确认后删除（含其下任务）", async ({
 	// 确认路径：列消失。
 	await firstCol.getByRole("button", { name: `删除列 ${colName}`, exact: true }).click();
 	await dialog.getByRole("button", { name: "删除", exact: true }).click();
-	await expect(page.locator("div[class*='w-[280px]']").first()).not.toHaveText(
+	await expect(page.locator("div[class*='w-[282px]']").first()).not.toHaveText(
 		String(colName),
 	);
 });
@@ -79,19 +78,27 @@ test("任务删除：确认后任务消失", async ({ page }) => {
 	await page.locator('a[href*="/p/"]', { hasText: "看板冒烟" }).click();
 	await page.waitForSelector("text=新建列");
 
-	const firstCol = page.locator("div[class*='w-[280px]']").first();
+	const firstCol = page.locator("div[class*='w-[282px]']").first();
 	// 等待任务卡片渲染。
 	const firstTask = firstCol.locator("p.break-words").first();
 	await expect(firstTask).toBeVisible();
 	const taskTitle = (await firstTask.textContent()) ?? "";
 
-	// hover 显示删除按钮并点击。
-	const card = firstTask.locator("xpath=..").locator("xpath=..");
-	await card.hover();
-	await card.getByRole("button", { name: `删除任务 ${taskTitle}`, exact: true }).click();
+	// 打开任务详情 → 归档（归档后才出现「永久删除任务」入口）。
+	await firstTask.click();
+	await page.waitForURL(/\/t\//);
+	await page.getByRole("button", { name: "归档任务", exact: true }).click();
+	await expect(page.getByRole("button", { name: "永久删除任务" })).toBeVisible({
+		timeout: 5000,
+	});
 
+	// 永久删除经确认框。
+	await page.getByRole("button", { name: "永久删除任务" }).click();
 	const dialog = page.getByRole("dialog");
 	await expect(dialog).toBeVisible();
 	await dialog.getByRole("button", { name: "删除", exact: true }).click();
-	await expect(firstCol.getByText(taskTitle)).toHaveCount(0);
+
+	// 删除后回看板，任务消失。
+	await page.waitForURL(/\/p\/[^/]+$/);
+	await expect(firstCol.getByText(taskTitle)).toHaveCount(0, { timeout: 5000 });
 });
