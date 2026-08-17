@@ -4,13 +4,19 @@ import type { QueryClient } from "@tanstack/react-query";
 
 export const queryKeys = {
 	workspaces: () => ["workspaces"] as const,
+	me: () => ["me"] as const,
+	members: (workspaceId: string) => ["members", workspaceId] as const,
 	dashboard: () => ["dashboard"] as const,
-	labels: (workspaceId: string) => ["labels", workspaceId] as const,
 	projects: (workspaceId: string) => ["projects", workspaceId] as const,
 	board: (projectId: string) => ["board", projectId] as const,
 	task: (taskId: string) => ["task", taskId] as const,
+	/** 仪表盘「需要关注」补齐项目名的辅助查询（真实后端不返回 projectName 时启用）。 */
+	taskSource: (taskId: string) => ["task", taskId, "dashboard-source"] as const,
 	tasks: () => ["task"] as const,
+	archivedTasks: (projectId: string) => ["archived-tasks", projectId] as const,
+	milestones: (projectId: string) => ["milestones", projectId] as const,
 	activities: () => ["activity"] as const,
+	calendar: () => ["calendar"] as const,
 };
 
 // —— 失效映射 ——
@@ -22,6 +28,7 @@ export function invalidateBoardScope(
 ): void {
 	queryClient.invalidateQueries({ queryKey: queryKeys.board(projectId) });
 	queryClient.invalidateQueries({ queryKey: queryKeys.tasks() });
+	queryClient.invalidateQueries({ queryKey: queryKeys.archivedTasks(projectId) });
 }
 
 // 仅看板（任务详情页不受影响）。

@@ -9,6 +9,9 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// sqliteDriver 抽象驱动名以便测试覆盖 sql.Open 失败分支（生产恒为 "sqlite"）。
+var sqliteDriver = "sqlite"
+
 // Open 打开（必要时创建）SQLite 数据库并设置实用 PRAGMA。
 func Open(dataDir string) (*sql.DB, error) {
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
@@ -16,7 +19,7 @@ func Open(dataDir string) (*sql.DB, error) {
 	}
 
 	path := filepath.Join(dataDir, "kanso.db")
-	database, err := sql.Open("sqlite", path)
+	database, err := sql.Open(sqliteDriver, path)
 	if err != nil {
 		return nil, fmt.Errorf("打开数据库失败: %w", err)
 	}

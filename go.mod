@@ -3,12 +3,13 @@ module kanso
 go 1.26
 
 require (
+	github.com/DATA-DOG/go-sqlmock v1.5.2
+	github.com/coder/websocket v1.8.15
 	github.com/go-chi/chi/v5 v5.2.3
 	modernc.org/sqlite v1.56.0
 )
 
 require (
-	github.com/coder/websocket v1.8.15 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect

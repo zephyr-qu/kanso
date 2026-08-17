@@ -7,7 +7,12 @@ import (
 	"sort"
 )
 
+// migrateFS 抽象迁移文件源以便测试覆盖读取失败分支（生产为 embed 的 migrationFiles）。
+var migrateFS fs.FS = migrationFiles
+
 // Migrate 按文件名顺序执行未应用的迁移（embed 自 migrations/ 目录）。
+// 所有迁移（含 0007 member 表）在 personal/team 两种模式均应用：
+// personal = 单一 owner 成员的团队模式（ADR-0013 修订）。
 func Migrate(database *sql.DB) error {
 	if _, err := database.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
 		version    TEXT PRIMARY KEY,
@@ -33,7 +38,7 @@ func Migrate(database *sql.DB) error {
 		return err
 	}
 
-	entries, err := fs.ReadDir(migrationFiles, "migrations")
+	entries, err := fs.ReadDir(migrateFS, "migrations")
 	if err != nil {
 		return fmt.Errorf("读取迁移目录失败: %w", err)
 	}
@@ -49,7 +54,7 @@ func Migrate(database *sql.DB) error {
 		if applied[name] {
 			continue
 		}
-		content, err := migrationFiles.ReadFile("migrations/" + name)
+		content, err := fs.ReadFile(migrateFS, "migrations/"+name)
 		if err != nil {
 			return err
 		}

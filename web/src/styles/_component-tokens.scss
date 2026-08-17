@@ -1,0 +1,47 @@
+/* Component contracts. Values reference primitive or semantic tokens only. */
+:root {
+  --component-shell-sidebar-width: 216px;
+  --component-shell-brand-height: 56px;
+  --component-shell-header-height: 56px;
+
+  --component-sidebar-padding-x: 10px;
+  --component-sidebar-padding-top: 14px;
+  --component-sidebar-padding-bottom: 12px;
+  --component-sidebar-group-gap: 22px;
+  --component-sidebar-item-height: 32px;
+  --component-sidebar-item-padding-x: 9px;
+  --component-sidebar-item-padding-y: 7px;
+  --component-sidebar-item-gap: 9px;
+  --component-sidebar-item-radius: var(--primitive-radius-lg);
+  --component-sidebar-item-font-size: 13.5px;
+  --component-sidebar-label-font-size: 10.5px;
+
+  --component-card-radius: var(--primitive-radius-lg);
+  --component-card-padding: var(--primitive-space-5);
+  --component-card-shadow: var(--semantic-shadow-card);
+
+  --component-button-radius: var(--primitive-radius-md);
+  --component-button-height: 32px;
+  --component-input-height: 38px;
+  --component-focus-ring: 0 0 0 3px color-mix(in srgb, var(--semantic-action-primary) 24%, transparent);
+  --component-floating-tip-shadow: var(--semantic-shadow-lift);
+  --component-command-shadow: 0 16px 48px rgba(55, 53, 47, 0.18);
+  --component-quick-capture-shadow: var(--semantic-shadow-pop);
+  --component-task-radius: var(--primitive-radius-md);
+  --component-task-padding: 11px 12px 10px;
+  --component-column-width: 282px;
+  --component-column-gap: 14px;
+  --component-board-column-header-height: 42px;
+  --component-board-column-count-size: 22px;
+  --component-board-sort-width: 100px;
+  --component-task-avatar-size: 20px;
+  --component-board-task-limit: 10;
+  --component-project-card-padding: 18px 18px 14px;
+  --component-project-meta-icon-size: 11px;
+  --component-select-height: 36px;
+  --component-select-radius: var(--primitive-radius-md);
+  --component-select-padding-x: 10px;
+  --component-priority-dot-size: 7px;
+  --component-priority-gap: 4px;
+  --component-icon-button-size: 28px;
+}

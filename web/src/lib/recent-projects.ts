@@ -1,6 +1,8 @@
 // 最近打开的项目记录（localStorage）：仪表盘"项目速览"按此展示最近打开的 N 个项目。
 // 进入项目看板（/w/:wid/p/:pid）时写入；按工作区记录，最新在前，重复打开去重置顶。
-const STORAGE_KEY = "kaneo:recent-projects";
+import { safeReadJSON, safeWriteJSON } from "@/lib/safe-storage";
+
+const STORAGE_KEY = "kanso:recent-projects";
 const MAX_PER_WORKSPACE = 20;
 const MAX_TOTAL = 100;
 
@@ -11,24 +13,12 @@ export interface RecentProjectEntry {
 }
 
 function read(): RecentProjectEntry[] {
-	if (typeof window === "undefined") return [];
-	try {
-		const raw = window.localStorage.getItem(STORAGE_KEY);
-		if (!raw) return [];
-		const parsed: unknown = JSON.parse(raw);
-		return Array.isArray(parsed) ? (parsed as RecentProjectEntry[]) : [];
-	} catch {
-		return [];
-	}
+	const parsed = safeReadJSON<unknown>(STORAGE_KEY);
+	return Array.isArray(parsed) ? (parsed as RecentProjectEntry[]) : [];
 }
 
 function write(entries: RecentProjectEntry[]): void {
-	if (typeof window === "undefined") return;
-	try {
-		window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-	} catch {
-		// 持久化尽力而为：隐私模式或配额不足时静默失败
-	}
+	safeWriteJSON(STORAGE_KEY, entries);
 }
 
 /** 打开项目时调用：同工作区同项目去重，并把该项目置顶。 */

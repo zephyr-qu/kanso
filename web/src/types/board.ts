@@ -9,6 +9,7 @@ export type Column = {
 	name: string;
 	position: number;
 	createdAt: string;
+	wipLimit?: number | null;
 };
 
 export type BoardColumn = Column & {
@@ -19,4 +20,14 @@ export type Board = {
 	project: Project;
 	columns: BoardColumn[];
 	labels: Label[];
+};
+
+export type Milestone = {
+	id: string;
+	projectId: string;
+	name: string;
+	dueDate: string | null;
+	createdAt: string;
+	/** 进度聚合（后端计算：末列任务数 / 关联任务数）；前端缺省显示「—」。 */
+	progress?: { done: number; total: number } | null;
 };

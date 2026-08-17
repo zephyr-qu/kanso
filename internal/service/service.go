@@ -3,9 +3,13 @@
 package service
 
 import (
+	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
+	"kanso/internal/config"
+	"kanso/internal/db/gen"
 	"kanso/internal/realtime"
 )
 
@@ -15,22 +19,57 @@ var ErrNotFound = errors.New("not found")
 // ErrCrossProjectMove 表示把任务移动到另一项目的列（客户端错误，HTTP 层映射为 400）。
 var ErrCrossProjectMove = errors.New("cross project task move")
 
+// ErrLabelNotFound 表示创建任务时贴的标签 ID 不存在（客户端错误，HTTP 层映射为 400）。
+var ErrLabelNotFound = errors.New("label not found")
+
+// ErrForbidden indicates that the authenticated member lacks the required role.
+var ErrForbidden = errors.New("forbidden")
+
+// ErrInvalidBackup 表示备份快照缺少恢复所需的基础数据。
+var ErrInvalidBackup = errors.New("invalid backup")
+
 // Broadcaster 是实时事件广播抽象（由 httpapi 注入 Hub）。
 type Broadcaster interface {
 	Broadcast(projectID string, event realtime.Event)
 	BroadcastAll(event realtime.Event)
 }
 
-// Service 持有数据库句柄，提供全部领域操作。
+// ctxKey 是 service 包内 context 键的私有类型，避免与其他包键冲突。
+type ctxKey int
+
+const (
+	// actorCtxKey 保存当前请求的执行者名（personal 模式恒为 "Admin"；team 模式为成员名）。
+	// 由 httpapi 的 actor 中间件写入，dispatch 在记录活动/广播时读取（ADR-0013 决策 5）。
+	actorCtxKey ctxKey = iota
+)
+
+// ActorFromContext 返回 context 中的执行者名；未注入时回退 "Admin"（如种子流程）。
+func ActorFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(actorCtxKey).(string); ok && v != "" {
+		return v
+	}
+	return "Admin"
+}
+
+// WithActor 返回携带执行者名的 context（httpapi 中间件使用）。
+func WithActor(ctx context.Context, actor string) context.Context {
+	return context.WithValue(ctx, actorCtxKey, actor)
+}
+
+// Service 持有数据库句柄与运行模式，提供全部领域操作。
 type Service struct {
 	db          *sql.DB
 	broadcaster Broadcaster
+	mode        config.Mode
 }
 
-// New 构造 Service。
-func New(database *sql.DB) *Service {
-	return &Service{db: database}
+// New 构造 Service（mode 决定认证与归属语义，ADR-0013）。
+func New(database *sql.DB, mode config.Mode) *Service {
+	return &Service{db: database, mode: mode}
 }
+
+// Mode 由字段持有（构造时注入），暂无外部读取方；如需暴露可在此添加。
+// （2026-08：S-11 清理时确认无调用者，保留字段不保留方法。）
 
 // SetBroadcaster 注入实时广播器（nil 安全）。
 func (s *Service) SetBroadcaster(b Broadcaster) {
@@ -61,6 +100,15 @@ func (s *Service) emitAll(eventType, workspaceID, entityID string) {
 	})
 }
 
+// beginTx 开启写事务并绑定查询句柄（全部写操作的统一起始头；只读导出保留独立 TX）。
+func beginTx(ctx context.Context, db *sql.DB) (*sql.Tx, *gen.Queries, error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("开启事务失败: %w", err)
+	}
+	return tx, gen.New(tx), nil
+}
+
 // mapNoRows 把 sql.ErrNoRows（:one 查询未命中）映射为 ErrNotFound。
 func mapNoRows(err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
@@ -68,4 +116,3 @@ func mapNoRows(err error) error {
 	}
 	return err
 }
-

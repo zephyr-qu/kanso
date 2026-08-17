@@ -2,6 +2,7 @@
 // 看板的"形状"（列及其顺序）属于看板数据本身，故列操作与查询同处一室（locality）。
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { buildPath } from "@/lib/endpoints";
 import { invalidateBoard, queryKeys } from "@/hooks/query-keys";
 import type { Board, Column } from "@/types/board";
 
@@ -28,13 +29,13 @@ export function useBoardData(projectId: string) {
 
 	const boardQuery = useQuery({
 		queryKey: queryKeys.board(projectId),
-		queryFn: () => api<Board>(`/api/projects/${projectId}`),
+		queryFn: () => api<Board>(buildPath("project", { id: projectId })),
 		enabled: projectId !== "",
 	});
 
 	const createColumn = useMutation({
 		mutationFn: (name: string) =>
-			api<Column>(`/api/projects/${projectId}/columns`, {
+			api<Column>(buildPath("projectColumns", { projectId }), {
 				method: "POST",
 				body: JSON.stringify({ name }),
 			}),
@@ -43,7 +44,7 @@ export function useBoardData(projectId: string) {
 
 	const renameColumn = useMutation({
 		mutationFn: ({ id, name }: { id: string; name: string }) =>
-			api<Column>(`/api/columns/${id}`, {
+			api<Column>(buildPath("column", { id }), {
 				method: "PATCH",
 				body: JSON.stringify({ name }),
 			}),
@@ -52,14 +53,14 @@ export function useBoardData(projectId: string) {
 
 	const deleteColumn = useMutation({
 		mutationFn: (id: string) =>
-			api<void>(`/api/columns/${id}`, { method: "DELETE" }),
+			api<void>(buildPath("column", { id }), { method: "DELETE" }),
 		onSuccess: () => invalidateBoard(queryClient, projectId),
 	});
 
 	// 列拖拽：乐观更新 + 失败回滚。
 	const moveColumn = useMutation({
 		mutationFn: ({ id, position }: { id: string; position: number }) =>
-			api<void>(`/api/columns/${id}`, {
+			api<void>(buildPath("column", { id }), {
 				method: "PATCH",
 				body: JSON.stringify({ position }),
 			}),

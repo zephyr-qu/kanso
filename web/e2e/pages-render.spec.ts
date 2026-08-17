@@ -3,7 +3,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { resetAndSeed } from "./seed";
 
-test.beforeEach(async () => { await resetAndSeed(); });
+test.beforeEach(async () => {
+	await resetAndSeed();
+});
 
 const KEY = process.env.KANSO_ACCESS_KEY ?? "mock-key";
 
@@ -54,9 +56,11 @@ test("全部计划页面逐一渲染（无 console error）", async ({ page }) =
 	await page.waitForURL(/\/t\//);
 	await expect(page.getByRole("heading", { name: /评论/ })).toBeVisible();
 
-	// 标签。
-	await page.goto(`/w/${ws}/labels`);
-	await expect(page.getByRole("heading", { name: "标签" })).toBeVisible();
+	// 标签（/w/:ws/labels 路由已移除：标签管理并入看板工具栏弹窗）。
+	await page.goto(`/w/${ws}/p/${p}`);
+	await expect(page.getByRole("button", { name: "新建列" })).toBeVisible();
+	await page.getByRole("button", { name: "标签", exact: true }).click();
+	await expect(page.getByRole("dialog").getByText("标签管理")).toBeVisible();
 
 	// 活动。
 	await page.goto("/activity");
@@ -67,7 +71,5 @@ test("全部计划页面逐一渲染（无 console error）", async ({ page }) =
 	await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
 
 	// 汇总断言：无 console error。
-	expect(errors, `页面渲染出现 console 错误:\n${errors.join("\n")}`).toEqual(
-		[],
-	);
+	expect(errors, `页面渲染出现 console 错误:\n${errors.join("\n")}`).toEqual([]);
 });

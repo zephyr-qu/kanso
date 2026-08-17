@@ -19,10 +19,11 @@ func (a *API) listProjects(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, projects)
 }
 
-// createProject 创建项目（自动种子默认列）。
+// createProject 创建项目（自动按模板种子默认列；template: board|quadrant，0006 Phase 4）。
 func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name string `json:"name"`
+		Name     string `json:"name"`
+		Template string `json:"template"`
 	}
 	if !decodeBody(w, r, &body) {
 		return
@@ -31,7 +32,7 @@ func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "项目名称不能为空")
 		return
 	}
-	project, err := a.svc.CreateProject(r.Context(), chi.URLParam(r, "id"), body.Name)
+	project, err := a.svc.CreateProject(r.Context(), chi.URLParam(r, "id"), body.Name, body.Template)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "创建项目失败")
 		return
@@ -41,17 +42,11 @@ func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
 
 // renameProject 重命名项目。
 func (a *API) renameProject(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Name string `json:"name"`
-	}
-	if !decodeBody(w, r, &body) {
+	name, ok := decodeNameBody(w, r, "项目名称")
+	if !ok {
 		return
 	}
-	if body.Name == "" {
-		writeError(w, http.StatusBadRequest, "项目名称不能为空")
-		return
-	}
-	project, err := a.svc.RenameProject(r.Context(), chi.URLParam(r, "id"), body.Name)
+	project, err := a.svc.RenameProject(r.Context(), chi.URLParam(r, "id"), name)
 	if err != nil {
 		if errors.Is(err, service.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "项目不存在")
@@ -65,6 +60,9 @@ func (a *API) renameProject(w http.ResponseWriter, r *http.Request) {
 
 // deleteProject 删除项目（其下列/任务等级联删除）。
 func (a *API) deleteProject(w http.ResponseWriter, r *http.Request) {
+	if !a.requireOwnerInTeam(w, r) {
+		return
+	}
 	if err := a.svc.DeleteProject(r.Context(), chi.URLParam(r, "id")); err != nil {
 		if errors.Is(err, service.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "项目不存在")

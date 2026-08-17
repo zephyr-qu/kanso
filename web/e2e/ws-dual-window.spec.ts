@@ -30,7 +30,7 @@ async function expectTaskInColumn(
 	title: string,
 	visible: boolean,
 ): Promise<void> {
-	const col = page.locator("div[class*='w-[280px]']").nth(columnIndex);
+	const col = page.locator("div[class*='w-[282px]']").nth(columnIndex);
 	if (visible) {
 		await expect(col.getByText(title).first()).toBeVisible({ timeout: 8000 });
 	} else {
@@ -49,7 +49,7 @@ test("双窗口：A 添加任务 → B 自动出现（无需刷新）", async ({
 
 		// A 添加任务到第一列（待办）。
 		const title = `同步任务${Date.now() % 100000}`;
-		const firstCol = a.locator("div[class*='w-[280px]']").first();
+		const firstCol = a.locator("div[class*='w-[282px]']").first();
 		await firstCol.getByText("添加任务").click();
 		await firstCol.locator("input").fill(title);
 		await firstCol.locator("input").press("Enter");
@@ -76,12 +76,12 @@ test("双窗口：A 移动任务 → B 列分布同步", async ({ browser }) => 
 		// 用真实 pointer 事件把待办第一个任务拖到进行中（dnd-kit PointerSensor）。
 		// 注意：title 必须在拖拽前读取（拖拽后 locator 会解析到新的首位任务）。
 		const from = a
-			.locator("div[class*='w-[280px]']")
+			.locator("div[class*='w-[282px]']")
 			.first()
 			.locator("p.break-words")
 			.first();
 		const title = (await from.textContent()) ?? "";
-		const to = a.locator("div[class*='w-[280px]']").nth(1);
+		const to = a.locator("div[class*='w-[282px]']").nth(1);
 		const sb = (await from.boundingBox())!;
 		const tb = (await to.boundingBox())!;
 		await a.mouse.move(sb.x + sb.width / 2, sb.y + sb.height / 2);
@@ -116,17 +116,20 @@ test("双窗口：A 改名任务 → B 标题同步", async ({ browser }) => {
 
 		// A 重命名待办第一个任务（hover 卡片显示「编辑任务」按钮 → 对话框改标题）。
 		const newTitle = `改名同步${Date.now() % 100000}`;
-		const firstCol = a.locator("div[class*='w-[280px]']").first();
+		const firstCol = a.locator("div[class*='w-[282px]']").first();
 		const task = firstCol.locator("p.break-words").first();
 		const oldTitle = (await task.textContent()) ?? "";
-		const card = task.locator("xpath=..").locator("xpath=..");
+		// 卡片定位用「打开任务 {title}」（role 稳定）：内联编辑时标题 p 被输入框替换，
+		// 若由 p 链推导 card，点击后惰性解析会断裂（locator 找不到任何元素）。
+		const card = firstCol.getByRole("button", { name: `打开任务 ${oldTitle}` });
+		// hover 卡片显示「编辑任务」按钮 → 卡内联编辑输入框 → Enter 保存。
 		await card.hover();
 		await card
 			.getByRole("button", { name: `编辑任务 ${oldTitle}`, exact: true })
 			.click();
-		const dialog = a.getByRole("dialog");
-		await dialog.getByPlaceholder(/标题|名称/).fill(newTitle);
-		await dialog.getByRole("button", { name: "保存" }).click();
+		const titleInput = card.locator(".kanso-task-card__title-input");
+		await titleInput.fill(newTitle);
+		await titleInput.press("Enter");
 
 		// A 自身更新。
 		await expectTaskInColumn(a, 0, newTitle, true);
@@ -150,12 +153,12 @@ test("项目隔离：A 项目事件不送达 B 项目窗口", async ({ browser }
 		await openBoard(b, "标签冒烟");
 
 		// 记录 B 侧当前任务标题快照。
-		const bCol = b.locator("div[class*='w-[280px]']").first();
+		const bCol = b.locator("div[class*='w-[282px]']").first();
 		const bTitlesBefore = await bCol.locator("p.break-words").allTextContents();
 
 		// A 在看板冒烟加任务。
 		const title = `隔离任务${Date.now() % 100000}`;
-		const firstCol = a.locator("div[class*='w-[280px]']").first();
+		const firstCol = a.locator("div[class*='w-[282px]']").first();
 		await firstCol.getByText("添加任务").click();
 		await firstCol.locator("input").fill(title);
 		await firstCol.locator("input").press("Enter");
@@ -188,7 +191,7 @@ test("断线重连后状态收敛：断开 B 的 WS，A 改任务，B 重连后�
 
 		// 断线期间 A 加任务。
 		const title = `重连任务${Date.now() % 100000}`;
-		const firstCol = a.locator("div[class*='w-[280px]']").first();
+		const firstCol = a.locator("div[class*='w-[282px]']").first();
 		await firstCol.getByText("添加任务").click();
 		await firstCol.locator("input").fill(title);
 		await firstCol.locator("input").press("Enter");

@@ -9,7 +9,7 @@ import (
 	"context"
 )
 
-const attachLabel = `-- name: AttachLabel :exec
+const attachLabel = `-- name: AttachLabel :execrows
 INSERT OR IGNORE INTO task_label (task_id, label_id) VALUES (?, ?)
 `
 
@@ -18,39 +18,39 @@ type AttachLabelParams struct {
 	LabelID string `json:"labelId"`
 }
 
-func (q *Queries) AttachLabel(ctx context.Context, arg AttachLabelParams) error {
-	_, err := q.db.ExecContext(ctx, attachLabel, arg.TaskID, arg.LabelID)
-	return err
+func (q *Queries) AttachLabel(ctx context.Context, arg AttachLabelParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, attachLabel, arg.TaskID, arg.LabelID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const createLabel = `-- name: CreateLabel :one
-INSERT INTO label (id, workspace_id, name, color, created_at)
-VALUES (?, ?, ?, ?, ?)
-RETURNING id, workspace_id, name, color, created_at
+INSERT INTO label (id, project_id, name, created_at)
+VALUES (?, ?, ?, ?)
+RETURNING id, project_id, name, created_at
 `
 
 type CreateLabelParams struct {
-	ID          string `json:"id"`
-	WorkspaceID string `json:"workspaceId"`
-	Name        string `json:"name"`
-	Color       string `json:"color"`
-	CreatedAt   string `json:"createdAt"`
+	ID        string `json:"id"`
+	ProjectID string `json:"projectId"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"createdAt"`
 }
 
 func (q *Queries) CreateLabel(ctx context.Context, arg CreateLabelParams) (Label, error) {
 	row := q.db.QueryRowContext(ctx, createLabel,
 		arg.ID,
-		arg.WorkspaceID,
+		arg.ProjectID,
 		arg.Name,
-		arg.Color,
 		arg.CreatedAt,
 	)
 	var i Label
 	err := row.Scan(
 		&i.ID,
-		&i.WorkspaceID,
+		&i.ProjectID,
 		&i.Name,
-		&i.Color,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -68,7 +68,7 @@ func (q *Queries) DeleteLabel(ctx context.Context, id string) (int64, error) {
 	return result.RowsAffected()
 }
 
-const detachLabel = `-- name: DetachLabel :exec
+const detachLabel = `-- name: DetachLabel :execrows
 DELETE FROM task_label WHERE task_id = ? AND label_id = ?
 `
 
@@ -77,13 +77,16 @@ type DetachLabelParams struct {
 	LabelID string `json:"labelId"`
 }
 
-func (q *Queries) DetachLabel(ctx context.Context, arg DetachLabelParams) error {
-	_, err := q.db.ExecContext(ctx, detachLabel, arg.TaskID, arg.LabelID)
-	return err
+func (q *Queries) DetachLabel(ctx context.Context, arg DetachLabelParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, detachLabel, arg.TaskID, arg.LabelID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const getLabel = `-- name: GetLabel :one
-SELECT id, workspace_id, name, color, created_at FROM label WHERE id = ?
+SELECT id, project_id, name, created_at FROM label WHERE id = ?
 `
 
 func (q *Queries) GetLabel(ctx context.Context, id string) (Label, error) {
@@ -91,20 +94,19 @@ func (q *Queries) GetLabel(ctx context.Context, id string) (Label, error) {
 	var i Label
 	err := row.Scan(
 		&i.ID,
-		&i.WorkspaceID,
+		&i.ProjectID,
 		&i.Name,
-		&i.Color,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
-const listLabelsByWorkspace = `-- name: ListLabelsByWorkspace :many
-SELECT id, workspace_id, name, color, created_at FROM label WHERE workspace_id = ? ORDER BY created_at
+const listLabelsByProject = `-- name: ListLabelsByProject :many
+SELECT id, project_id, name, created_at FROM label WHERE project_id = ? ORDER BY created_at
 `
 
-func (q *Queries) ListLabelsByWorkspace(ctx context.Context, workspaceID string) ([]Label, error) {
-	rows, err := q.db.QueryContext(ctx, listLabelsByWorkspace, workspaceID)
+func (q *Queries) ListLabelsByProject(ctx context.Context, projectID string) ([]Label, error) {
+	rows, err := q.db.QueryContext(ctx, listLabelsByProject, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -114,9 +116,8 @@ func (q *Queries) ListLabelsByWorkspace(ctx context.Context, workspaceID string)
 		var i Label
 		if err := rows.Scan(
 			&i.ID,
-			&i.WorkspaceID,
+			&i.ProjectID,
 			&i.Name,
-			&i.Color,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -133,18 +134,17 @@ func (q *Queries) ListLabelsByWorkspace(ctx context.Context, workspaceID string)
 }
 
 const listTaskLabelsByProject = `-- name: ListTaskLabelsByProject :many
-SELECT tl.task_id, l.id, l.workspace_id, l.name, l.color, l.created_at FROM task_label tl
+SELECT tl.task_id, l.id, l.project_id, l.name, l.created_at FROM task_label tl
 JOIN label l ON l.id = tl.label_id
-WHERE tl.task_id IN (SELECT id FROM task WHERE project_id = ?)
+WHERE tl.task_id IN (SELECT id FROM task WHERE task.project_id = ?)
 `
 
 type ListTaskLabelsByProjectRow struct {
-	TaskID      string `json:"taskId"`
-	ID          string `json:"id"`
-	WorkspaceID string `json:"workspaceId"`
-	Name        string `json:"name"`
-	Color       string `json:"color"`
-	CreatedAt   string `json:"createdAt"`
+	TaskID    string `json:"taskId"`
+	ID        string `json:"id"`
+	ProjectID string `json:"projectId"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"createdAt"`
 }
 
 func (q *Queries) ListTaskLabelsByProject(ctx context.Context, projectID string) ([]ListTaskLabelsByProjectRow, error) {
@@ -159,9 +159,8 @@ func (q *Queries) ListTaskLabelsByProject(ctx context.Context, projectID string)
 		if err := rows.Scan(
 			&i.TaskID,
 			&i.ID,
-			&i.WorkspaceID,
+			&i.ProjectID,
 			&i.Name,
-			&i.Color,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -178,7 +177,7 @@ func (q *Queries) ListTaskLabelsByProject(ctx context.Context, projectID string)
 }
 
 const listTaskLabelsByTask = `-- name: ListTaskLabelsByTask :many
-SELECT l.id, l.workspace_id, l.name, l.color, l.created_at FROM task_label tl JOIN label l ON l.id = tl.label_id WHERE tl.task_id = ? ORDER BY l.created_at
+SELECT l.id, l.project_id, l.name, l.created_at FROM task_label tl JOIN label l ON l.id = tl.label_id WHERE tl.task_id = ? ORDER BY l.created_at
 `
 
 func (q *Queries) ListTaskLabelsByTask(ctx context.Context, taskID string) ([]Label, error) {
@@ -192,9 +191,8 @@ func (q *Queries) ListTaskLabelsByTask(ctx context.Context, taskID string) ([]La
 		var i Label
 		if err := rows.Scan(
 			&i.ID,
-			&i.WorkspaceID,
+			&i.ProjectID,
 			&i.Name,
-			&i.Color,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -211,23 +209,21 @@ func (q *Queries) ListTaskLabelsByTask(ctx context.Context, taskID string) ([]La
 }
 
 const updateLabel = `-- name: UpdateLabel :one
-UPDATE label SET name = ?, color = ? WHERE id = ? RETURNING id, workspace_id, name, color, created_at
+UPDATE label SET name = ? WHERE id = ? RETURNING id, project_id, name, created_at
 `
 
 type UpdateLabelParams struct {
-	Name  string `json:"name"`
-	Color string `json:"color"`
-	ID    string `json:"id"`
+	Name string `json:"name"`
+	ID   string `json:"id"`
 }
 
 func (q *Queries) UpdateLabel(ctx context.Context, arg UpdateLabelParams) (Label, error) {
-	row := q.db.QueryRowContext(ctx, updateLabel, arg.Name, arg.Color, arg.ID)
+	row := q.db.QueryRowContext(ctx, updateLabel, arg.Name, arg.ID)
 	var i Label
 	err := row.Scan(
 		&i.ID,
-		&i.WorkspaceID,
+		&i.ProjectID,
 		&i.Name,
-		&i.Color,
 		&i.CreatedAt,
 	)
 	return i, err

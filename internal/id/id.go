@@ -7,10 +7,13 @@ import (
 	"fmt"
 )
 
+// readRandom 抽象随机源（生产即 crypto/rand.Read）；测试可替换以覆盖失败分支。
+var readRandom = rand.Read
+
 // New 生成一个新的 32 字符随机 hex ID。
 func New() (string, error) {
 	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
+	if _, err := readRandom(b); err != nil {
 		return "", fmt.Errorf("生成 ID 失败: %w", err)
 	}
 	return hex.EncodeToString(b), nil

@@ -1,16 +1,16 @@
--- name: ListLabelsByWorkspace :many
-SELECT * FROM label WHERE workspace_id = ? ORDER BY created_at;
+-- name: ListLabelsByProject :many
+SELECT * FROM label WHERE project_id = ? ORDER BY created_at;
 
 -- name: GetLabel :one
 SELECT * FROM label WHERE id = ?;
 
 -- name: CreateLabel :one
-INSERT INTO label (id, workspace_id, name, color, created_at)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO label (id, project_id, name, created_at)
+VALUES (?, ?, ?, ?)
 RETURNING *;
 
 -- name: UpdateLabel :one
-UPDATE label SET name = ?, color = ? WHERE id = ? RETURNING *;
+UPDATE label SET name = ? WHERE id = ? RETURNING *;
 
 -- name: DeleteLabel :execrows
 DELETE FROM label WHERE id = ?;
@@ -18,12 +18,12 @@ DELETE FROM label WHERE id = ?;
 -- name: ListTaskLabelsByProject :many
 SELECT tl.task_id, l.* FROM task_label tl
 JOIN label l ON l.id = tl.label_id
-WHERE tl.task_id IN (SELECT id FROM task WHERE project_id = ?);
+WHERE tl.task_id IN (SELECT id FROM task WHERE task.project_id = ?);
 
 -- name: ListTaskLabelsByTask :many
 SELECT l.* FROM task_label tl JOIN label l ON l.id = tl.label_id WHERE tl.task_id = ? ORDER BY l.created_at;
--- name: AttachLabel :exec
+-- name: AttachLabel :execrows
 INSERT OR IGNORE INTO task_label (task_id, label_id) VALUES (?, ?);
 
--- name: DetachLabel :exec
+-- name: DetachLabel :execrows
 DELETE FROM task_label WHERE task_id = ? AND label_id = ?;

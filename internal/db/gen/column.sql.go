@@ -9,21 +9,10 @@ import (
 	"context"
 )
 
-const countColumnsByProject = `-- name: CountColumnsByProject :one
-SELECT COUNT(*) FROM column WHERE project_id = ?
-`
-
-func (q *Queries) CountColumnsByProject(ctx context.Context, projectID string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countColumnsByProject, projectID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createColumn = `-- name: CreateColumn :one
-INSERT INTO column (id, project_id, name, position, created_at)
-VALUES (?, ?, ?, ?, ?)
-RETURNING id, project_id, name, position, created_at
+INSERT INTO column (id, project_id, name, position, wip_limit, created_at)
+VALUES (?, ?, ?, ?, ?, ?)
+RETURNING id, project_id, name, position, wip_limit, created_at
 `
 
 type CreateColumnParams struct {
@@ -31,6 +20,7 @@ type CreateColumnParams struct {
 	ProjectID string `json:"projectId"`
 	Name      string `json:"name"`
 	Position  int64  `json:"position"`
+	WipLimit  *int64 `json:"wipLimit"`
 	CreatedAt string `json:"createdAt"`
 }
 
@@ -40,6 +30,7 @@ func (q *Queries) CreateColumn(ctx context.Context, arg CreateColumnParams) (Col
 		arg.ProjectID,
 		arg.Name,
 		arg.Position,
+		arg.WipLimit,
 		arg.CreatedAt,
 	)
 	var i Column
@@ -48,6 +39,7 @@ func (q *Queries) CreateColumn(ctx context.Context, arg CreateColumnParams) (Col
 		&i.ProjectID,
 		&i.Name,
 		&i.Position,
+		&i.WipLimit,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -66,7 +58,7 @@ func (q *Queries) DeleteColumn(ctx context.Context, id string) (int64, error) {
 }
 
 const getColumn = `-- name: GetColumn :one
-SELECT id, project_id, name, position, created_at FROM column WHERE id = ?
+SELECT id, project_id, name, position, wip_limit, created_at FROM column WHERE id = ?
 `
 
 func (q *Queries) GetColumn(ctx context.Context, id string) (Column, error) {
@@ -77,13 +69,14 @@ func (q *Queries) GetColumn(ctx context.Context, id string) (Column, error) {
 		&i.ProjectID,
 		&i.Name,
 		&i.Position,
+		&i.WipLimit,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const listColumnsByProject = `-- name: ListColumnsByProject :many
-SELECT id, project_id, name, position, created_at FROM column WHERE project_id = ? ORDER BY position, created_at
+SELECT id, project_id, name, position, wip_limit, created_at FROM column WHERE project_id = ? ORDER BY position, created_at
 `
 
 func (q *Queries) ListColumnsByProject(ctx context.Context, projectID string) ([]Column, error) {
@@ -100,6 +93,7 @@ func (q *Queries) ListColumnsByProject(ctx context.Context, projectID string) ([
 			&i.ProjectID,
 			&i.Name,
 			&i.Position,
+			&i.WipLimit,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -113,6 +107,17 @@ func (q *Queries) ListColumnsByProject(ctx context.Context, projectID string) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const maxColumnPositionByProject = `-- name: MaxColumnPositionByProject :one
+SELECT COALESCE(MAX(position), -1) + 1 FROM column WHERE project_id = ?
+`
+
+func (q *Queries) MaxColumnPositionByProject(ctx context.Context, projectID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, maxColumnPositionByProject, projectID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const setColumnPosition = `-- name: SetColumnPosition :exec
@@ -130,7 +135,7 @@ func (q *Queries) SetColumnPosition(ctx context.Context, arg SetColumnPositionPa
 }
 
 const updateColumnName = `-- name: UpdateColumnName :one
-UPDATE column SET name = ? WHERE id = ? RETURNING id, project_id, name, position, created_at
+UPDATE column SET name = ? WHERE id = ? RETURNING id, project_id, name, position, wip_limit, created_at
 `
 
 type UpdateColumnNameParams struct {
@@ -146,6 +151,30 @@ func (q *Queries) UpdateColumnName(ctx context.Context, arg UpdateColumnNamePara
 		&i.ProjectID,
 		&i.Name,
 		&i.Position,
+		&i.WipLimit,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updateColumnWIP = `-- name: UpdateColumnWIP :one
+UPDATE column SET wip_limit = ? WHERE id = ? RETURNING id, project_id, name, position, wip_limit, created_at
+`
+
+type UpdateColumnWIPParams struct {
+	WipLimit *int64 `json:"wipLimit"`
+	ID       string `json:"id"`
+}
+
+func (q *Queries) UpdateColumnWIP(ctx context.Context, arg UpdateColumnWIPParams) (Column, error) {
+	row := q.db.QueryRowContext(ctx, updateColumnWIP, arg.WipLimit, arg.ID)
+	var i Column
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Position,
+		&i.WipLimit,
 		&i.CreatedAt,
 	)
 	return i, err

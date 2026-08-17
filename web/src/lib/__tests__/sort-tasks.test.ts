@@ -65,4 +65,37 @@ describe("sortTasks", () => {
 		sortTasks(tasks, { field: "title", direction: "asc" });
 		expect(tasks.map((t) => t.id)).toEqual(["b", "a"]);
 	});
+
+	it("priority 升序：urgent > high > med > low", () => {
+		const tasks = [
+			task({ id: "med", priority: "med" }),
+			task({ id: "urgent", priority: "urgent" }),
+			task({ id: "low", priority: "low" }),
+			task({ id: "high", priority: "high" }),
+		];
+		const sorted = sortTasks(tasks, { field: "priority", direction: "asc" });
+		expect(sorted.map((t) => t.id)).toEqual(["urgent", "high", "med", "low"]);
+	});
+
+	it("priority 未设置（null/空串）恒排最后（升序）", () => {
+		const tasks = [
+			task({ id: "unset", priority: null }),
+			task({ id: "empty", priority: "" }),
+			task({ id: "low", priority: "low" }),
+			task({ id: "urgent", priority: "urgent" }),
+		];
+		const sorted = sortTasks(tasks, { field: "priority", direction: "asc" });
+		expect(sorted.map((t) => t.id)).toEqual(["urgent", "low", "unset", "empty"]);
+	});
+
+	it("priority 降序：未设置仍排最后，其余反向", () => {
+		const tasks = [
+			task({ id: "unset", priority: null }),
+			task({ id: "med", priority: "med" }),
+			task({ id: "urgent", priority: "urgent" }),
+			task({ id: "low", priority: "low" }),
+		];
+		const sorted = sortTasks(tasks, { field: "priority", direction: "desc" });
+		expect(sorted.map((t) => t.id)).toEqual(["low", "med", "urgent", "unset"]);
+	});
 });

@@ -2,11 +2,10 @@
 // 复现「每测试干净起点」。
 import type { Page } from "@playwright/test";
 
-const BASE = process.env.KANSO_API_URL ?? "http://localhost:8080";
+const BASE = process.env.KANSO_API_URL ?? `http://127.0.0.1:${process.env.KANSO_E2E_API_PORT ?? "8080"}`;
 
 // 命名种子：E2E 各 spec 依赖的项目名。
-// 任务对象支持 description：原型 demo board 的卡片含描述，种子需对齐才能让
-// visual-compare 的 cardH/colH 尺寸对比达标（差异 ≤2px）。
+// 任务对象支持 description/priority/due：与真实后端 CreateTask 契约对齐。
 const SEED_PROJECTS = [
 	{
 		name: "看板冒烟",
@@ -16,8 +15,7 @@ const SEED_PROJECTS = [
 	},
 	{
 		name: "原型演示",
-		// 待办列 3 个精确标题任务（sort.spec 断言标题序列）；进行中 4 任务对齐原型 demo board
-		// （visual-compare 的 colH/cardH 对比需要与原型 board 数据量一致）。
+		// 待办列 3 个精确标题任务（sort.spec 断言标题序列）。
 		todo: [
 			{ title: "设计看板原型四个方向", description: "终端、杂志、便签、禅——结构差异不是换皮" },
 			{ title: "确定配色与字体体系", description: "离线部署，自托管字体内嵌" },
@@ -38,14 +36,14 @@ const SEED_PROJECTS = [
 	},
 ] as const;
 
-// 工作区级标签（labels.spec 断言「紧急」徽章；misc 断言 dashboard 统计含「紧急」）。
+// 项目级标签（labels.spec 断言「紧急」徽章）。
 const SEED_LABELS = [
-	{ name: "前端", color: "#3b82f6" },
-	{ name: "紧急", color: "#ef4444" },
-	{ name: "设计", color: "#8b5cf6" },
+	{ name: "前端" },
+	{ name: "紧急" },
+	{ name: "设计" },
 ] as const;
 
-async function api(path: string, init?: RequestInit): Promise<Response> {
+export async function api(path: string, init?: RequestInit): Promise<Response> {
 	const res = await fetch(`${BASE}${path}`, {
 		...init,
 		headers: {
@@ -60,41 +58,34 @@ async function api(path: string, init?: RequestInit): Promise<Response> {
 	return res;
 }
 
-// 重置：删除所有工作区（级联项目/列/任务/标签/活动），重建默认工作区与种子数据。
+// 重置：保留当前 owner 所在工作区，清空其项目后重建种子数据。
+// 不能删除最后一个工作区：工作区级联会删除 owner 成员，使后续 bearer key 失效。
 export async function resetAndSeed(): Promise<void> {
-	// 1. 删除全部工作区。
+	// 1. 清空工作区内项目，保留工作区与 owner 成员。
 	const wsRes = await api("/api/workspaces");
-	if (wsRes.ok) {
-		const workspaces = (await wsRes.json()) as { id: string }[];
-		for (const ws of workspaces) {
-			const r = await api(`/api/workspaces/${ws.id}`, { method: "DELETE" });
-			if (!r.ok && r.status !== 404)
-				throw new Error(`删除工作区失败: ${r.status}`);
-		}
+	const workspaces = (await wsRes.json()) as { id: string }[];
+	let ws = workspaces[0];
+	if (!ws) {
+		const created = await api("/api/workspaces", {
+			method: "POST",
+			body: JSON.stringify({ name: "默认工作区" }),
+		});
+		ws = (await created.json()) as { id: string };
 	}
-
-	// 2. 重建默认工作区。
-	const created = await api("/api/workspaces", {
-		method: "POST",
+	const existingProjects = (await (await api(`/api/workspaces/${ws.id}/projects`)).json()) as { id: string }[];
+	for (const project of existingProjects) {
+		await api(`/api/projects/${project.id}`, { method: "DELETE" });
+	}
+	for (const extra of workspaces.slice(1)) {
+		await api(`/api/workspaces/${extra.id}`, { method: "DELETE" });
+	}
+	await api(`/api/workspaces/${ws.id}`, {
+		method: "PATCH",
 		body: JSON.stringify({ name: "默认工作区" }),
 	});
-	if (!created.ok) throw new Error(`创建工作区失败: ${created.status}`);
-	const ws = (await created.json()) as { id: string };
 
-	// 3. 工作区级标签。
-	const labelIds = new Map<string, string>();
-	for (const l of SEED_LABELS) {
-		const r = await api(`/api/workspaces/${ws.id}/labels`, {
-			method: "POST",
-			body: JSON.stringify({ name: l.name, color: l.color }),
-		});
-		if (r.ok) {
-			const label = (await r.json()) as { id: string; name: string };
-			labelIds.set(label.name, label.id);
-		}
-	}
-
-	// 4. 命名项目（创建自动种子默认列 待办/进行中/已阻塞/已完成）。
+	// 2. 命名项目（创建自动种子默认列 待办/进行中/已阻塞/已完成）。
+	const labelIdsByProject = new Map<string, Map<string, string>>();
 	for (const p of SEED_PROJECTS) {
 		const r = await api(`/api/workspaces/${ws.id}/projects`, {
 			method: "POST",
@@ -102,6 +93,15 @@ export async function resetAndSeed(): Promise<void> {
 		});
 		if (!r.ok) throw new Error(`创建项目 ${p.name} 失败: ${r.status}`);
 		const project = (await r.json()) as { id: string };
+		const labelIds = new Map<string, string>();
+		for (const l of SEED_LABELS) {
+			const label = (await (await api(`/api/projects/${project.id}/labels`, {
+				method: "POST",
+				body: JSON.stringify({ name: l.name }),
+			})).json()) as { id: string; name: string };
+			labelIds.set(label.name, label.id);
+		}
+		labelIdsByProject.set(project.id, labelIds);
 		const boardRes = await api(`/api/projects/${project.id}`);
 		const board = (await boardRes.json()) as {
 			columns: { id: string; name: string }[];
@@ -125,16 +125,9 @@ export async function resetAndSeed(): Promise<void> {
 		}
 	}
 
-	// 5. 贴标签：给「标签冒烟」的「带标签」任务贴「前端」；给「原型演示」待办 3 任务贴
-	//    「前端/设计」徽章（对齐原型 demo board 卡片高度，visual-compare cardH 对比需要）。
-	const wsAgain = (await (await api("/api/workspaces")).json()) as {
-		id: string;
-	}[];
-	const smokeWs = wsAgain[0];
-	if (smokeWs) {
-		const projs = (await (
-			await api(`/api/workspaces/${smokeWs.id}/projects`)
-		).json()) as { id: string; name: string }[];
+	// 3. 贴标签：给「标签冒烟」的「带标签」任务贴「前端」；给「原型演示」待办 3 任务贴「前端/设计」徽章（labels.spec/sort.spec 断言徽章计数与标题序列）。
+	const projs = (await (await api(`/api/workspaces/${ws.id}/projects`)).json()) as { id: string; name: string }[];
+	{
 		const smoke = projs.find((p) => p.name === "标签冒烟");
 		if (smoke) {
 			const board = (await (await api(`/api/projects/${smoke.id}`)).json()) as {
@@ -142,7 +135,7 @@ export async function resetAndSeed(): Promise<void> {
 			};
 			const todo = board.columns.find((c) => c.name === "待办");
 			const task = todo?.tasks[0];
-			const frontend = labelIds.get("前端");
+			const frontend = labelIdsByProject.get(smoke.id)?.get("前端");
 			if (task && frontend) {
 				await api(`/api/tasks/${task.id}/labels/${frontend}`, {
 					method: "POST",
@@ -155,8 +148,9 @@ export async function resetAndSeed(): Promise<void> {
 				columns: { id: string; name: string; tasks: { id: string }[] }[];
 			};
 			const todo = board.columns.find((c) => c.name === "待办");
-			const frontend = labelIds.get("前端");
-			const design = labelIds.get("设计");
+			const labels = labelIdsByProject.get(demo.id);
+			const frontend = labels?.get("前端");
+			const design = labels?.get("设计");
 			for (const task of todo?.tasks ?? []) {
 				if (frontend) {
 					await api(`/api/tasks/${task.id}/labels/${frontend}`, {

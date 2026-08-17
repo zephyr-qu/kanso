@@ -1,73 +1,83 @@
-// 全局活动页：跨项目活动时间线，按日分组（今天/昨天/更早），组内时间倒序。
-// 数据来自 /api/activity（mock 与仪表盘共用拍平逻辑；对接后由真实端点提供）。
-// 条目渲染与仪表盘最近活动共用 ActivityItem（活动文案与高亮一处定义）。
+// 全局活动记录：对齐原型的单卡片操作轨迹布局。
 import { useQuery } from "@tanstack/react-query";
-import { Spinner } from "@/components/ui/spinner";
+import { HistoryIcon } from "lucide-react";
 import ActivityItem from "@/components/activity-item";
+import { activityIconForAction } from "@/components/activity-icon";
+import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
-import {
-	groupActivitiesByDay,
-	type FlatActivity,
-} from "@/lib/activity";
+import { buildPath } from "@/lib/endpoints";
+import { groupActivitiesByDay, type FlatActivity } from "@/lib/activity";
 import { queryKeys } from "@/hooks/query-keys";
-import { formatClock } from "@/lib/format-relative";
-
+import { useRealtime } from "@/hooks/use-realtime";
+import { PageContent, PageHeader, SurfaceCard } from "@/components/kanso-ui";
+import { formatActivityAge } from "@/lib/format-relative";
 
 export default function ActivityPage() {
+	// 全局实时订阅：任何变更（含备份导入）失效活动流查询。
+	useRealtime(undefined);
 	const { data, isLoading, isError } = useQuery({
 		queryKey: queryKeys.activities(),
-		queryFn: () => api<FlatActivity[]>("/api/activity"),
+		queryFn: () => api<FlatActivity[]>(buildPath("activity")),
 	});
+
+	const activities = data
+		? groupActivitiesByDay(data).flatMap((group) => group.items)
+		: [];
 
 	return (
 		<div className="flex h-full flex-col">
-			<div className="flex h-14 shrink-0 items-center border-b px-6">
-				<h1 className="text-[17px] font-[650] tracking-tight">活动</h1>
-			</div>
+			<PageHeader>
+				<h1 aria-label="活动" className="text-[17px] font-[650] tracking-tight">
+					活动记录
+				</h1>
+				<span className="text-[13px] text-muted-foreground">
+					全部工作区 · 操作轨迹
+				</span>
+			</PageHeader>
 
-			<div className="flex-1 overflow-auto px-8 pb-12 pt-7">
+			<PageContent className="px-[30px] pb-11 pt-[26px]">
 				{isLoading ? (
-					<div className="flex justify-center py-16">
-						<Spinner />
-					</div>
+					<div className="flex justify-center py-16"><Spinner /></div>
 				) : isError ? (
-					<p className="py-16 text-center text-sm text-destructive">
-						加载活动失败
-					</p>
-				) : !data || data.length === 0 ? (
-					<p className="py-16 text-center text-sm text-muted-foreground">
-						还没有活动记录
-					</p>
+					<p className="py-16 text-center text-sm text-destructive">加载活动失败</p>
+				) : activities.length === 0 ? (
+					<SurfaceCard className="px-5 py-12 text-center">
+						<HistoryIcon className="mx-auto size-5 text-muted-foreground/45" />
+						<p className="mt-3 text-sm text-muted-foreground">还没有活动记录</p>
+					</SurfaceCard>
 				) : (
-					<div className="space-y-6">
-						{/* 对齐原型 #activity：全宽内容、11px 大写 day-label、a-item 圆点 + 蓝色项目名。 */}
-						{groupActivitiesByDay(data).map((group) => (
-							<section key={group.key}>
-								<h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
-									{group.key}
-								</h2>
-								<ul className="flex flex-col">
-									{group.items.map((a) => (
-										<li
-											key={a.id}
-											className="flex items-baseline gap-2.5 rounded-lg px-2 py-2 text-[13px] leading-[1.5] transition-colors hover:bg-muted"
-										>
-											<span className="mt-[6px] size-[7px] shrink-0 self-start rounded-full bg-border" />
-											<ActivityItem
-												projectName={a.projectName}
-												action={a.action}
-											/>
-											<span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
-												{formatClock(a.createdAt)}
-											</span>
-										</li>
-									))}
-								</ul>
-							</section>
+					<SurfaceCard className="kanso-activity-card px-5 py-4">
+						{activities.map((activity) => (
+							<ActivityRow key={activity.id} activity={activity} />
 						))}
-					</div>
+					</SurfaceCard>
 				)}
+			</PageContent>
+		</div>
+	);
+}
+
+function ActivityRow({ activity }: { activity: FlatActivity }) {
+	const Icon = activityIconForAction(activity.action);
+	return (
+		<div className="kanso-recent-activity__row">
+			<span className="kanso-recent-activity__icon" aria-hidden="true">
+				<Icon />
+			</span>
+			<div className="kanso-recent-activity__body">
+				<ActivityItem
+					projectName={activity.projectName}
+					action={activity.action}
+					data={activity.data}
+					actor={activity.actor}
+					className="block"
+				/>
+				<div className="kanso-recent-activity__time">
+					{formatActivityAge(activity.createdAt)}
+				</div>
 			</div>
 		</div>
 	);
 }
+
+// formatActivityAge 已提取至 lib/format-relative（S-11，与仪表盘共用）。

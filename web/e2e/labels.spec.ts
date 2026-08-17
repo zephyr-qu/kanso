@@ -1,4 +1,4 @@
-// T3 标签库 E2E：侧栏入口 + 创建（色板选色）→ 重命名 → 删除 → 看板贴/摘全链路。
+// T3 标签库 E2E：看板工具栏入口 + 创建 → 重命名 → 删除 → 看板贴/摘全链路。
 import { expect, test } from "@playwright/test";
 import { resetAndSeed } from "./seed";
 
@@ -16,35 +16,32 @@ test("标签库：创建→重命名→删除全流程", async ({ page }) => {
 	await loginToApp(page);
 	await page.waitForSelector('a[href*="/p/"]');
 
-	// 侧栏入口可达。
-	await page.getByRole("link", { name: "标签", exact: true }).click();
-	await page.waitForSelector("text=创建标签");
+	// 标签库入口位于当前看板工具栏。
+	await page.locator('a[href*="/p/"]').first().click();
+	await page.waitForSelector("text=新建列");
+	await page.getByRole("button", { name: "标签", exact: true }).click();
+	const manager = page.getByRole("dialog");
+	await expect(manager.getByText("标签管理")).toBeVisible();
 
 	// 创建：选色板 + 输名称。
 	const name = `测试标签${Date.now() % 10000}`;
-	await page.getByRole("button", { name: "颜色 #f43f5e" }).click();
-	await page.getByPlaceholder("标签名称").fill(name);
-	await page.getByRole("button", { name: "添加", exact: true }).click();
-	const row = page.locator("div.group", { hasText: name });
-	await expect(row).toBeVisible();
+	await manager.getByPlaceholder("新标签名称").fill(name);
+	await manager.getByRole("button", { name: "添加", exact: true }).click();
+	await expect(manager.getByText(name, { exact: true })).toBeVisible();
 
 	// 重命名（在对话框作用域内操作，避免与创建区输入框歧义）。
 	const renamed = `${name}-改`;
-	await row.getByRole("button", { name: `重命名 ${name}`, exact: true }).click();
-	const renameDialog = page.getByRole("dialog");
-	await renameDialog.getByPlaceholder("名称", { exact: true }).fill(renamed);
-	await renameDialog.getByRole("button", { name: "保存" }).click();
-	await expect(page.locator("div.group", { hasText: renamed })).toBeVisible({ timeout: 5000 });
+	await manager.getByRole("button", { name: `重命名 ${name}`, exact: true }).click();
+	await manager.locator("input").last().fill(renamed);
+	await manager.getByRole("button", { name: "保存", exact: true }).click();
+	await expect(manager.getByText(renamed, { exact: true })).toBeVisible({ timeout: 5000 });
 
 	// 删除（经确认）。
-	const row2 = page.locator("div.group", { hasText: renamed });
-	await row2
-		.getByRole("button", { name: `删除 ${renamed}`, exact: true })
-		.click();
-	const dialog = page.getByRole("dialog");
+	await manager.getByRole("button", { name: `删除 ${renamed}`, exact: true }).click();
+	const dialog = page.getByRole("dialog").last();
 	await expect(dialog).toBeVisible();
-	await dialog.getByRole("button", { name: "删除", exact: true }).click();
-	await expect(page.locator("div.group", { hasText: renamed })).toHaveCount(0);
+	await dialog.getByRole("button", { name: `确认删除 ${renamed}`, exact: true }).click();
+	await expect(manager.getByText(renamed, { exact: true })).toHaveCount(0);
 });
 
 test("看板贴/摘标签：徽章出现与消失", async ({ page }) => {
@@ -54,7 +51,7 @@ test("看板贴/摘标签：徽章出现与消失", async ({ page }) => {
 	await page.locator('a[href*="/p/"]', { hasText: "标签冒烟" }).click();
 	await page.waitForSelector("text=新建列");
 
-	const firstCol = page.locator("div[class*='w-[280px]']").first();
+	const firstCol = page.locator("div[class*='w-[282px]']").first();
 	const firstTask = firstCol.locator("p.break-words").first();
 	await expect(firstTask).toBeVisible();
 	const taskTitle = (await firstTask.textContent()) ?? "";
@@ -79,7 +76,7 @@ test("看板贴标签后任务详情页同步显示", async ({ page }) => {
 	await page.waitForSelector("text=新建列");
 
 	// 给第一个任务贴"紧急"。
-	const firstCol = page.locator("div[class*='w-[280px]']").first();
+	const firstCol = page.locator("div[class*='w-[282px]']").first();
 	const firstTask = firstCol.locator("p.break-words").first();
 	await expect(firstTask).toBeVisible();
 	const taskTitle = (await firstTask.textContent()) ?? "";
@@ -101,6 +98,6 @@ test("看板贴标签后任务详情页同步显示", async ({ page }) => {
 	await firstTask.click();
 	await page.waitForURL(/\/t\//);
 	await expect(
-		page.locator("main span.inline-flex", { hasText: "紧急" }).first(),
+		page.locator("main span.kanso-task-detail__label-chip", { hasText: "紧急" }).first(),
 	).toBeVisible({ timeout: 5000 });
 });

@@ -1,7 +1,8 @@
 {
   "name": "kanso-web",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "packageManager": "pnpm@11.21.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "token-audit": "node scripts/check-token-usage.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -33,9 +35,16 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^5.1.4",
+    "msw": "^2.15.0",
+    "sass": "^1.102.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~5.8.3",
     "vite": "^7.3.5",
     "vitest": "^4.1.10"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }

@@ -2,5 +2,9 @@
 packages:
   - "."
 allowBuilds:
+  '@parcel/watcher': false
   esbuild: true
   msw: true
+# 供应链加固（CWE-829）：禁止直接从不可信源安装传递依赖、新包 7 天冷却期、禁止降级安全设置。
+blockExoticSubdeps: true
+minimumReleaseAge: 10080

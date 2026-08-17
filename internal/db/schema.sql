@@ -22,6 +22,7 @@ CREATE TABLE column (
     project_id TEXT NOT NULL REFERENCES project (id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     position INTEGER NOT NULL DEFAULT 0,
+    wip_limit INTEGER,
     created_at TEXT NOT NULL
 );
 CREATE INDEX idx_column_project ON column (project_id);
@@ -33,6 +34,9 @@ CREATE TABLE task (
     title TEXT NOT NULL,
     description TEXT,
     position INTEGER NOT NULL DEFAULT 0,
+    priority TEXT NOT NULL DEFAULT 'med',
+    due_date TEXT,
+    archived_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -41,12 +45,11 @@ CREATE INDEX idx_task_column ON task (column_id);
 
 CREATE TABLE label (
     id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES workspace (id) ON DELETE CASCADE,
+    project_id TEXT NOT NULL REFERENCES project (id) ON DELETE CASCADE,
     name TEXT NOT NULL,
-    color TEXT NOT NULL DEFAULT '#3b82f6',
     created_at TEXT NOT NULL
 );
-CREATE INDEX idx_label_workspace ON label (workspace_id);
+CREATE INDEX idx_label_project ON label (project_id);
 
 CREATE TABLE task_label (
     task_id TEXT NOT NULL REFERENCES task (id) ON DELETE CASCADE,
@@ -55,11 +58,28 @@ CREATE TABLE task_label (
 );
 CREATE INDEX idx_task_label_task ON task_label (task_id);
 
+CREATE TABLE milestone (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES project (id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    due_date TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX idx_milestone_project ON milestone (project_id);
+
+CREATE TABLE task_milestone (
+    task_id TEXT NOT NULL REFERENCES task (id) ON DELETE CASCADE,
+    milestone_id TEXT NOT NULL REFERENCES milestone (id) ON DELETE CASCADE,
+    PRIMARY KEY (task_id, milestone_id)
+);
+CREATE INDEX idx_task_milestone_milestone ON task_milestone (milestone_id);
+
 CREATE TABLE comment (
     id TEXT PRIMARY KEY,
     task_id TEXT NOT NULL REFERENCES task (id) ON DELETE CASCADE,
     content TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    author TEXT NOT NULL DEFAULT 'Admin' -- 归属身份（ADR-0013：personal 'Admin'，team 成员名）
 );
 CREATE INDEX idx_comment_task ON comment (task_id);
 
@@ -69,6 +89,20 @@ CREATE TABLE activity (
     resource_id TEXT NOT NULL,
     action TEXT NOT NULL,
     data TEXT, -- JSON 字符串
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    actor TEXT NOT NULL DEFAULT 'Admin' -- 归属身份（ADR-0013：personal 'Admin'，team 成员名）
 );
 CREATE INDEX idx_activity_resource ON activity (resource_type, resource_id);
+
+-- 0007: 成员（轻量 1-3 人小团队；owner/member 两级角色，多密钥认证）
+CREATE TABLE member (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspace (id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'member', -- 'owner' | 'member'
+    avatar_color TEXT,                   -- 头像底色（前端色板值）
+    avatar TEXT,                         -- 上传头像（data URL）
+    access_key TEXT UNIQUE,              -- 访问密钥（授权后生成；owner 由启动种子注入）
+    created_at TEXT NOT NULL
+);
+CREATE INDEX idx_member_workspace ON member (workspace_id);

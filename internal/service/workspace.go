@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -76,9 +77,29 @@ func (s *Service) RenameWorkspace(ctx context.Context, workspaceID, name string)
 	return workspace, nil
 }
 
+// ErrLastWorkspace 表示试图删除最后一个工作区（HTTP 层映射为 400）。
+// 工作区承载 owner 成员（member.workspace_id 级联删除），删光会导致认证身份失效。
+var ErrLastWorkspace = errors.New("cannot delete last workspace")
+
 // DeleteWorkspace 删除工作区，其下项目/列/任务等由外键级联删除；不存在时返回 ErrNotFound。
+// 最后一个工作区不可删除（个人/团队模式均适用：owner 成员随工作区级联删除）。
 func (s *Service) DeleteWorkspace(ctx context.Context, workspaceID string) error {
-	q := gen.New(s.db)
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	// 目标不存在 → ErrNotFound（先于「最后一个」守卫，避免对不存在的工作区误报）。
+	if _, err := q.GetWorkspace(ctx, workspaceID); err != nil {
+		return mapNoRows(err)
+	}
+	count, err := q.CountWorkspaces(ctx)
+	if err != nil {
+		return fmt.Errorf("统计工作区失败: %w", err)
+	}
+	if count <= 1 {
+		return ErrLastWorkspace
+	}
 	// 先清工作区下任务的活动（activity 无外键，需显式清理）。
 	if err := q.DeleteActivitiesByWorkspace(ctx, workspaceID); err != nil {
 		return fmt.Errorf("删除工作区活动失败: %w", err)
@@ -89,6 +110,9 @@ func (s *Service) DeleteWorkspace(ctx context.Context, workspaceID string) error
 	}
 	if n == 0 {
 		return ErrNotFound
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交删除工作区事务失败: %w", err)
 	}
 	return nil
 }

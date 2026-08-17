@@ -9,10 +9,11 @@ import (
 	"kanso/internal/id"
 )
 
-// BoardTask 是看板中携带标签的任务。
+// BoardTask 是看板中携带标签与评论数的任务。
 type BoardTask struct {
 	gen.Task
-	Labels []gen.Label `json:"labels"`
+	Labels       []gen.Label `json:"labels"`
+	CommentCount int64       `json:"commentCount"`
 }
 
 // BoardColumn 是看板聚合中一列及其任务。
@@ -60,21 +61,29 @@ func (s *Service) GetBoard(ctx context.Context, projectID string) (Board, error)
 	}
 	for _, row := range labelRows {
 		labelsByTask[row.TaskID] = append(labelsByTask[row.TaskID], gen.Label{
-			ID:          row.ID,
-			WorkspaceID: row.WorkspaceID,
-			Name:        row.Name,
-			Color:       row.Color,
-			CreatedAt:   row.CreatedAt,
+			ID:        row.ID,
+			ProjectID: row.ProjectID,
+			Name:      row.Name,
+			CreatedAt: row.CreatedAt,
 		})
 	}
-	labels, err := q.ListLabelsByWorkspace(ctx, project.WorkspaceID)
+	// 任务评论数（单次聚合，避免 N+1）。
+	commentCounts := make(map[string]int64)
+	commentRows, err := q.CountCommentsByProject(ctx, projectID)
+	if err != nil {
+		return Board{}, fmt.Errorf("查询任务评论数失败: %w", err)
+	}
+	for _, row := range commentRows {
+		commentCounts[row.TaskID] = row.CommentCount
+	}
+
+	labels, err := q.ListLabelsByProject(ctx, projectID)
 	if err != nil {
 		return Board{}, fmt.Errorf("查询标签失败: %w", err)
 	}
 	if labels == nil {
 		labels = []gen.Label{}
 	}
-
 	boardColumns := make([]BoardColumn, 0, len(columns))
 	for _, column := range columns {
 		tasks := tasksByColumn[column.ID]
@@ -88,8 +97,9 @@ func (s *Service) GetBoard(ctx context.Context, projectID string) (Board, error)
 				labels = []gen.Label{}
 			}
 			boardTasks = append(boardTasks, BoardTask{
-				Task:   task,
-				Labels: labels,
+				Task:         task,
+				Labels:       labels,
+				CommentCount: commentCounts[task.ID],
 			})
 		}
 		boardColumns = append(boardColumns, BoardColumn{
@@ -105,8 +115,23 @@ func (s *Service) GetBoard(ctx context.Context, projectID string) (Board, error)
 	}, nil
 }
 
+// ListArchivedTasks returns hidden tasks for the board archive panel.
+func (s *Service) ListArchivedTasks(ctx context.Context, projectID string) ([]gen.Task, error) {
+	if _, err := gen.New(s.db).GetProject(ctx, projectID); err != nil {
+		return nil, mapNoRows(err)
+	}
+	tasks, err := gen.New(s.db).ListArchivedTasksByProject(ctx, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("查询归档任务失败: %w", err)
+	}
+	if tasks == nil {
+		return []gen.Task{}, nil
+	}
+	return tasks, nil
+}
+
 // CreateColumn 在项目末尾追加新列。
-func (s *Service) CreateColumn(ctx context.Context, projectID, name string) (gen.Column, error) {
+func (s *Service) CreateColumn(ctx context.Context, projectID, name string, wipLimit *int64) (gen.Column, error) {
 	q := gen.New(s.db)
 
 	// 校验项目存在（外键会兜底，但这里给出清晰的 404）。
@@ -114,9 +139,11 @@ func (s *Service) CreateColumn(ctx context.Context, projectID, name string) (gen
 		return gen.Column{}, mapNoRows(err)
 	}
 
-	count, err := q.CountColumnsByProject(ctx, projectID)
+	// W-2：新列 position 取 MAX+1 而非 COUNT——删除中间列留洞后 COUNT 会与既有
+	// position 冲突（同 position 两列都被视为末列，完成/趋势/里程碑口径错乱）。
+	maxPos, err := q.MaxColumnPositionByProject(ctx, projectID)
 	if err != nil {
-		return gen.Column{}, fmt.Errorf("统计列失败: %w", err)
+		return gen.Column{}, fmt.Errorf("查询列最大位置失败: %w", err)
 	}
 
 	columnID, err := id.New()
@@ -127,13 +154,29 @@ func (s *Service) CreateColumn(ctx context.Context, projectID, name string) (gen
 		ID:        columnID,
 		ProjectID: projectID,
 		Name:      name,
-		Position:  count,
+		Position:  maxPos,
+		WipLimit:  wipLimit, // 0006 Phase 3 任务 3.6：建列即设 WIP
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	})
 	if err != nil {
 		return gen.Column{}, fmt.Errorf("创建列失败: %w", err)
 	}
 	if err := s.dispatch(ctx, Event{Action: EventColumnCreated, ProjectID: projectID, EntityID: column.ID}); err != nil {
+		return gen.Column{}, err
+	}
+	return column, nil
+}
+
+// UpdateColumnWIP updates the optional warning threshold; nil clears it.
+func (s *Service) UpdateColumnWIP(ctx context.Context, columnID string, limit *int64) (gen.Column, error) {
+	if limit != nil && *limit < 0 {
+		return gen.Column{}, fmt.Errorf("wip limit must be non-negative")
+	}
+	column, err := gen.New(s.db).UpdateColumnWIP(ctx, gen.UpdateColumnWIPParams{ID: columnID, WipLimit: limit})
+	if err != nil {
+		return gen.Column{}, mapNoRows(err)
+	}
+	if err := s.dispatch(ctx, Event{Action: EventColumnUpdated, ProjectID: column.ProjectID, EntityID: column.ID, Data: map[string]any{"wipLimit": limit}}); err != nil {
 		return gen.Column{}, err
 	}
 	return column, nil
@@ -156,7 +199,11 @@ func (s *Service) RenameColumn(ctx context.Context, columnID, name string) (gen.
 
 // DeleteColumn 删除列（其下任务由外键级联删除）；不存在时返回 ErrNotFound。
 func (s *Service) DeleteColumn(ctx context.Context, columnID string) error {
-	q := gen.New(s.db)
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
 	column, err := q.GetColumn(ctx, columnID)
 	if err != nil {
 		return mapNoRows(err)
@@ -172,27 +219,30 @@ func (s *Service) DeleteColumn(ctx context.Context, columnID string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交删除列事务失败: %w", err)
+	}
 	return s.dispatch(ctx, Event{Action: EventColumnDeleted, ProjectID: column.ProjectID, EntityID: columnID})
 }
 
 // MoveColumn 把列移动到目标位置（0 起），整列列表重排（reindex）。
-func (s *Service) MoveColumn(ctx context.Context, columnID string, targetPosition int64) error {
+// 返回移动后的列（0006 Phase 3 任务 3.2）。
+func (s *Service) MoveColumn(ctx context.Context, columnID string, targetPosition int64) (gen.Column, error) {
 	// 读（列顺序）与写（reindex）在同一事务内：单连接下保证并发拖拽不覆盖他人提交。
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
-		return fmt.Errorf("开启事务失败: %w", err)
+		return gen.Column{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	q := gen.New(tx)
 
 	column, err := q.GetColumn(ctx, columnID)
 	if err != nil {
-		return mapNoRows(err)
+		return gen.Column{}, mapNoRows(err)
 	}
 
 	columns, err := q.ListColumnsByProject(ctx, column.ProjectID)
 	if err != nil {
-		return fmt.Errorf("查询列失败: %w", err)
+		return gen.Column{}, fmt.Errorf("查询列失败: %w", err)
 	}
 
 	// 从当前顺序中移除目标列，再插入新位置。
@@ -215,11 +265,15 @@ func (s *Service) MoveColumn(ctx context.Context, columnID string, targetPositio
 			ID:       c.ID,
 			Position: int64(i),
 		}); err != nil {
-			return fmt.Errorf("更新列位置失败: %w", err)
+			return gen.Column{}, fmt.Errorf("更新列位置失败: %w", err)
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("提交事务失败: %w", err)
+		return gen.Column{}, fmt.Errorf("提交事务失败: %w", err)
 	}
-	return s.dispatch(ctx, Event{Action: EventColumnMoved, ProjectID: column.ProjectID, EntityID: columnID})
+	if err := s.dispatch(ctx, Event{Action: EventColumnMoved, ProjectID: column.ProjectID, EntityID: columnID}); err != nil {
+		return gen.Column{}, err
+	}
+	// 返回移动后的最新列（position 已更新）。
+	return gen.New(s.db).GetColumn(ctx, columnID)
 }

@@ -9,11 +9,14 @@ import (
 	"kanso/internal/service"
 )
 
-// createTask 在列末尾创建任务（标题必填）。
+// createTask 在列末尾创建任务（标题必填；labels 为项目内标签 ID，创建时贴好）。
 func (a *API) createTask(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Title       string  `json:"title"`
-		Description *string `json:"description"`
+		Title       string   `json:"title"`
+		Description *string  `json:"description"`
+		Priority    *string  `json:"priority"`
+		DueDate     *string  `json:"dueDate"`
+		Labels      []string `json:"labels"`
 	}
 	if !decodeBody(w, r, &body) {
 		return
@@ -22,10 +25,22 @@ func (a *API) createTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "任务标题不能为空")
 		return
 	}
-	task, _, err := a.svc.CreateTask(r.Context(), chi.URLParam(r, "id"), body.Title, deref(body.Description))
+	priority := ""
+	if body.Priority != nil {
+		priority = *body.Priority
+	}
+	task, _, err := a.svc.CreateTask(r.Context(), chi.URLParam(r, "id"), body.Title, deref(body.Description), priority, body.DueDate, body.Labels)
 	if err != nil {
 		if errors.Is(err, service.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "列不存在")
+			return
+		}
+		if errors.Is(err, service.ErrCrossProjectMove) {
+			writeError(w, http.StatusBadRequest, "任务与标签必须属于同一项目")
+			return
+		}
+		if errors.Is(err, service.ErrLabelNotFound) {
+			writeError(w, http.StatusBadRequest, "标签不存在")
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "创建任务失败")
@@ -39,6 +54,8 @@ func (a *API) updateTask(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Title       *string `json:"title"`
 		Description *string `json:"description"`
+		Priority    *string `json:"priority"`
+		DueDate     *string `json:"dueDate"`
 		ColumnID    *string `json:"columnId"`
 		Position    *int64  `json:"position"`
 	}
@@ -53,7 +70,8 @@ func (a *API) updateTask(w http.ResponseWriter, r *http.Request) {
 		if body.Position != nil {
 			position = *body.Position
 		}
-		if err := a.svc.MoveTask(r.Context(), taskID, body.ColumnID, position); err != nil {
+		task, err := a.svc.MoveTask(r.Context(), taskID, body.ColumnID, position)
+		if err != nil {
 			if errors.Is(err, service.ErrNotFound) {
 				writeError(w, http.StatusNotFound, "任务或目标列不存在")
 				return
@@ -65,7 +83,8 @@ func (a *API) updateTask(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "移动任务失败")
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		// 0006 Phase 3 任务 3.1：移动返回 Task（契约要求，此前返回 {ok:true}）。
+		writeJSON(w, http.StatusOK, task)
 		return
 	}
 
@@ -73,7 +92,7 @@ func (a *API) updateTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "任务标题不能为空")
 		return
 	}
-	task, err := a.svc.UpdateTask(r.Context(), taskID, body.Title, body.Description)
+	task, err := a.svc.UpdateTask(r.Context(), taskID, body.Title, body.Description, body.Priority, body.DueDate)
 	if err != nil {
 		if errors.Is(err, service.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "任务不存在")
@@ -96,6 +115,32 @@ func (a *API) deleteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) archiveTask(w http.ResponseWriter, r *http.Request) {
+	task, err := a.svc.SetTaskArchived(r.Context(), chi.URLParam(r, "id"), true)
+	if err != nil {
+		if errors.Is(err, service.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "任务不存在")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "归档任务失败")
+		return
+	}
+	writeJSON(w, http.StatusOK, task)
+}
+
+func (a *API) restoreTask(w http.ResponseWriter, r *http.Request) {
+	task, err := a.svc.SetTaskArchived(r.Context(), chi.URLParam(r, "id"), false)
+	if err != nil {
+		if errors.Is(err, service.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "任务不存在")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "恢复任务失败")
+		return
+	}
+	writeJSON(w, http.StatusOK, task)
 }
 
 func deref(v *string) string {

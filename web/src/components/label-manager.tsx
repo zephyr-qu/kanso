@@ -1,13 +1,11 @@
-// 标签管理器：工作区共享标签库的创建/重命名/删除（+ 颜色选择）。
+// 标签管理器：项目级标签库的创建/重命名/删除（看板工具栏入口）。
 import { useState } from "react";
 import { PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
 	DialogBackdrop,
-	DialogClose,
 	DialogDescription,
-	DialogFooter,
 	DialogHeader,
 	DialogPortal,
 	DialogPopup,
@@ -17,30 +15,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Label as LabelType } from "@/types/label";
 
-export const LABEL_COLORS = [
-	"#ef4444",
-	"#f97316",
-	"#eab308",
-	"#22c55e",
-	"#3b82f6",
-	"#8b5cf6",
-	"#ec4899",
-];
-
 export default function LabelManagerDialog(props: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	labels: LabelType[];
-	onCreate: (name: string, color: string) => Promise<void>;
+	onCreate: (name: string) => Promise<void>;
 	onRename: (id: string, name: string) => Promise<void>;
 	onDelete: (id: string) => Promise<void>;
 }) {
 	const { open, onOpenChange, labels, onCreate, onRename, onDelete } = props;
 	const [name, setName] = useState("");
-	const [color, setColor] = useState(LABEL_COLORS[4]);
 	const [editing, setEditing] = useState<LabelType | null>(null);
 	const [editName, setEditName] = useState("");
 	const [busy, setBusy] = useState(false);
+	// 删除二次确认：点垃圾桶进入「确认/取消」态（列/任务删除都有确认，标签删除补上）。
+	const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -50,7 +39,7 @@ export default function LabelManagerDialog(props: {
 					<DialogHeader>
 						<DialogTitle>标签管理</DialogTitle>
 						<DialogDescription>
-							标签库属于整个工作区，所有项目共享。
+							标签库属于当前项目，项目间互不影响。
 						</DialogDescription>
 					</DialogHeader>
 					<div className="space-y-4 p-4">
@@ -62,7 +51,7 @@ export default function LabelManagerDialog(props: {
 								if (!name.trim() || busy) return;
 								setBusy(true);
 								try {
-									await onCreate(name.trim(), color);
+					await onCreate(name.trim());
 									setName("");
 								} finally {
 									setBusy(false);
@@ -70,20 +59,6 @@ export default function LabelManagerDialog(props: {
 							}}
 						>
 							<div className="flex items-center gap-2">
-								<div className="flex gap-1">
-									{LABEL_COLORS.map((c) => (
-										<button
-											key={c}
-											type="button"
-											aria-label={`颜色 ${c}`}
-											className={`size-5 rounded-full border-2 ${
-												color === c ? "border-foreground" : "border-transparent"
-											}`}
-											style={{ backgroundColor: c }}
-											onClick={() => setColor(c)}
-										/>
-									))}
-								</div>
 								<Input
 									value={name}
 									onChange={(e) => setName(e.target.value)}
@@ -128,44 +103,60 @@ export default function LabelManagerDialog(props: {
 													保存
 												</Button>
 											</>
-										) : (
-											<>
-												<span
-													className="size-3 rounded-full"
-													style={{ backgroundColor: label.color }}
-												/>
-												<span className="flex-1 text-sm">{label.name}</span>
-												<Button
-													variant="ghost"
-													size="icon"
-													className="size-7"
-													aria-label={`重命名 ${label.name}`}
-													onClick={() => {
-														setEditing(label);
-														setEditName(label.name);
-													}}
-												>
-													<PencilIcon />
-												</Button>
-												<Button
-													variant="ghost"
-													size="icon"
-													className="size-7 text-destructive"
-													aria-label={`删除 ${label.name}`}
-													onClick={() => onDelete(label.id)}
-												>
-													<TrashIcon />
-												</Button>
-											</>
-										)}
+										) : confirmingDelete === label.id ? (
+												<>
+													<span className="flex-1 truncate text-sm text-destructive">{label.name}</span>
+													<Button
+														size="sm"
+														variant="destructive"
+														className="h-7 px-2 text-xs"
+														aria-label={`确认删除 ${label.name}`}
+														onClick={() => { setConfirmingDelete(null); void onDelete(label.id); }}
+													>
+														删除
+													</Button>
+													<Button
+														size="sm"
+														variant="ghost"
+														className="h-7 px-2 text-xs"
+														aria-label="取消删除"
+														onClick={() => setConfirmingDelete(null)}
+													>
+														取消
+													</Button>
+												</>
+											) : (
+												<>
+													<span className="flex-1 text-sm">{label.name}</span>
+													<Button
+														variant="ghost"
+														size="icon"
+														className="size-7"
+														aria-label={`重命名 ${label.name}`}
+														onClick={() => {
+															setEditing(label);
+															setEditName(label.name);
+															setConfirmingDelete(null);
+														}}
+													>
+														<PencilIcon />
+													</Button>
+													<Button
+														variant="ghost"
+														size="icon"
+														className="size-7 text-destructive"
+														aria-label={`删除 ${label.name}`}
+														onClick={() => setConfirmingDelete(label.id)}
+													>
+														<TrashIcon />
+													</Button>
+												</>
+											)}
 									</li>
 								))}
 							</ul>
 						)}
 					</div>
-					<DialogFooter className="p-4 pt-0">
-						<DialogClose render={<Button variant="ghost">关闭</Button>} />
-					</DialogFooter>
 				</DialogPopup>
 			</DialogPortal>
 		</Dialog>

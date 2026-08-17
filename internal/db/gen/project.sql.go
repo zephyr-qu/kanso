@@ -9,17 +9,6 @@ import (
 	"context"
 )
 
-const countProjectsByWorkspace = `-- name: CountProjectsByWorkspace :one
-SELECT COUNT(*) FROM project WHERE workspace_id = ?
-`
-
-func (q *Queries) CountProjectsByWorkspace(ctx context.Context, workspaceID string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countProjectsByWorkspace, workspaceID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createProject = `-- name: CreateProject :one
 INSERT INTO project (id, workspace_id, name, position, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?)

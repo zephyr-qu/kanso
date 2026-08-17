@@ -12,9 +12,10 @@ import AppShell from "@/components/app-shell";
 import { UNAUTHORIZED_EVENT } from "@/lib/api";
 import ActivityPage from "@/pages/activity";
 import BoardPage from "@/pages/board";
+import CalendarPage from "@/pages/calendar";
 import DashboardPage from "@/pages/dashboard";
-import LabelsPage from "@/pages/labels";
 import LoginPage from "@/pages/login";
+import ProfilePage from "@/pages/profile";
 import RedirectHome from "@/pages/redirect-home";
 import SettingsPage from "@/pages/settings";
 import TaskDetailPage from "@/pages/task-detail";
@@ -47,10 +48,11 @@ const router = createBrowserRouter([
 				children: [
 					{ index: true, element: <RedirectHome /> },
 					{ path: "dashboard", element: <DashboardPage /> },
+					{ path: "calendar", element: <CalendarPage /> },
 					{ path: "activity", element: <ActivityPage /> },
 					{ path: "settings", element: <SettingsPage /> },
+					{ path: "profile", element: <ProfilePage /> },
 					{ path: "w/:workspaceId", element: <WorkspacePage /> },
-					{ path: "w/:workspaceId/labels", element: <LabelsPage /> },
 					{ path: "w/:workspaceId/p/:projectId", element: <BoardPage /> },
 					{
 						path: "w/:workspaceId/p/:projectId/t/:taskId",

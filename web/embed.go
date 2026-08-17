@@ -7,8 +7,9 @@ import (
 )
 
 // dist contains the Vite production output. The Docker build populates this
-// directory before compiling the Go binary; the tracked .gitkeep keeps local
-// Go tooling usable before the first frontend build.
+// directory before compiling the Go binary; the tracked placeholder
+// web/dist/index.html keeps local Go tooling usable before the first frontend
+// build (go:embed ignores dotfiles, so a .gitkeep would not satisfy it).
 //
 //go:embed dist/**
 var dist embed.FS

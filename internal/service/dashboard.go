@@ -10,10 +10,14 @@ import (
 	"kanso/internal/db/gen"
 )
 
-
 type DashboardColumnStat struct {
 	Name  string `json:"name"`
 	Count int64  `json:"count"`
+}
+
+type DashboardPriorityStat struct {
+	Priority string `json:"priority"`
+	Count    int64  `json:"count"`
 }
 
 type DashboardProjectStat struct {
@@ -25,20 +29,15 @@ type DashboardProjectStat struct {
 }
 
 type DashboardFocusTask struct {
-	ID     string `json:"id"`
-	Title  string `json:"title"`
-	Column string `json:"column"`
-	Urgent bool   `json:"urgent"`
+	ID          string  `json:"id"`
+	Title       string  `json:"title"`
+	Column      string  `json:"column"`
+	ProjectName string  `json:"projectName"`
+	DueDate     *string `json:"dueDate"`
+	Urgent      bool    `json:"urgent"`
 }
 
-// DashboardActivityItem 仪表盘「最近活动」条目——结构化字段，文案由前端统一渲染
-// （ActivityItem 组件；Go 不拼文案，见 ADR-0004 前后端无共享类型包的约束）。
-type DashboardActivityItem struct {
-	ID          string `json:"id"`
-	ProjectName string `json:"projectName"`
-	Action      string `json:"action"`
-	CreatedAt   string `json:"createdAt"`
-}
+// 仪表盘「最近活动」复用 ActivityItem（S-11：删除字段重复的 DashboardActivityItem）。
 
 // DashboardTrendPoint 某一天的创建/完成任务数（跨全部工作区）。
 type DashboardTrendPoint struct {
@@ -54,9 +53,10 @@ type DashboardData struct {
 	DoneTasks         int64                   `json:"doneTasks"`
 	CompletionPercent int64                   `json:"completionPercent"`
 	ByColumn          []DashboardColumnStat   `json:"byColumn"`
+	ByPriority        []DashboardPriorityStat `json:"byPriority"`
 	Projects          []DashboardProjectStat  `json:"projects"`
 	Focus             []DashboardFocusTask    `json:"focus"`
-	RecentActivity    []DashboardActivityItem `json:"recentActivity"`
+	RecentActivity    []ActivityItem          `json:"recentActivity"`
 	Trend             []DashboardTrendPoint   `json:"trend"`
 }
 
@@ -73,6 +73,10 @@ func (s *Service) GetDashboard(ctx context.Context) (DashboardData, error) {
 	if err != nil {
 		return DashboardData{}, fmt.Errorf("查询列分布失败: %w", err)
 	}
+	priorities, err := q.ListPriorityDistributions(ctx)
+	if err != nil {
+		return DashboardData{}, fmt.Errorf("查询优先级分布失败: %w", err)
+	}
 	progress, err := q.ListProjectColumnCounts(ctx)
 	if err != nil {
 		return DashboardData{}, fmt.Errorf("查询项目进展失败: %w", err)
@@ -81,9 +85,9 @@ func (s *Service) GetDashboard(ctx context.Context) (DashboardData, error) {
 	if err != nil {
 		return DashboardData{}, fmt.Errorf("查询任务失败: %w", err)
 	}
-	urgent, err := q.ListTaskLabels(ctx)
+	focusRows, err := q.ListFocusCandidates(ctx)
 	if err != nil {
-		return DashboardData{}, fmt.Errorf("查询紧急任务失败: %w", err)
+		return DashboardData{}, fmt.Errorf("查询需要关注任务失败: %w", err)
 	}
 	activities, err := q.ListActivitiesWithProject(ctx)
 	if err != nil {
@@ -97,12 +101,21 @@ func (s *Service) GetDashboard(ctx context.Context) (DashboardData, error) {
 	if err != nil {
 		return DashboardData{}, fmt.Errorf("查询完成趋势失败: %w", err)
 	}
+	createdInFinalColumnTrend, err := q.ListTaskCreatedInFinalColumnTrend(ctx)
+	if err != nil {
+		return DashboardData{}, fmt.Errorf("查询末列直建完成趋势失败: %w", err)
+	}
 
 	var total, done int64
 	byColumn := make([]DashboardColumnStat, 0, len(columns))
 	for _, c := range columns {
 		total += c.TaskCount
+		// 状态由列位置定义而非列名：不做任何按名的过滤，分布图与统计卡使用同一列集合。
 		byColumn = append(byColumn, DashboardColumnStat{Name: c.ColumnName, Count: c.TaskCount})
+	}
+	byPriority := make([]DashboardPriorityStat, 0, len(priorities))
+	for _, p := range priorities {
+		byPriority = append(byPriority, DashboardPriorityStat{Priority: p.Priority, Count: p.TaskCount})
 	}
 
 	// 每项目最大列 position：末列 = 已完成（不依赖列名）。
@@ -142,30 +155,39 @@ func (s *Service) GetDashboard(ctx context.Context) (DashboardData, error) {
 		})
 	}
 
-	// 紧急任务：按标签名过滤（避免 SQL 中文）。
-	urgentTasks := make([]gen.ListTaskLabelsRow, 0)
-	for _, t := range urgent {
-		if t.LabelName == "紧急" {
-			urgentTasks = append(urgentTasks, t)
+	// 「需要关注」：priority=urgent 或有 dueDate，且不在末列，前 8 条（口径与 Mock/0005 §5.6 一致）。
+	focus := make([]DashboardFocusTask, 0, 8)
+	for _, t := range focusRows {
+		if last, ok := maxPos[t.ProjectID]; ok && t.ColumnPosition == last {
+			continue // 已完成列（末列）不进「需要关注」
+		}
+		focus = append(focus, DashboardFocusTask{
+			ID:          t.ID,
+			Title:       t.Title,
+			Column:      t.ColumnName,
+			ProjectName: t.ProjectName,
+			DueDate:     t.DueDate,
+			Urgent:      t.Priority == "urgent",
+		})
+		if len(focus) >= 8 {
+			break
 		}
 	}
-	focus := make([]DashboardFocusTask, 0, len(urgentTasks))
-	for _, t := range urgentTasks {
-		focus = append(focus, DashboardFocusTask{
-			ID: t.ID, Title: t.Title, Column: t.ColumnName, Urgent: true,
-		})
-	}
 
-	recent := make([]DashboardActivityItem, 0, 8)
+	recent := make([]ActivityItem, 0, 8)
 	for i, a := range activities {
 		if i >= 8 {
 			break
 		}
-		recent = append(recent, DashboardActivityItem{
-			ID:          a.ID,
-			ProjectName: a.ProjectName,
-			Action:      a.Action,
-			CreatedAt:   a.CreatedAt,
+		recent = append(recent, ActivityItem{
+			ID:           a.ID,
+			ResourceType: "task",
+			ResourceID:   a.ResourceID,
+			ProjectName:  a.ProjectName,
+			Action:       a.Action,
+			Data:         a.Data,
+			Actor:        a.Actor,
+			CreatedAt:    a.CreatedAt,
 		})
 	}
 
@@ -174,35 +196,48 @@ func (s *Service) GetDashboard(ctx context.Context) (DashboardData, error) {
 		// 与前端 mock 的 Math.round 对齐（整数截断会与 mock 差 1 个百分点）。
 		completion = (done*100 + total/2) / total
 	}
-
+	// urgent 计数：priority=urgent（与 focus 同口径，不按标签）。
+	var urgentCount int64
+	for _, t := range tasks {
+		if t.Priority == "urgent" {
+			urgentCount++
+		}
+	}
 	return DashboardData{
 		TotalTasks:        total,
-		Urgent:            int64(len(urgentTasks)),
+		Urgent:            urgentCount,
 		NewThisWeek:       countNewThisWeek(tasks),
 		DoneTasks:         done,
 		CompletionPercent: completion,
 		ByColumn:          byColumn,
+		ByPriority:        byPriority,
 		Projects:          projects,
 		Focus:             focus,
 		RecentActivity:    recent,
-		Trend:             buildDashboardTrend(createdTrend, completionTrend, dashboardTrendDays),
+		Trend:             buildDashboardTrend(createdTrend, completionTrend, createdInFinalColumnTrend, dashboardTrendDays),
 	}, nil
 }
 
 // buildDashboardTrend 生成近 days 天（含今天）的连续趋势序列，无数据的日期补零。
-// 日期按 UTC 对齐（activity.created_at 存 UTC RFC3339）。
+// 完成数 = 移入末列（completionTrend）+ 末列直建（createdInFinalColumnTrend），
+// 与 doneTasks 同口径（此前只数移入末列，末列直建任务缺失导致两数不一致）。
+// 日期按 UTC 对齐（activity.created_at / task.created_at 存 UTC RFC3339）。
 func buildDashboardTrend(
 	created []gen.ListTaskCreationTrendRow,
 	completed []gen.ListTaskCompletionTrendRow,
+	completedDirect []gen.ListTaskCreatedInFinalColumnTrendRow,
 	days int,
 ) []DashboardTrendPoint {
 	createdMap := make(map[string]int64, len(created))
 	for _, c := range created {
 		createdMap[c.Day] = c.Count
 	}
-	completedMap := make(map[string]int64, len(completed))
+	completedMap := make(map[string]int64, len(completed)+len(completedDirect))
 	for _, c := range completed {
-		completedMap[c.Day] = c.Count
+		completedMap[c.Day] += c.Count
+	}
+	for _, c := range completedDirect {
+		completedMap[c.Day] += c.Count
 	}
 	points := make([]DashboardTrendPoint, 0, days)
 	now := time.Now().UTC()

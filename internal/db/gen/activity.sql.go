@@ -10,9 +10,9 @@ import (
 )
 
 const createActivity = `-- name: CreateActivity :one
-INSERT INTO activity (id, resource_type, resource_id, action, data, created_at)
-VALUES (?, ?, ?, ?, ?, ?)
-RETURNING id, resource_type, resource_id, "action", data, created_at
+INSERT INTO activity (id, resource_type, resource_id, action, data, created_at, actor)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+RETURNING id, resource_type, resource_id, "action", data, created_at, actor
 `
 
 type CreateActivityParams struct {
@@ -22,6 +22,7 @@ type CreateActivityParams struct {
 	Action       string  `json:"action"`
 	Data         *string `json:"data"`
 	CreatedAt    string  `json:"createdAt"`
+	Actor        string  `json:"actor"`
 }
 
 func (q *Queries) CreateActivity(ctx context.Context, arg CreateActivityParams) (Activity, error) {
@@ -32,6 +33,7 @@ func (q *Queries) CreateActivity(ctx context.Context, arg CreateActivityParams) 
 		arg.Action,
 		arg.Data,
 		arg.CreatedAt,
+		arg.Actor,
 	)
 	var i Activity
 	err := row.Scan(
@@ -41,6 +43,7 @@ func (q *Queries) CreateActivity(ctx context.Context, arg CreateActivityParams) 
 		&i.Action,
 		&i.Data,
 		&i.CreatedAt,
+		&i.Actor,
 	)
 	return i, err
 }
@@ -82,7 +85,7 @@ func (q *Queries) DeleteActivityByTask(ctx context.Context, resourceID string) e
 }
 
 const listActivitiesByResource = `-- name: ListActivitiesByResource :many
-SELECT id, resource_type, resource_id, "action", data, created_at FROM activity WHERE resource_type = ? AND resource_id = ? ORDER BY created_at DESC
+SELECT id, resource_type, resource_id, "action", data, created_at, actor FROM activity WHERE resource_type = ? AND resource_id = ? ORDER BY created_at DESC
 `
 
 type ListActivitiesByResourceParams struct {
@@ -106,6 +109,7 @@ func (q *Queries) ListActivitiesByResource(ctx context.Context, arg ListActiviti
 			&i.Action,
 			&i.Data,
 			&i.CreatedAt,
+			&i.Actor,
 		); err != nil {
 			return nil, err
 		}
@@ -118,4 +122,16 @@ func (q *Queries) ListActivitiesByResource(ctx context.Context, arg ListActiviti
 		return nil, err
 	}
 	return items, nil
+}
+
+const reownLegacyActivities = `-- name: ReownLegacyActivities :execrows
+UPDATE activity SET actor = ? WHERE actor = 'Admin'
+`
+
+func (q *Queries) ReownLegacyActivities(ctx context.Context, actor string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, reownLegacyActivities, actor)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

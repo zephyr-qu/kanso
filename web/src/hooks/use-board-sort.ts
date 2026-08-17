@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { safeReadJSON, safeWriteJSON } from "@/lib/safe-storage";
 import type { SortConfig, SortDirection, SortField } from "@/lib/sort-tasks";
 
 const DEFAULT_SORT: SortConfig = {
@@ -10,9 +11,10 @@ const SORT_FIELD_MAP: Record<SortField, true> = {
   position: true,
   createdAt: true,
   title: true,
+  priority: true,
 };
 
-const SORT_FIELDS = Object.keys(SORT_FIELD_MAP) as readonly SortField[];
+export const SORT_FIELDS = Object.keys(SORT_FIELD_MAP) as readonly SortField[];
 
 const SORT_DIRECTION_MAP: Record<SortDirection, true> = {
   asc: true,
@@ -46,34 +48,20 @@ function normalizeSort(value: unknown): SortConfig {
 }
 
 export function useBoardSort(projectId: string | undefined) {
-  const storageKey = projectId ? `kaneo:board-sort:${projectId}` : null;
+  const storageKey = projectId ? `kanso:board-sort:${projectId}` : null;
   const [sort, setSort] = useState<SortConfig>(DEFAULT_SORT);
 
   useEffect(() => {
-    if (!storageKey || typeof window === "undefined") return;
-
-    try {
-      const stored = window.localStorage.getItem(storageKey);
-      if (!stored) {
-        setSort(DEFAULT_SORT);
-        return;
-      }
-
-      const parsed = JSON.parse(stored) as unknown;
-      setSort(normalizeSort(parsed));
-    } catch {
-      setSort(DEFAULT_SORT);
-    }
+    if (!storageKey) return;
+    // normalizeSort 兜底：无值/损坏/非法形状一律回退 DEFAULT_SORT。
+    setSort(normalizeSort(safeReadJSON<unknown>(storageKey)));
   }, [storageKey]);
 
   useEffect(() => {
-    if (!storageKey || typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify(sort));
-    } catch {
-      // persistence is best-effort; private mode or quota can block writes
-    }
+    if (!storageKey) return;
+    safeWriteJSON(storageKey, sort);
   }, [sort, storageKey]);
+
 
   return { sort, setSort };
 }

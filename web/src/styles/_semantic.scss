@@ -1,0 +1,88 @@
+/* Purpose aliases. Components and pages should consume this layer, not raw values. */
+:root {
+  --semantic-font-sans: var(--primitive-font-sans);
+  --semantic-font-heading: var(--primitive-font-sans);
+  --semantic-font-mono: var(--primitive-font-mono);
+  --semantic-font-serif: var(--primitive-font-serif);
+
+  --semantic-surface-page: var(--primitive-color-bg);
+  --semantic-surface-sidebar: var(--primitive-color-bg-deep);
+  --semantic-surface-card: var(--primitive-color-card);
+  --semantic-surface-muted: var(--primitive-color-card-muted);
+  --semantic-surface-board-column: var(--primitive-alpha-board-column);
+
+  --semantic-content-primary: var(--primitive-color-text);
+  --semantic-content-secondary: var(--primitive-color-text-soft);
+  --semantic-content-tertiary: var(--primitive-color-text-faint);
+  --semantic-content-on-primary: var(--primitive-color-white-warm);
+
+  --semantic-action-primary: var(--primitive-color-coral-600);
+  --semantic-action-primary-hover: var(--primitive-color-coral-700);
+  --semantic-action-primary-soft: var(--primitive-alpha-sidebar-active);
+
+  --semantic-border-default: var(--primitive-alpha-border);
+  --semantic-border-strong: var(--primitive-alpha-border-strong);
+  --semantic-border-sidebar: var(--primitive-alpha-sidebar-border);
+
+  --semantic-sidebar-hover: var(--primitive-alpha-sidebar-hover);
+  --semantic-sidebar-active: var(--primitive-alpha-sidebar-active);
+
+  --semantic-state-success: var(--primitive-color-success);
+  --semantic-state-danger: var(--primitive-color-danger);
+  --semantic-state-info: var(--primitive-color-info);
+
+  --semantic-shadow-card: var(--primitive-shadow-card);
+  --semantic-shadow-lift: var(--primitive-shadow-lift);
+  --semantic-shadow-pop: var(--primitive-shadow-pop);
+
+  --font-sans: var(--semantic-font-sans);
+  --font-heading: var(--semantic-font-heading);
+  --font-mono: var(--semantic-font-mono);
+  --font-serif: var(--semantic-font-serif);
+  --radius: var(--primitive-radius-lg);
+  --chart-1: var(--semantic-action-primary);
+  --chart-2: var(--semantic-state-danger);
+  --chart-3: var(--semantic-state-success);
+  --chart-4: var(--semantic-state-info);
+  --chart-5: var(--semantic-content-tertiary);
+  --code: var(--semantic-surface-muted);
+  --code-foreground: var(--semantic-content-primary);
+  --code-highlight: rgba(55, 53, 47, 0.05);
+
+  /* Compatibility aliases consumed by the existing shadcn/CVA components. */
+  --background: var(--semantic-surface-page);
+  --foreground: var(--semantic-content-primary);
+  --card: var(--semantic-surface-card);
+  --card-foreground: var(--semantic-content-primary);
+  --popover: var(--semantic-surface-card);
+  --popover-foreground: var(--semantic-content-primary);
+  --primary: var(--semantic-action-primary);
+  --primary-foreground: var(--semantic-content-on-primary);
+  --secondary: var(--semantic-surface-muted);
+  --secondary-foreground: var(--semantic-content-primary);
+  --muted: var(--semantic-surface-muted);
+  --muted-foreground: var(--semantic-content-secondary);
+  --accent: var(--semantic-action-primary-soft);
+  --accent-foreground: var(--semantic-action-primary-hover);
+  --destructive: var(--semantic-state-danger);
+  --destructive-foreground: #ffffff;
+  --border: var(--semantic-border-default);
+  --input: var(--semantic-border-strong);
+  --ring: var(--semantic-action-primary);
+  --sidebar: var(--semantic-surface-sidebar);
+  --sidebar-foreground: var(--semantic-content-primary);
+  --sidebar-primary: var(--semantic-action-primary);
+  --sidebar-primary-foreground: var(--semantic-content-on-primary);
+  --sidebar-accent: var(--semantic-sidebar-active);
+  --sidebar-accent-foreground: var(--semantic-action-primary-hover);
+  --sidebar-border: var(--semantic-border-sidebar);
+  --sidebar-ring: var(--semantic-action-primary);
+}
+
+/* 暗色：semantic 变量引用 primitive，随 html.dark 暗色集自动切换；
+   此处只需修正 color-scheme（表单控件/滚动条跟随）与代码高亮底色。 */
+html.dark,
+html.dark body {
+  color-scheme: dark;
+  --code-highlight: rgba(232, 227, 218, 0.06);
+}

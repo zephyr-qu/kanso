@@ -1,0 +1,314 @@
+@layer components {
+  .kanso-primary-button {
+    background: var(--semantic-action-primary);
+    color: var(--semantic-content-on-primary);
+    box-shadow: var(--semantic-shadow-card);
+  }
+
+  .kanso-primary-button:hover {
+    background: var(--semantic-action-primary-hover);
+    box-shadow: var(--semantic-shadow-lift);
+  }
+  .date-picker-nav {
+    display: inline-flex;
+    width: 24px;
+    height: 24px;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--primitive-radius-md);
+    color: var(--semantic-content-secondary);
+    transition: background-color var(--primitive-duration-fast) ease, color var(--primitive-duration-fast) ease;
+  }
+
+  .date-picker-nav:hover {
+    background: var(--semantic-surface-muted);
+    color: var(--semantic-content-primary);
+  }
+
+  .date-picker-quick {
+    color: var(--semantic-content-secondary);
+    font-size: 12px;
+    transition: color var(--primitive-duration-fast) ease;
+  }
+
+  .date-picker-quick:hover {
+    color: var(--semantic-action-primary);
+  }
+
+  .kanso-quiet-button {
+    border-color: var(--semantic-border-default);
+    background: transparent;
+    color: var(--semantic-content-secondary);
+  }
+
+  .kanso-quiet-button:hover {
+    border-color: var(--semantic-border-default);
+    background: var(--semantic-surface-muted);
+    color: var(--semantic-content-primary);
+  }
+
+  .kanso-icon-button {
+    display: inline-flex;
+    width: var(--component-icon-button-size);
+    height: var(--component-icon-button-size);
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    border-radius: var(--component-button-radius);
+    color: var(--semantic-content-secondary);
+    transition: background-color var(--primitive-duration-fast) ease, color var(--primitive-duration-fast) ease;
+  }
+
+  .kanso-icon-button:hover { background: var(--semantic-surface-muted); color: var(--semantic-content-primary); }
+  .kanso-icon-button[data-danger="true"]:hover { color: var(--semantic-state-danger); background: color-mix(in srgb, var(--semantic-state-danger) 10%, transparent); }
+
+  .kanso-chip {
+    display: inline-flex;
+    align-items: center;
+    border-radius: var(--primitive-radius-full);
+    background: var(--semantic-surface-muted);
+    padding: 1.5px 8px;
+    color: var(--semantic-content-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+
+  .kanso-label-theme-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    flex: 0 0 auto;
+    border-radius: var(--primitive-radius-full);
+    background: var(--semantic-action-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--semantic-action-primary) 12%, transparent);
+  }
+
+  .kanso-label-chip {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid color-mix(in srgb, var(--semantic-action-primary) 18%, var(--semantic-border-default));
+    border-radius: var(--primitive-radius-full);
+    background: color-mix(in srgb, var(--semantic-action-primary) 10%, transparent);
+    padding: 1.5px 8px;
+    color: var(--semantic-action-primary-hover);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+
+  .kanso-quick-capture-select-trigger {
+    min-width: 0;
+    width: 100%;
+    height: var(--component-select-height);
+    border: 1px solid var(--semantic-border-strong);
+    border-radius: var(--component-select-radius);
+    background: var(--semantic-surface-card);
+    padding: 0 32px 0 var(--component-select-padding-x);
+    color: var(--semantic-content-primary);
+    font-size: 13px;
+    line-height: 1;
+    outline: none;
+    box-shadow: none;
+    transition: border-color var(--primitive-duration-fast) ease, background-color var(--primitive-duration-fast) ease, box-shadow var(--primitive-duration-fast) ease;
+  }
+
+  .kanso-quick-capture-select-trigger:hover { border-color: var(--semantic-action-primary); }
+  .kanso-quick-capture-select-trigger:focus-visible,
+  .kanso-quick-capture-select-trigger[data-popup-open] {
+    border-color: var(--semantic-action-primary);
+    background: var(--semantic-surface-card);
+    box-shadow: var(--component-focus-ring);
+  }
+
+  .kanso-quick-capture-select-trigger > [data-slot="select-icon"] {
+    width: 14px;
+    height: 14px;
+    color: var(--semantic-content-secondary);
+    opacity: 1;
+  }
+
+  .kanso-quick-capture-select-popup {
+    padding: 5px;
+  }
+
+  .kanso-quick-capture-select-item {
+    min-height: 31px;
+    grid-template-columns: 14px 1fr;
+    gap: 7px;
+    border-radius: var(--component-button-radius);
+    padding: 5px 8px;
+    color: var(--semantic-content-secondary);
+    font-size: 13px;
+  }
+
+  .kanso-quick-capture-select-item[data-highlighted] {
+    background: var(--semantic-action-primary-soft);
+    color: var(--semantic-action-primary-hover);
+  }
+
+  .kanso-quick-capture-select-item[data-selected] {
+    color: var(--semantic-content-primary);
+    font-weight: 600;
+  }
+
+  .kanso-quick-capture-select-item[data-highlighted][data-selected] {
+    color: var(--semantic-action-primary-hover);
+  }
+
+  .kanso-priority-option {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--component-priority-gap);
+    border: 1px solid var(--semantic-border-default);
+    border-radius: var(--component-button-radius);
+    background: var(--semantic-surface-card);
+    padding: 6px 10px;
+    color: var(--semantic-content-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.35;
+    outline: none;
+    transition: border-color var(--primitive-duration-fast) ease, background-color var(--primitive-duration-fast) ease, color var(--primitive-duration-fast) ease;
+  }
+
+  .kanso-priority-option:hover,
+  .kanso-priority-option:focus-visible {
+    border-color: var(--semantic-border-strong);
+    background: var(--semantic-surface-muted);
+    color: var(--semantic-content-primary);
+  }
+
+  .kanso-priority-option[data-selected="true"] {
+    border-color: color-mix(in srgb, var(--semantic-action-primary) 42%, var(--semantic-border-default));
+    background: var(--semantic-action-primary-soft);
+    color: var(--semantic-action-primary-hover);
+  }
+
+  .kanso-priority-option__dot {
+    width: var(--component-priority-dot-size);
+    height: var(--component-priority-dot-size);
+    flex: 0 0 auto;
+    border-radius: var(--primitive-radius-full);
+    background: var(--priority-color);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--priority-color) 14%, transparent);
+  }
+
+  .kanso-priority-option--urgent { --priority-color: var(--semantic-state-danger); }
+  .kanso-priority-option--high { --priority-color: var(--semantic-action-primary); }
+  .kanso-priority-option--med { --priority-color: var(--semantic-state-info); }
+  .kanso-priority-option--low { --priority-color: var(--semantic-content-tertiary); }
+
+  .kanso-priority-option[data-selected="true"] { color: var(--priority-color); }
+
+  .kanso-priority-option[data-selected="true"] .kanso-priority-option__dot {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--priority-color) 24%, transparent);
+  }
+
+  .kanso-priority, .kanso-due-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; }
+  .kanso-priority__dot {
+    width: var(--component-priority-dot-size);
+    height: var(--component-priority-dot-size);
+    flex: 0 0 auto;
+    border-radius: var(--primitive-radius-full);
+    background: currentColor;
+    box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 14%, transparent);
+  }
+  .kanso-task-card__title { padding-right: 74px; font-size: 13.5px; font-weight: 500; line-height: 1.5; }
+  .kanso-task-card__title-input {
+    width: 100%;
+    padding: 2px 6px;
+    border: 1px solid var(--semantic-action-primary);
+    border-radius: var(--primitive-radius-md);
+    background: var(--semantic-surface-card);
+    color: var(--semantic-content-primary);
+    font-size: 13.5px;
+    font-weight: 500;
+    line-height: 1.5;
+    outline: none;
+    box-shadow: var(--component-focus-ring);
+  }
+  .kanso-task-card__meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--semantic-content-secondary); font-size: 11px; }
+  .kanso-task-card__time { display: inline-flex; align-items: center; gap: 4px; color: var(--semantic-content-tertiary); font-size: 11px; white-space: nowrap; }
+
+  .kanso-field-label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--semantic-content-secondary);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .kanso-input,
+  .kanso-textarea {
+    border-color: var(--semantic-border-strong);
+    background: var(--semantic-surface-card);
+    color: var(--semantic-content-primary);
+  }
+
+  .kanso-input {
+    min-height: var(--component-input-height);
+  }
+
+  .kanso-login-mark {
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    background: var(--semantic-action-primary);
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--semantic-action-primary) 40%, transparent);
+  }
+
+  .kanso-quick-capture {
+    border-radius: var(--primitive-radius-full);
+    background: var(--semantic-action-primary);
+    color: var(--semantic-content-on-primary);
+    box-shadow: var(--component-quick-capture-shadow);
+  }
+
+  .kanso-quick-capture:hover {
+    background: var(--semantic-action-primary-hover);
+  }
+
+  .kanso-command-panel {
+    border: 1px solid var(--semantic-border-default);
+    border-radius: var(--primitive-radius-xl);
+    background: var(--semantic-surface-card);
+    box-shadow: var(--component-command-shadow);
+  }
+
+  .kanso-keyboard-tip {
+    border: 1px solid var(--semantic-border-default);
+    border-radius: var(--primitive-radius-full);
+    background: var(--semantic-surface-card);
+    padding: 7px 16px;
+    color: var(--semantic-content-secondary);
+    font-family: var(--semantic-font-mono);
+    font-size: 11.5px;
+    opacity: 0.9;
+    box-shadow: var(--component-floating-tip-shadow);
+  }
+
+  .kanso-input:focus-within,
+  .kanso-textarea:focus-within,
+  .kanso-select-trigger:focus-visible,
+  .kanso-focus-ring:focus-visible {
+    border-color: var(--semantic-action-primary) !important;
+    outline: none;
+    box-shadow: var(--component-focus-ring) !important;
+  }
+
+  .kanso-input:focus-within::before,
+  .kanso-textarea:focus-within::before,
+  .kanso-select-trigger:focus-visible::before {
+    box-shadow: none !important;
+  }
+
+  .kanso-input > input:focus,
+  .kanso-input > [data-slot="input"]:focus,
+  .kanso-textarea > textarea:focus,
+  .kanso-comment-input textarea:focus {
+    border-color: transparent;
+    outline: none !important;
+    box-shadow: none !important;
+  }
+}

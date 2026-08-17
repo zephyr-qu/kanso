@@ -11,6 +11,7 @@ export type DashboardData = {
 	doneTasks: number;
 	completionPercent: number;
 	byColumn: { name: string; count: number }[];
+	byPriority: { priority: string; count: number }[];
 	projects: {
 		id: string;
 		workspaceId: string;
@@ -18,13 +19,24 @@ export type DashboardData = {
 		done: number;
 		total: number;
 	}[];
-	focus: { id: string; title: string; column: string; urgent: boolean }[];
+	focus: {
+		id: string;
+		title: string;
+		column: string;
+		projectName: string;
+		dueDate: string | null;
+		urgent: boolean;
+	}[];
 	recentActivity: {
 		id: string;
 		projectName: string;
 		action: string;
+		/** 活动载荷（JSON 字符串），供活动详情文案展示（与 /api/activity 同构）。 */
+		data?: string | null;
+		/** 执行者名（ADR-0013：team 模式为成员名，personal 为 Admin）。 */
+		actor?: string;
 		createdAt: string;
 	}[];
-	/** 近 14 天新增/完成趋势（含今天，无数据日期补零）。 */
+	/** 近 14 天新增/完成趋势（含今天，无数据日期补零）；仪表盘展示最后 7 天。 */
 	trend: { day: string; created: number; completed: number }[];
 };

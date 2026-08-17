@@ -6,8 +6,11 @@ data/
 
 # 前端
 node_modules/
+web/.pnpm-store/
+.pnpm-store/
+# dist 目录 gitignore，但保留占位文件 index.html（go:embed 需要，避免新克隆 go build 失败）
 web/dist/*
-!web/dist/.gitkeep
+!web/dist/index.html
 
 # 环境
 .env
@@ -16,15 +19,43 @@ web/dist/*
 !**/.env.example
 .pi-subagents/
 .agents/
+.impeccable/
 .scratch/
+.e2e-*/
+.vscode/
 /kanso
+
+# 本地文档（不入版本管理）
+docs/
+CONTEXT.md
 
 # 本地产物与临时文件
 /kanas-new
 /kanso-new
 /kanso.exe
+*.exe
+/nul
 temp/
 .gocache/
+.gocache-*/
+.e2e-review-data*/
+.data-drag-*/
+designs/
+skills-lock.json
 *.log
+playwright-report/
+test-results/
 web/screenshots/
 web/test-results/
+.codex-go-cache/
+
+# 本地运行配置（可能包含访问密钥）
+kanso-config.json
+
+# Go 测试覆盖率产物
+*.cover
+*.coverprofile
+*-cover
+*-cover.html
+*-cover.out
+coverage.out

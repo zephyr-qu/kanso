@@ -1,0 +1,39 @@
+@layer components {
+  .kanso-error {
+    color: var(--semantic-state-danger);
+  }
+
+  .kanso-success {
+    color: var(--semantic-state-success);
+  }
+
+  .kanso-drag-over {
+    background: color-mix(in srgb, var(--semantic-action-primary) 8%, var(--semantic-surface-card));
+    border-color: color-mix(in srgb, var(--semantic-action-primary) 36%, var(--semantic-border-default));
+  }
+
+  .kanso-board-column[data-drag-over="true"] {
+    border-color: color-mix(in srgb, var(--semantic-action-primary) 35%, var(--semantic-border-default));
+    box-shadow: 0 0 0 2px var(--semantic-action-primary-soft);
+  }
+
+  [data-slot="dialog-popup"],
+  [data-slot="popover-popup"],
+  [data-slot="select-popup"],
+  [data-slot="menu-popup"] {
+    border-color: var(--semantic-border-default);
+    border-radius: var(--primitive-radius-lg);
+    background: var(--semantic-surface-card);
+    color: var(--semantic-content-primary);
+    box-shadow: var(--semantic-shadow-pop);
+  }
+
+  .kanso-surface-card,
+  .kanso-sidebar-item,
+  .kanso-primary-button,
+  .kanso-quiet-button {
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  }
+}
