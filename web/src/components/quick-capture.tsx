@@ -174,7 +174,7 @@ export function QuickCapture({
 						<DialogClose />
 					</div>
 
-					<div className="space-y-4 px-5 py-4">
+					<div className="space-y-3 px-5 py-4">
 						<input
 							ref={inputRef}
 							value={title}
@@ -254,8 +254,10 @@ export function QuickCapture({
 							</div>
 						</div>
 
-						{/* 优先级分段按钮 */}
-						<div className="flex flex-wrap gap-1.5">
+					{/* 优先级：左标签 + 右按钮组（与截止日期/标签行对齐） */}
+					<div className="flex items-center justify-between gap-2">
+						<span className="text-[11px] font-medium text-muted-foreground">优先级</span>
+						<div className="flex flex-wrap justify-end gap-1.5">
 							{PRIORITIES.map((p) => (
 								<button
 									key={p}
@@ -269,6 +271,7 @@ export function QuickCapture({
 								</button>
 							))}
 						</div>
+					</div>
 
 						{/* 截止日期（可选） */}
 						<div className="flex items-center justify-between gap-2">
