@@ -460,6 +460,23 @@ export const handlers = [
 	}),
 	http.post(mswPattern("taskMilestones"), async ({ params }) => milestoneLink(textParam(params.taskId), textParam(params.milestoneId), true)),
 	http.delete(mswPattern("taskMilestones"), async ({ params }) => milestoneLink(textParam(params.taskId), textParam(params.milestoneId), false)),
+	http.get(mswPattern("milestoneTasks"), async ({ params }) => {
+		const milestoneId = textParam(params.id);
+		const db = getMockDb();
+		if (!findMilestone(milestoneId)) return error("里程碑不存在", 404);
+		// 反查关联该里程碑的任务。
+		const tasks: Array<{ id: string; title: string; columnName: string; archived: boolean }> = [];
+		for (const board of Object.values(db.boards)) {
+			for (const col of board.columns) {
+				for (const t of col.tasks) {
+					if ((db.taskMilestones[t.id] ?? []).includes(milestoneId)) {
+						tasks.push({ id: t.id, title: t.title, columnName: col.name, archived: !!t.archivedAt });
+					}
+				}
+			}
+		}
+		return HttpResponse.json(tasks);
+	}),
 ];
 
 async function archiveTask(taskId: string, archived: boolean) {

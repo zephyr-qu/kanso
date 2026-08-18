@@ -108,3 +108,22 @@ test("分享进度卡:卡片含里程碑进度,可下载PNG", async ({ page }) =
 	const download = await dl;
 	expect(download.suggestedFilename()).toMatch(/png$/);
 });
+
+test("点项目页进度卡:打开该里程碑详情面板(非管理)", async ({ page }) => {
+	await loginAndOpenBoard(page);
+
+	// 建一个里程碑。
+	await page.getByRole("button", { name: "里程碑" }).click();
+	const dialog = page.getByRole("dialog");
+	await dialog.getByPlaceholder("新里程碑名称").fill("详情MS");
+	await dialog.getByRole("button", { name: "创建", exact: true }).click();
+	await expect(dialog.getByText("详情MS")).toBeVisible({ timeout: 5000 });
+	await page.keyboard.press("Escape");
+
+	// 点页面顶部这个里程碑的进度卡 → 打开详情面板。
+	await page.locator("button.kanso-surface-card", { hasText: "详情MS" }).click();
+	const detail = page.getByRole("dialog");
+	await expect(detail.getByText("详情MS")).toBeVisible();
+	await expect(detail.getByText(/关联任务/).first()).toBeVisible();
+	await expect(detail.getByText(/进度/).first()).toBeVisible();
+});

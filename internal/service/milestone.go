@@ -204,3 +204,42 @@ func (s *Service) SetTaskMilestone(ctx context.Context, taskID, milestoneID stri
 	s.broadcastEvent(event)
 	return nil
 }
+
+// MilestoneTask 里程碑关联的任务摘要(M5 详情面板)。
+type MilestoneTask struct {
+	ID         string `json:"id"`
+	Title      string `json:"title"`
+	ColumnName string `json:"columnName"`
+	Archived   bool   `json:"archived"`
+}
+
+// ListMilestoneTasks 返回该里程碑关联的任务(task_milestone 多对多);里程碑不存在返回 ErrNotFound。
+func (s *Service) ListMilestoneTasks(ctx context.Context, milestoneID string) ([]MilestoneTask, error) {
+	if _, err := gen.New(s.db).GetMilestone(ctx, milestoneID); err != nil {
+		return nil, mapNoRows(err)
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT t.id, t.title, c.name AS column_name,
+		CASE WHEN t.archived_at IS NULL THEN 0 ELSE 1 END AS archived
+		FROM task t
+		JOIN task_milestone tm ON tm.task_id = t.id
+		JOIN column c ON c.id = t.column_id
+		WHERE tm.milestone_id = ?
+		ORDER BY t.created_at`, milestoneID)
+	if err != nil {
+		return nil, fmt.Errorf("查询里程碑任务失败: %w", err)
+	}
+	defer rows.Close()
+	out := make([]MilestoneTask, 0)
+	for rows.Next() {
+		var mt MilestoneTask
+		if err := rows.Scan(&mt.ID, &mt.Title, &mt.ColumnName, &mt.Archived); err != nil {
+			return nil, fmt.Errorf("扫描里程碑任务失败: %w", err)
+		}
+		out = append(out, mt)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("遍历里程碑任务失败: %w", err)
+	}
+	return out, nil
+}
+

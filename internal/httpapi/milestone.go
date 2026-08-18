@@ -114,3 +114,17 @@ func (a *API) detachMilestone(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// listMilestoneTasks 返回该里程碑关联的任务。
+func (a *API) listMilestoneTasks(w http.ResponseWriter, r *http.Request) {
+	tasks, err := a.svc.ListMilestoneTasks(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		if errors.Is(err, service.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "里程碑不存在")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "查询里程碑任务失败")
+		return
+	}
+	writeJSON(w, http.StatusOK, tasks)
+}

@@ -85,6 +85,7 @@ func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.
 		pr.Get("/api/projects/{id}/archived-tasks", a.listArchivedTasks)
 		pr.Get("/api/projects/{id}/milestones", a.listMilestones)
 		pr.Post("/api/projects/{id}/milestones", a.createMilestone)
+		pr.Get("/api/milestones/{id}/tasks", a.listMilestoneTasks)
 		pr.Patch("/api/milestones/{id}", a.updateMilestone)
 		pr.Delete("/api/milestones/{id}", a.deleteMilestone)
 		pr.Post("/api/projects/{id}/columns", a.createColumn)

@@ -34,6 +34,7 @@ export const ENDPOINT_TEMPLATES = {
 	comment: "/api/comments/:id",
 	label: "/api/labels/:id",
 	milestone: "/api/milestones/:id",
+	milestoneTasks: "/api/milestones/:id/tasks",
 	// 汇总与检索
 	dashboard: "/api/dashboard",
 	activity: "/api/activity",

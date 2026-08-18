@@ -31,6 +31,7 @@ import ConfirmDialog from "@/components/confirm-dialog";
 import LabelManagerDialog from "@/components/label-manager";
 import NameDialog from "@/components/name-dialog";
 import ShareMilestoneDialog from "@/components/share-milestone-dialog";
+import MilestoneDetailDialog from "@/components/milestone-detail-dialog";
 import SortableColumn from "@/components/board/sortable-column";
 import { TaskCardView } from "@/components/board/sortable-task-card";
 import { Button } from "@/components/ui/button";
@@ -157,6 +158,7 @@ export default function BoardPage() {
 	const [viewMode, setViewMode] = useState<"columns" | "swimlane">("columns");
 	const [milestoneOpen, setMilestoneOpen] = useState(false);
 	const [shareOpen, setShareOpen] = useState(false);
+	const [detailMilestone, setDetailMilestone] = useState<Milestone | null>(null);
 	const [newMilestone, setNewMilestone] = useState("");
 	// 里程碑行内编辑/删除状态。
 	const [editingMilestone, setEditingMilestone] = useState<{ id: string; name: string } | null>(null);
@@ -392,7 +394,7 @@ export default function BoardPage() {
 								{milestonesQuery.data.map((m) => {
 									const pct = m.progress && m.progress.total > 0 ? Math.round((m.progress.done / m.progress.total) * 100) : 0;
 									return (
-										<button key={m.id} type="button" onClick={() => setMilestoneOpen(true)}
+										<button key={m.id} type="button" onClick={() => setDetailMilestone(m)}
 											className="kanso-surface-card flex w-40 flex-col gap-1 p-3 text-left transition-colors hover:border-primary/40">
 											<span className="truncate text-sm font-medium">{m.name}</span>
 											<span className="text-[11px] text-muted-foreground">{m.dueDate ? `截止 ${m.dueDate}` : "未设截止"}</span>
@@ -646,6 +648,13 @@ export default function BoardPage() {
 			/>
 		
 			<ShareMilestoneDialog open={shareOpen} onOpenChange={setShareOpen} projectName={board?.project.name ?? ""} milestones={milestonesQuery.data ?? []} />
+			<MilestoneDetailDialog
+				open={detailMilestone !== null}
+				onOpenChange={(open) => { if (!open) setDetailMilestone(null); }}
+				milestone={detailMilestone}
+				workspaceId={workspaceId}
+				projectId={projectId}
+			/>
 		</div>
 	);
 }
