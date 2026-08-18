@@ -251,19 +251,8 @@ export default function TaskDetailPage() {
 									</h2>
 								)}
 								<div className="kanso-task-detail__title-meta">
-									<span className="kanso-task-detail__priority">
-										<span
-											className="kanso-priority__dot"
-											style={{
-												backgroundColor: priorityColor(
-													normalizePriority(data.task.priority),
-												),
-											}}
-										/>
-										{PRIORITY_LABEL[normalizePriority(data.task.priority)]}
-									</span>
 									{/* 优先级分段按钮：点击即保存（0008 后优先级为唯一重要度维度）。 */}
-									<span className="ml-1 inline-flex items-center gap-1">
+									<span className="inline-flex items-center gap-1">
 										{PRIORITIES.map((p) => (
 											<button
 												key={p}
@@ -278,11 +267,13 @@ export default function TaskDetailPage() {
 											</button>
 										))}
 									</span>
+									<div className="mt-1 flex w-full flex-wrap items-center gap-1.5">
 									{data.labels.map((label) => (
 										<span key={label.id} className="kanso-task-detail__label-chip">
 											{label.name}
 										</span>
 									))}
+									</div>
 								</div>
 							</div>
 						</div>
