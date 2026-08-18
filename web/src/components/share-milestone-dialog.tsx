@@ -5,7 +5,15 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { toPng } from "html-to-image";
 import { DownloadIcon, CheckIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogBackdrop, DialogHeader, DialogPanel, DialogPopup, DialogPortal, DialogTitle } from "@/components/ui/dialog";
+import {
+	Dialog,
+	DialogBackdrop,
+	DialogHeader,
+	DialogPanel,
+	DialogPopup,
+	DialogPortal,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import type { Milestone } from "@/types/board";
 
 const ORANGE = "#c2410c";
@@ -36,11 +44,7 @@ function pathD(H: number): string {
 const NODE_STEP = 92; // 每节点纵向间距
 
 // 旅程曲线 + 里程碑节点(HTML 标签定位在 SVG 节点坐标上)。
-function Journey({
-	milestones,
-}: {
-	milestones: Milestone[];
-}) {
+function Journey({ milestones }: { milestones: Milestone[] }) {
 	const pathRef = useRef<SVGPathElement | null>(null);
 	const [pts, setPts] = useState<{ x: number; y: number }[]>([]);
 	const n = Math.max(milestones.length, 1);
@@ -58,7 +62,9 @@ function Journey({
 	}, [milestones.length, H]);
 
 	return (
-		<div style={{ position: "relative", width: 400, height: H, margin: "0 auto" }}>
+		<div
+			style={{ position: "relative", width: 400, height: H, margin: "0 auto" }}
+		>
 			{/* 曲线 */}
 			<svg width={400} height={H} style={{ position: "absolute", inset: 0 }}>
 				<path
@@ -90,15 +96,46 @@ function Journey({
 							textAlign: left ? "left" : "right",
 						}}
 					>
-						<div style={{ display: "flex", alignItems: "center", gap: 7, justifyContent: left ? "flex-start" : "flex-end" }}>
+						<div
+							style={{
+								display: "flex",
+								alignItems: "center",
+								gap: 7,
+								justifyContent: left ? "flex-start" : "flex-end",
+							}}
+						>
 							{done ? (
 								<CheckIcon size={15} color={ORANGE} strokeWidth={3} />
 							) : (
-								<span style={{ width: 7, height: 7, borderRadius: 99, background: SOFT, flex: "0 0 auto" }} />
+								<span
+									style={{
+										width: 7,
+										height: 7,
+										borderRadius: 99,
+										background: SOFT,
+										flex: "0 0 auto",
+									}}
+								/>
 							)}
-							<span style={{ fontSize: 15, fontWeight: 600, color: INK, whiteSpace: "nowrap" }}>{m.name}</span>
+							<span
+								style={{
+									fontSize: 15,
+									fontWeight: 600,
+									color: INK,
+									whiteSpace: "nowrap",
+								}}
+							>
+								{m.name}
+							</span>
 						</div>
-						<div style={{ fontSize: 10, color: FAINT, marginTop: 3, letterSpacing: ".05em" }}>
+						<div
+							style={{
+								fontSize: 10,
+								color: FAINT,
+								marginTop: 3,
+								letterSpacing: ".05em",
+							}}
+						>
 							{pctOf(m)}% {m.dueDate ? `· ${m.dueDate}` : ""}
 						</div>
 					</div>
@@ -132,31 +169,92 @@ function CardVisual({
 				boxShadow: "0 1px 0 rgba(55,53,47,.05)",
 			}}
 		>
-			<div style={{ height: 8, background: `linear-gradient(90deg, ${ORANGE}, #e0601f, #f0a563)` }} />
+			<div
+				style={{
+					height: 8,
+					background: `linear-gradient(90deg, ${ORANGE}, #e0601f, #f0a563)`,
+				}}
+			/>
 			<div style={{ padding: "26px 34px 24px" }}>
 				{/* 品牌行 */}
-				<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+				<div
+					style={{
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "space-between",
+					}}
+				>
 					<div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-						<div style={{ width: 26, height: 26, borderRadius: 7, background: ORANGE, display: "flex", alignItems: "center", justifyContent: "center" }}>
-							<span style={{ color: "#fff8f0", fontFamily: SERIF, fontSize: 14 }}>簡</span>
+						<div
+							style={{
+								width: 26,
+								height: 26,
+								borderRadius: 7,
+								background: ORANGE,
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "center",
+							}}
+						>
+							<span style={{ color: "#fff8f0", fontFamily: SERIF, fontSize: 14 }}>
+								簡
+							</span>
 						</div>
-						<span style={{ fontSize: 13, letterSpacing: ".18em", color: SOFT, fontWeight: 600 }}>KANSO</span>
+						<span
+							style={{
+								fontSize: 13,
+								letterSpacing: ".18em",
+								color: SOFT,
+								fontWeight: 600,
+							}}
+						>
+							KANSO
+						</span>
 					</div>
-					<span style={{ fontSize: 10, letterSpacing: ".14em", color: FAINT }}>里程碑旅程</span>
+					<span style={{ fontSize: 10, letterSpacing: ".14em", color: FAINT }}>
+						里程碑旅程
+					</span>
 				</div>
 
 				{/* 项目名 */}
-				<h2 style={{ fontFamily: SERIF, fontSize: 32, lineHeight: 1.25, color: INK, margin: "22px 0 0", textAlign: "center", letterSpacing: "-0.01em" }}>
+				<h2
+					style={{
+						fontFamily: SERIF,
+						fontSize: 32,
+						lineHeight: 1.25,
+						color: INK,
+						margin: "22px 0 0",
+						textAlign: "center",
+						letterSpacing: "-0.01em",
+					}}
+				>
 					{projectName}
 				</h2>
-				<p style={{ fontSize: 10, color: FAINT, margin: "8px 0 0", textAlign: "center", letterSpacing: ".18em" }}>
+				<p
+					style={{
+						fontSize: 10,
+						color: FAINT,
+						margin: "8px 0 0",
+						textAlign: "center",
+						letterSpacing: ".18em",
+					}}
+				>
 					MILESTONE JOURNEY
 				</p>
 
 				{/* 旅程曲线 */}
 				<div style={{ marginTop: 26 }}>
 					{milestones.length === 0 ? (
-						<p style={{ textAlign: "center", fontSize: 13, color: FAINT, padding: "30px 0" }}>暂无里程碑</p>
+						<p
+							style={{
+								textAlign: "center",
+								fontSize: 13,
+								color: FAINT,
+								padding: "30px 0",
+							}}
+						>
+							暂无里程碑
+						</p>
 					) : (
 						<Journey milestones={milestones} />
 					)}
@@ -164,15 +262,38 @@ function CardVisual({
 			</div>
 
 			{/* 底部汇总 */}
-			<div style={{ borderTop: `1px solid ${LINE}`, padding: "14px 34px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+			<div
+				style={{
+					borderTop: `1px solid ${LINE}`,
+					padding: "14px 34px",
+					display: "flex",
+					justifyContent: "space-between",
+					alignItems: "center",
+				}}
+			>
 				<span style={{ fontSize: 11, color: SOFT }}>
-					<span style={{ fontFamily: MONO, fontWeight: 700, color: ORANGE }}>{done}</span>/{total} 完成
+					{total > 0 ? (
+						<><span style={{ fontFamily: MONO, fontWeight: 700, color: ORANGE }}>{done}</span>/{total} 完成</>
+					) : (
+						<span style={{ fontFamily: MONO, fontWeight: 700, color: ORANGE }}>未启动</span>
+					)}
 				</span>
 				<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
 					<span style={{ fontSize: 10, color: FAINT, letterSpacing: ".08em" }}>
-						{generatedAt.getFullYear()}·{String(generatedAt.getMonth() + 1).padStart(2, "0")}·{String(generatedAt.getDate()).padStart(2, "0")}
+						{generatedAt.getFullYear()}·
+						{String(generatedAt.getMonth() + 1).padStart(2, "0")}·
+						{String(generatedAt.getDate()).padStart(2, "0")}
 					</span>
-					<span style={{ fontSize: 11, letterSpacing: ".16em", fontWeight: 600, color: SOFT }}>KANSO</span>
+					<span
+						style={{
+							fontSize: 11,
+							letterSpacing: ".16em",
+							fontWeight: 600,
+							color: SOFT,
+						}}
+					>
+						KANSO
+					</span>
 				</div>
 			</div>
 		</div>
@@ -213,10 +334,20 @@ export default function ShareMilestoneDialog(props: {
 					</DialogHeader>
 					<DialogPanel className="flex flex-col items-center gap-4 py-4">
 						<div ref={cardRef} className="w-full">
-							<CardVisual projectName={projectName} milestones={milestones} generatedAt={generatedAt} />
+							<CardVisual
+								projectName={projectName}
+								milestones={milestones}
+								generatedAt={generatedAt}
+							/>
 						</div>
 						<div className="flex items-center justify-end gap-2 self-end pr-1">
-							<Button variant="ghost" size="sm" onClick={() => props.onOpenChange(false)}>关闭</Button>
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={() => props.onOpenChange(false)}
+							>
+								关闭
+							</Button>
 							<Button size="sm" onClick={download}>
 								<DownloadIcon className="size-4" /> 下载 PNG
 							</Button>

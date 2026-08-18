@@ -1,5 +1,6 @@
 // 看板页：编排与渲染。数据/缓存/乐观更新逻辑都在领域 hooks 里（架构候选 1）。
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	DndContext,
@@ -172,6 +173,7 @@ export default function BoardPage() {
 		const x = e.clientX, y = e.clientY;
 		const t = window.setTimeout(() => {
 			suppressClickRef.current = true;
+			document.body.classList.add("no-select");
 			setMilestoneLink({ fromX: x, fromY: y, curX: x, curY: y, milestoneId, targetTaskId: null });
 		}, 300);
 		linkPressRef.current = { x, y, timer: t };
@@ -189,6 +191,7 @@ export default function BoardPage() {
 			const card = (target as Element | null)?.closest?.("[data-task-id]");
 			return card ? card.getAttribute("data-task-id") : null;
 		};
+		const onSelectStart = (e: Event) => { if (linkPressRef.current) e.preventDefault(); };
 		const move = (ev: PointerEvent) => {
 			setMilestoneLink((l) => (l ? { ...l, curX: ev.clientX, curY: ev.clientY, targetTaskId: detectTask(ev.target) } : l));
 		};
@@ -199,9 +202,11 @@ export default function BoardPage() {
 			});
 			clearLinkPress();
 		};
+		window.addEventListener("selectstart", onSelectStart);
 		window.addEventListener("pointermove", move);
 		window.addEventListener("pointerup", up);
 		return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+		window.removeEventListener("selectstart", onSelectStart);
 	}, []);
 	const [newMilestone, setNewMilestone] = useState("");
 	// 里程碑行内编辑/删除状态。
@@ -689,12 +694,12 @@ export default function BoardPage() {
 				</DialogPopup></DialogPortal>
 			</Dialog>
 		
-			{milestoneLink ? (
+			{milestoneLink ? createPortal(
 				<svg className="pointer-events-none fixed inset-0 z-[120]">
 					<line x1={milestoneLink.fromX} y1={milestoneLink.fromY} x2={milestoneLink.curX} y2={milestoneLink.curY} stroke="#c2410c" strokeWidth={2} strokeDasharray="5 4" />
 					<circle cx={milestoneLink.curX} cy={milestoneLink.curY} r={5} fill={milestoneLink.targetTaskId ? "#c2410c" : "rgba(194,65,12,.45)"} />
 				</svg>
-			) : null}
+, document.body) : null}
 			<ShareMilestoneDialog open={shareOpen} onOpenChange={setShareOpen} projectName={board?.project.name ?? ""} milestones={milestonesQuery.data ?? []} />
 			<MilestoneDetailDialog
 				open={detailMilestone !== null}

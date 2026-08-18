@@ -1412,3 +1412,10 @@ input:-webkit-autofill:active {
   background: color-mix(in srgb, var(--primary) 22%, transparent);
   color: var(--foreground);
 }
+
+/* 长按里程碑卡拖线关联时禁用文字选中。 */
+.no-select,
+.no-select * {
+	user-select: none;
+	-webkit-user-select: none;
+}
