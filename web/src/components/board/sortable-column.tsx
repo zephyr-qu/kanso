@@ -31,7 +31,7 @@ export default function SortableColumn(props: {
 	sortConfig: SortConfig;
 	onRename: (column: BoardColumn) => void;
 	onDelete: (column: BoardColumn) => void;
-	onAddTask: (columnId: string, title: string) => void;
+	onAddTask: (columnId: string, title: string, priority: string) => void;
 	onOpenTask: (task: Task) => void;
 	onRenameTask: (task: Task, title: string) => void;
 	onArchiveTask: (task: Task) => void;
@@ -172,7 +172,7 @@ export default function SortableColumn(props: {
 					{taskList}
 				</SortableContext>
 			)}
-			<AddTaskForm onAdd={(title) => onAddTask(column.id, title)} />
+			<AddTaskForm onAdd={(title, priority) => onAddTask(column.id, title, priority)} />
 			</div>
 			</div>
 		</div>

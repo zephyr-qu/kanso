@@ -385,8 +385,8 @@ export default function BoardPage() {
 										sortConfig={sortConfig}
 										onRename={setRenaming}
 										onDelete={setDeleting}
-										onAddTask={(columnId, title) =>
-											taskOps.createTask.mutate({ columnId, title })
+										onAddTask={(columnId, title, priority) =>
+											taskOps.createTask.mutate({ columnId, title, priority })
 										}
 										onOpenTask={(task) =>
 											navigate(

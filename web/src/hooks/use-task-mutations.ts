@@ -57,10 +57,10 @@ export function useTaskMutations(projectId: string) {
 	const queryClient = useQueryClient();
 
 	const createTask = useMutation({
-		mutationFn: ({ columnId, title }: { columnId: string; title: string }) =>
+		mutationFn: ({ columnId, title, priority }: { columnId: string; title: string; priority: string }) =>
 			api<Task>(buildPath("columnTasks", { columnId }), {
 				method: "POST",
-				body: JSON.stringify({ title }),
+				body: JSON.stringify({ title, priority }),
 			}),
 		onSuccess: (task) => {
 			// 乐观插入：用服务端返回的任务立即写入缓存（无延迟感），invalidate 后台收敛。

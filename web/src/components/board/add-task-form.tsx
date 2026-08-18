@@ -1,11 +1,16 @@
 // 列内"添加任务"的内联表单（借鉴原型 .add：轻量触发按钮，hover 加深；回车创建）。
+// 0008 后统一优先级为唯一重要度维度：表单提供四档优先级分段按钮（默认 中）。
 import { useState } from "react";
 import { PlusIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { PRIORITIES, PRIORITY_LABEL, normalizePriority } from "@/lib/priority";
 
-export default function AddTaskForm(props: { onAdd: (title: string) => void }) {
+export default function AddTaskForm(props: {
+	onAdd: (title: string, priority: string) => void;
+}) {
 	const [adding, setAdding] = useState(false);
 	const [title, setTitle] = useState("");
+	const [priority, setPriority] = useState("med");
 
 	if (!adding) {
 		return (
@@ -23,8 +28,9 @@ export default function AddTaskForm(props: { onAdd: (title: string) => void }) {
 			onSubmit={(e) => {
 				e.preventDefault();
 				if (!title.trim()) return;
-				props.onAdd(title.trim());
+				props.onAdd(title.trim(), priority);
 				setTitle("");
+				setPriority("med");
 				setAdding(false);
 			}}
 		>
@@ -36,6 +42,22 @@ export default function AddTaskForm(props: { onAdd: (title: string) => void }) {
 				placeholder="任务标题，回车创建"
 				className="h-8 text-sm"
 			/>
+			{/* 优先级分段按钮：与 Quick Capture 同款交互。 */}
+			<div className="mt-1.5 flex flex-wrap gap-1">
+				{PRIORITIES.map((p) => (
+					<button
+						key={p}
+						type="button"
+						onClick={() => setPriority(p)}
+						onMouseDown={(e) => e.preventDefault()}
+						className={`kanso-priority-option kanso-priority-option--${p} px-2 py-1 text-[11px]`}
+						data-selected={priority === p}
+					>
+						<span className="kanso-priority-option__dot" aria-hidden="true" />
+						{PRIORITY_LABEL[normalizePriority(p)]}
+					</button>
+				))}
+			</div>
 		</form>
 	);
 }

@@ -31,6 +31,7 @@ import { PageContent, PageHeader } from "@/components/kanso-ui";
 import DatePicker from "@/components/date-picker";
 import {
 	normalizePriority,
+	PRIORITIES,
 	PRIORITY_LABEL,
 	priorityColor,
 } from "@/lib/priority";
@@ -259,7 +260,23 @@ export default function TaskDetailPage() {
 												),
 											}}
 										/>
-										{PRIORITY_LABEL[normalizePriority(data.task.priority)]} 优先级
+										{PRIORITY_LABEL[normalizePriority(data.task.priority)]}
+									</span>
+									{/* 优先级分段按钮：点击即保存（0008 后优先级为唯一重要度维度）。 */}
+									<span className="ml-1 inline-flex items-center gap-1">
+										{PRIORITIES.map((p) => (
+											<button
+												key={p}
+												type="button"
+												title={`设为${PRIORITY_LABEL[normalizePriority(p)]}优先级`}
+												onClick={() => updateTaskMutation.mutate({ priority: p })}
+												className={`kanso-priority-option kanso-priority-option--${p} px-1.5 py-0.5 text-[11px]`}
+												data-selected={normalizePriority(data.task.priority) === p}
+											>
+												<span className="kanso-priority-option__dot" aria-hidden="true" />
+												{PRIORITY_LABEL[normalizePriority(p)]}
+											</button>
+										))}
 									</span>
 									{data.labels.map((label) => (
 										<span key={label.id} className="kanso-task-detail__label-chip">
