@@ -25,7 +25,7 @@
   --component-input-height: 38px;
   --component-focus-ring: 0 0 0 3px color-mix(in srgb, var(--semantic-action-primary) 24%, transparent);
   --component-floating-tip-shadow: var(--semantic-shadow-lift);
-  --component-command-shadow: 0 16px 48px rgba(55, 53, 47, 0.18);
+  --component-command-shadow: var(--semantic-shadow-command);
   --component-quick-capture-shadow: var(--semantic-shadow-pop);
   --component-task-radius: var(--primitive-radius-md);
   --component-task-padding: 11px 12px 10px;
