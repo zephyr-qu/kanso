@@ -23,13 +23,14 @@ import {
 	horizontalListSortingStrategy,
 	sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
-import { ArchiveIcon, ArrowDownIcon, ArrowUpIcon, CalendarIcon, MilestoneIcon, PencilIcon, PlusIcon, TagIcon, TrashIcon } from "lucide-react";
+import { ArchiveIcon, ArrowDownIcon, ArrowUpIcon, CalendarIcon, MilestoneIcon, PencilIcon, PlusIcon, Share2Icon, TagIcon, TrashIcon } from "lucide-react";
 import DatePicker from "@/components/date-picker";
 import { CSS } from "@dnd-kit/utilities";
 import { Link, useNavigate, useParams } from "react-router";
 import ConfirmDialog from "@/components/confirm-dialog";
 import LabelManagerDialog from "@/components/label-manager";
 import NameDialog from "@/components/name-dialog";
+import ShareMilestoneDialog from "@/components/share-milestone-dialog";
 import SortableColumn from "@/components/board/sortable-column";
 import { TaskCardView } from "@/components/board/sortable-task-card";
 import { Button } from "@/components/ui/button";
@@ -155,6 +156,7 @@ export default function BoardPage() {
 	const [archiveOpen, setArchiveOpen] = useState(false);
 	const [viewMode, setViewMode] = useState<"columns" | "swimlane">("columns");
 	const [milestoneOpen, setMilestoneOpen] = useState(false);
+	const [shareOpen, setShareOpen] = useState(false);
 	const [newMilestone, setNewMilestone] = useState("");
 	// 里程碑行内编辑/删除状态。
 	const [editingMilestone, setEditingMilestone] = useState<{ id: string; name: string } | null>(null);
@@ -385,6 +387,7 @@ export default function BoardPage() {
 							<div className="mb-1.5 flex items-center justify-between">
 								<span className="text-xs font-medium text-muted-foreground">里程碑进度</span>
 								<button type="button" className="text-xs text-primary hover:underline" onClick={() => setMilestoneOpen(true)}>管理</button>
+									<button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setShareOpen(true)}>分享进度</button>
 							</div>
 							<div className="flex flex-wrap gap-2">
 								{milestonesQuery.data.map((m) => {
@@ -630,6 +633,8 @@ export default function BoardPage() {
 									);
 								})}
 						</div>
+					
+						<div className="mt-4"><Button size="sm" variant="outline" onClick={() => setShareOpen(true)}><Share2Icon className="size-4" /> 下载进度卡</Button></div>
 					</DialogPanel>
 				</DialogPopup></DialogPortal>
 			</Dialog>
@@ -640,6 +645,8 @@ export default function BoardPage() {
 				description={`确定删除里程碑「${deletingMilestone?.name}」吗？其任务关联将一并解除，此操作不可撤销。`}
 				onConfirm={async () => { if (deletingMilestone) await deleteMilestoneMutation.mutateAsync(deletingMilestone.id); }}
 			/>
+		
+			<ShareMilestoneDialog open={shareOpen} onOpenChange={setShareOpen} projectName={board?.project.name ?? ""} milestones={milestonesQuery.data ?? []} />
 		</div>
 	);
 }

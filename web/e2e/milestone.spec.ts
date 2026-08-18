@@ -82,3 +82,29 @@ test("任务详情:勾选归属里程碑,计数与进度随关联更新", async 
 	await page.getByRole("button", { name: "关联MS", exact: true }).click();
 	await expect(trigger).toContainText("1", { timeout: 5000 });
 });
+
+test("分享进度卡:卡片含里程碑进度,可下载PNG", async ({ page }) => {
+	await loginAndOpenBoard(page);
+
+	// 建一个里程碑(弹层保持打开)。
+	await page.getByRole("button", { name: "里程碑" }).click();
+	const dialog = page.getByRole("dialog");
+	await dialog.getByPlaceholder("新里程碑名称").fill("进展MS");
+	await dialog.getByRole("button", { name: "创建", exact: true }).click();
+	await expect(dialog.getByText("进展MS")).toBeVisible({ timeout: 5000 });
+
+	// 在里程碑弹层内点「下载进度卡」打开分享弹窗。
+	await dialog.getByRole("button", { name: "下载进度卡" }).click();
+	await expect(page.getByText("进度分享卡")).toBeVisible();
+
+	// 卡片含品牌头/项目名/里程碑名称 + 生成时间(无任务明细)。
+	await expect(page.getByText(/Kanso/).first()).toBeVisible();
+	await expect(page.getByText("进展MS").first()).toBeVisible();
+	await expect(page.getByText(/生成于/).first()).toBeVisible();
+
+	// 下载 PNPPNG。
+	const dl = page.waitForEvent("download", { timeout: 10000 });
+	await page.getByRole("button", { name: "下载 PNG" }).click();
+	const download = await dl;
+	expect(download.suggestedFilename()).toMatch(/png$/);
+});
