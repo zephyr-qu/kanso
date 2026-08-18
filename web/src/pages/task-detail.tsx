@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverPopup, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
@@ -251,29 +252,48 @@ export default function TaskDetailPage() {
 									</h2>
 								)}
 								<div className="kanso-task-detail__title-meta">
-									{/* 优先级分段按钮：点击即保存（0008 后优先级为唯一重要度维度）。 */}
-									<span className="inline-flex items-center gap-1">
-										{PRIORITIES.map((p) => (
-											<button
-												key={p}
-												type="button"
-												title={`设为${PRIORITY_LABEL[normalizePriority(p)]}优先级`}
-												onClick={() => updateTaskMutation.mutate({ priority: p })}
-												className={`kanso-priority-option kanso-priority-option--${p} px-1.5 py-0.5 text-[11px]`}
-												data-selected={normalizePriority(data.task.priority) === p}
-											>
-												<span className="kanso-priority-option__dot" aria-hidden="true" />
-												{PRIORITY_LABEL[normalizePriority(p)]}
-											</button>
-										))}
-									</span>
-									<div className="mt-1 flex w-full flex-wrap items-center gap-1.5">
+									{/* 优先级：单标记，点击弹四档选择器（选中即保存）。 */}
+									<Popover>
+										<PopoverTrigger
+											render={
+												<button
+													type="button"
+													className="kanso-task-detail__priority cursor-pointer"
+													title="修改优先级"
+												>
+													<span
+														className="kanso-priority__dot"
+														style={{
+															backgroundColor: priorityColor(normalizePriority(data.task.priority)),
+														}}
+													/>
+													{PRIORITY_LABEL[normalizePriority(data.task.priority)]}
+												</button>
+											}
+										/>
+										<PopoverPopup className="w-fit p-2">
+											<div className="flex gap-1">
+												{PRIORITIES.map((p) => (
+													<button
+														key={p}
+														type="button"
+														title={`设为${PRIORITY_LABEL[normalizePriority(p)]}优先级`}
+														onClick={() => updateTaskMutation.mutate({ priority: p })}
+														className={`kanso-priority-option kanso-priority-option--${p} px-1.5 py-0.5 text-[11px]`}
+														data-selected={normalizePriority(data.task.priority) === p}
+													>
+														<span className="kanso-priority-option__dot" aria-hidden="true" />
+														{PRIORITY_LABEL[normalizePriority(p)]}
+													</button>
+												))}
+											</div>
+										</PopoverPopup>
+									</Popover>
 									{data.labels.map((label) => (
 										<span key={label.id} className="kanso-task-detail__label-chip">
 											{label.name}
 										</span>
 									))}
-									</div>
 								</div>
 							</div>
 						</div>

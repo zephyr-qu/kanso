@@ -1,6 +1,5 @@
 // 回归：优先级在创建任务时可选（看板内联表单），创建后卡片显示所选档位；
-// 详情页可修改优先级（PATCH 生效）。
-// 修复前：看板表单无优先级 → 恒为「中」；详情只读不可改。
+// 详情页优先级为单标记，点击弹出四档选择器修改（PATCH 生效）。
 import { expect, test, type Page } from "@playwright/test";
 import { resetAndSeed } from "./seed";
 
@@ -39,7 +38,7 @@ test("看板添加任务：表单可选优先级，卡片显示所选档位", as
 	});
 });
 
-test("任务详情：优先级可点击修改并持久化", async ({ page }) => {
+test("任务详情：优先级单标记，可弹层修改并持久化", async ({ page }) => {
 	await loginAndOpenBoard(page);
 	// 打开第一列第一个任务详情。
 	const firstCol = page.locator("div[class*='w-[282px]']").first();
@@ -47,14 +46,18 @@ test("任务详情：优先级可点击修改并持久化", async ({ page }) => 
 	await page.waitForURL(/\/t\//);
 	await expect(page.getByRole("heading", { name: /评论/ })).toBeVisible();
 
-	// 详情优先级区应有四档可点。
+	// 优先级为单标记（当前档位文字+色点），点击弹出四档选择器。
 	const detail = page.locator("main");
-	const prioOptions = detail.getByRole("button", { name: /紧急|高|中|低/ });
-	await expect(prioOptions).toHaveCount(4);
+const prioTrigger = detail.getByRole("button", { name: /紧急|高|中|低/ }).first();
+await expect(prioTrigger).toBeVisible();
+await prioTrigger.click();
 
-	// 点「紧急」，标签区显示「紧急」。
-	await detail.getByRole("button", { name: "紧急", exact: true }).click();
-	await expect(detail.getByText("紧急", { exact: true }).first()).toBeVisible({
-		timeout: 5000,
-	});
+const prioOptions = page.getByRole("button", { name: /紧急|高|中|低/ });
+	await expect(prioOptions).toHaveCount(5); // trigger(当前档位) + 弹层四档
+
+	// 弹层里换选「紧急」，标记区更新为「紧急」。
+	await page.getByRole("button", { name: "紧急", exact: true }).last().click();
+	await expect(
+		page.locator("main").getByRole("button", { name: "紧急", exact: true }),
+	).toBeVisible({ timeout: 5000 });
 });
