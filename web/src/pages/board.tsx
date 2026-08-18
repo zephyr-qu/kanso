@@ -206,7 +206,6 @@ export default function BoardPage() {
 	const [newMilestone, setNewMilestone] = useState("");
 	// 里程碑行内编辑/删除状态。
 	const [editingMilestone, setEditingMilestone] = useState<{ id: string; name: string } | null>(null);
-	const [editingDue, setEditingDue] = useState<string | null>(null);
 	const [deletingMilestone, setDeletingMilestone] = useState<Milestone | null>(null);
 	const [reducedMotion, setReducedMotion] = useState(false);
 	useEffect(() => {
@@ -256,7 +255,6 @@ export default function BoardPage() {
 		mutationFn: ({ id, dueDate }: { id: string; dueDate: string }) =>
 			api<Milestone>(buildPath("milestone", { id }), { method: "PATCH", body: JSON.stringify({ dueDate }) }),
 		onSuccess: () => {
-			setEditingDue(null);
 			queryClient.invalidateQueries({ queryKey: queryKeys.milestones(projectId) });
 		},
 	});
@@ -675,12 +673,13 @@ export default function BoardPage() {
 												<span className="min-w-0 flex-1 truncate text-sm">{milestone.name}</span>
 											)}
 											<span className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-muted"><span className="block h-full rounded-full bg-primary" style={{ width: `${pct}%` }} /></span>
-											<span className="w-9 shrink-0 text-right font-mono text-[11px] text-muted-foreground">{milestone.progress ? `${pct}% · ${milestone.progress.done}/${milestone.progress.total}` : "—"}</span>
-											{editingDue === milestone.id ? (
-												<DatePicker value={milestone.dueDate ?? ""} onChange={(d) => void updateMilestoneDueMutation.mutateAsync({ id: milestone.id, dueDate: d })} ariaLabel="里程碑截止日期" placeholder="设置日期" />
-											) : (
-												<button type="button" aria-label={`设截止 ${milestone.name}`} title={milestone.dueDate ? `截止 ${milestone.dueDate}` : "设置截止"} className="text-muted-foreground hover:text-foreground" onClick={() => setEditingDue(milestone.id)}><CalendarIcon className="size-3.5" /></button>
-											)}
+											<span className="w-9 shrink-0 text-right font-mono text-[11px] text-muted-foreground">{milestone.progress ? `${pct}%` : "—"}</span>
+														<DatePicker
+															value={milestone.dueDate ?? ""}
+															onChange={(d) => void updateMilestoneDueMutation.mutateAsync({ id: milestone.id, dueDate: d })}
+															ariaLabel="里程碑截止日期"
+															placeholder="设置日期"
+														/>
 											<button type="button" aria-label={`重命名 ${milestone.name}`} title="重命名" className="text-muted-foreground hover:text-foreground" onClick={() => setEditingMilestone({ id: milestone.id, name: milestone.name })}><PencilIcon className="size-3.5" /></button>
 											<button type="button" aria-label={`删除里程碑 ${milestone.name}`} title="删除" className="text-muted-foreground hover:text-destructive" onClick={() => setDeletingMilestone(milestone)}><TrashIcon className="size-3.5" /></button>
 										</div>
@@ -688,7 +687,6 @@ export default function BoardPage() {
 								})}
 						</div>
 					
-						<div className="mt-4"><Button size="sm" variant="outline" onClick={() => setShareOpen(true)}><Share2Icon className="size-4" /> 下载进度卡</Button></div>
 					</DialogPanel>
 				</DialogPopup></DialogPortal>
 			</Dialog>

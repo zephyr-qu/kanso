@@ -41,15 +41,10 @@ test("里程碑:看板头弹层 新建→重命名→设截止→删除", async 
 	await renameInput.press("Enter");
 	await expect(dialog.getByText("M1-改名")).toBeVisible({ timeout: 5000 });
 
-	// 设截止:点日历弹出 DatePicker,选今天。
-	await dialog.getByRole("button", { name: "设截止 M1-改名" }).click();
-	// 先点 DatePicker 触发按钮打开日历,再选今天。
+	// 设截止:常显 DatePicker,点触发按钮直接弹日历选今天。
 	await page.getByLabel("里程碑截止日期").click();
 	await page.getByRole("button", { name: String(new Date().getDate()) }).click();
-	// 截止按钮的 title 变为含日期。
-	await expect(
-		dialog.getByRole("button", { name: "设截止 M1-改名" }),
-	).toHaveAttribute("title", /截止/);
+	await expect(dialog.getByLabel("里程碑截止日期")).toContainText(String(new Date().getDate()), { timeout: 5000 });
 
 	// 删除(ConfirmDialog 确认)。
 	await dialog.getByRole("button", { name: "删除里程碑 M1-改名" }).click();
@@ -94,7 +89,9 @@ test("分享进度卡:卡片含里程碑进度,可下载PNG", async ({ page }) =
 	await expect(dialog.getByText("进展MS")).toBeVisible({ timeout: 5000 });
 
 	// 在里程碑弹层内点「下载进度卡」打开分享弹窗。
-	await dialog.getByRole("button", { name: "下载进度卡" }).click();
+	// 关里程碑弹层, 项目页顶部「分享进度」打开分享弹窗。
+	await page.keyboard.press("Escape");
+	await page.getByRole("button", { name: "分享进度" }).click();
 	await expect(page.getByText("进度分享卡")).toBeVisible();
 
 	// 卡片含品牌头/项目名/里程碑名称 + 生成时间(无任务明细)。
