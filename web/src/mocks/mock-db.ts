@@ -656,7 +656,15 @@ export function deleteMember(
 	return { ok: false, error: "成员不存在" };
 }
 export function taskDetail(taskId: string): TaskDetail | undefined {
-	return clone(db.details[taskId]);
+	const detail = clone(db.details[taskId]);
+	if (!detail) return undefined;
+	// M5:注入该任务已关联的里程碑摘要(多对多)。
+	const ids = db.taskMilestones[taskId] ?? [];
+	const projectMs = db.milestones[detail.task.projectId] ?? [];
+	detail.milestones = projectMs
+		.filter((m) => ids.includes(m.id))
+		.map((m) => ({ id: m.id, name: m.name, dueDate: m.dueDate ?? null }));
+	return detail;
 }
 export function activities(): Activity[] {
 	return clone(db.activities)

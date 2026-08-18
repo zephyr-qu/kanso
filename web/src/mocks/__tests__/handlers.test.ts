@@ -108,6 +108,40 @@ describe("Mock REST contract", () => {
 	});
 });
 
+	it("M5 task-milestone: 多对多归属,详情带已选且进度聚合", async () => {
+		const workspaces = await json<Array<{ id: string }>>("/api/workspaces");
+		const projects = await json<Array<{ id: string }>>(`/api/workspaces/${workspaces.body[0].id}/projects`);
+		const projectId = projects.body[0].id;
+		const board = await json<{ columns: Array<{ id: string }> }>(`/api/projects/${projectId}`);
+		const task = await json<{ id: string }>(`/api/columns/${board.body.columns[0].id}/tasks`, {
+			method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: "里程碑任务" }),
+		});
+		const m1 = await json<{ id: string }>(`/api/projects/${projectId}/milestones`, {
+			method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "MS-A" }),
+		});
+		const m2 = await json<{ id: string }>(`/api/projects/${projectId}/milestones`, {
+			method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "MS-B" }),
+		});
+
+		// 多播归属:把任务挂到两个里程碑。
+		for (const mid of [m1.body.id, m2.body.id]) {
+			const r = await fetch(`http://localhost/api/tasks/${task.body.id}/milestones/${mid}`, { method: "POST" });
+			expect(r.status).toBe(204);
+		}
+
+		// 任务详情带两个已选里程碑。
+		const detail = await json<{ milestones: Array<{ id: string; name: string }> }>(`/api/tasks/${task.body.id}`);
+		expect(detail.body.milestones.map((m) => m.id).sort()).toEqual([m1.body.id, m2.body.id].sort());
+
+		// 里程碑进度聚合 total=2(该任务关联两个)。
+		const ms = await json<Array<{ id: string; progress: { done: number; total: number } | null }>>(`/api/projects/${projectId}/milestones`);
+		const p1 = ms.body.find((x) => x.id === m1.body.id);
+		// 每个里程碑各自关联 1 个任务(多对多:两个里程碑各 total=1)。
+		expect(p1?.progress?.total).toBe(1);
+		const p2 = ms.body.find((x) => x.id === m2.body.id);
+		expect(p2?.progress?.total).toBe(1);
+	});
+
 it("supports member create/delete with owner protection and 5-person limit", async () => {
 	const workspaces = await json<Array<{ id: string }>>("/api/workspaces");
 	const workspaceId = workspaces.body[0].id;

@@ -9,6 +9,7 @@ import {
 	ArchiveRestoreIcon,
 	FlagIcon,
 	MessageSquareIcon,
+	MilestoneIcon,
 	SendIcon,
 	TagIcon,
 	Trash2Icon,
@@ -37,6 +38,7 @@ import {
 	priorityColor,
 } from "@/lib/priority";
 import type { Comment, TaskDetail } from "@/types/task-detail";
+import type { Milestone } from "@/types/board";
 import type { Task } from "@/types/task";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -93,6 +95,17 @@ export default function TaskDetailPage() {
 
 	// 实时：项目事件推送后 invalidate 本页查询（含 board，返回看板时同步）。
 	useRealtime(projectId);
+	// M5:任务归属里程碑(项目全部供选择,可多选)。
+	const milestoneQuery = useQuery({
+		queryKey: queryKeys.milestones(projectId),
+		queryFn: () => api<Milestone[]>(buildPath("projectMilestones", { id: projectId })),
+		enabled: projectId !== "",
+	});
+	const toggleMilestone = useMutation({
+		mutationFn: ({ milestoneId, attach }: { milestoneId: string; attach: boolean }) =>
+			api<void>(buildPath("taskMilestones", { taskId, milestoneId }), { method: attach ? "POST" : "DELETE" }),
+		onSuccess: () => invalidateTask(queryClient, taskId),
+	});
 
 	const updateTaskMutation = useMutation({
 		mutationFn: (
@@ -328,6 +341,37 @@ export default function TaskDetailPage() {
 									{data.labels.length}
 								</strong>
 							</span>
+							<Popover>
+								<PopoverTrigger
+									render={
+										<button type="button" className="flex items-center gap-2 text-[13px] text-muted-foreground hover:text-foreground">
+											<MilestoneIcon className="size-3.5 opacity-70" />
+											里程碑 <strong className="font-semibold text-foreground">{(data.milestones ?? []).length}</strong>
+										</button>
+								}
+								/>
+								<PopoverPopup className="w-56 p-2">
+									<p className="px-1 pb-1 text-xs text-muted-foreground">里程碑</p>
+									{milestoneQuery.data && milestoneQuery.data.length > 0 ? (
+										<ul className="space-y-0.5">
+											{milestoneQuery.data.map((m) => {
+												const attached = (data.milestones ?? []).some((x) => x.id === m.id);
+												return (
+													<li key={m.id}>
+														<button type="button" className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-xs hover:bg-muted"
+															onClick={() => toggleMilestone.mutate({ milestoneId: m.id, attach: !attached })}>
+															<span className="flex-1">{m.name}</span>
+															{attached ? <span className="text-primary">✓</span> : null}
+														</button>
+													</li>
+												);
+											})}
+										</ul>
+									) : (
+										<p className="px-1 py-2 text-xs text-muted-foreground">暂无里程碑，可在项目看板创建</p>
+									)}
+								</PopoverPopup>
+							</Popover>
 							<span className="flex items-center gap-2 text-[13px] text-muted-foreground">
 								<FlagIcon className="size-3.5 opacity-70" />
 								状态{" "}

@@ -19,11 +19,21 @@ type TaskDetail struct {
 	Labels      []gen.Label    `json:"labels"`
 	Comments    []TaskComment  `json:"comments"`
 	Activity    []TaskActivity `json:"activity"`
+	// Milestones：该任务关联的里程碑摘要（M5 任务归属，多对多）。
+	Milestones []MilestoneRef `json:"milestones"`
 }
 
 // TaskDetailTask is the task-detail DTO.
 type TaskDetailTask struct {
 	gen.Task
+}
+
+// MilestoneRef 是任务详情中携带的里程碑摘要(M5 多对多归属)。
+// DueDate 指针:null=未设截止。
+type MilestoneRef struct {
+	ID      string  `json:"id"`
+	Name    string  `json:"name"`
+	DueDate *string `json:"dueDate"`
 }
 
 type TaskComment struct {
@@ -151,6 +161,28 @@ func (s *Service) GetTaskDetail(ctx context.Context, taskID string) (TaskDetail,
 		labels = []gen.Label{}
 	}
 
+// M5:该任务关联的里程碑摘要(task_milestone 多对多)。
+	milestoneRows, err := s.db.QueryContext(ctx, `SELECT m.id, m.name, m.due_date FROM milestone m
+JOIN task_milestone tm ON tm.milestone_id = m.id
+WHERE tm.task_id = ?
+ORDER BY m.created_at`, taskID)
+	if err != nil {
+		return TaskDetail{}, fmt.Errorf("查询任务里程碑失败: %w", err)
+	}
+	milestones := make([]MilestoneRef, 0)
+	for milestoneRows.Next() {
+		var ref MilestoneRef
+		if err := milestoneRows.Scan(&ref.ID, &ref.Name, &ref.DueDate); err != nil {
+			_ = milestoneRows.Close()
+			return TaskDetail{}, fmt.Errorf("扫描任务里程碑失败: %w", err)
+		}
+		milestones = append(milestones, ref)
+	}
+	_ = milestoneRows.Close()
+	if err := milestoneRows.Err(); err != nil {
+		return TaskDetail{}, fmt.Errorf("遍历任务里程碑失败: %w", err)
+	}
+
 	comments, err := q.ListCommentsByTask(ctx, taskID)
 	if err != nil {
 		return TaskDetail{}, fmt.Errorf("查询评论失败: %w", err)
@@ -203,6 +235,7 @@ func (s *Service) GetTaskDetail(ctx context.Context, taskID string) (TaskDetail,
 		Labels:      labels,
 		Comments:    taskComments,
 		Activity:    taskActivity,
+		Milestones:  milestones,
 	}, nil
 }
 

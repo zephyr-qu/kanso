@@ -56,3 +56,29 @@ test("里程碑:看板头弹层 新建→重命名→设截止→删除", async 
 	await page.getByRole("button", { name: "删除", exact: true }).click();
 	await expect(dialog.getByText("M1-改名")).toHaveCount(0);
 });
+
+test("任务详情:勾选归属里程碑,计数与进度随关联更新", async ({ page }) => {
+	await loginAndOpenBoard(page);
+
+	// 建一个里程碑。
+	await page.getByRole("button", { name: "里程碑" }).click();
+	const dialog = page.getByRole("dialog");
+	await dialog.getByPlaceholder("新里程碑名称").fill("关联MS");
+	await dialog.getByRole("button", { name: "创建", exact: true }).click();
+	await expect(dialog.getByText("关联MS")).toBeVisible({ timeout: 5000 });
+	await page.keyboard.press("Escape");
+
+	// 打开第一个任务详情。
+	const firstCol = page.locator("div[class*='w-[282px]']").first();
+	await firstCol.locator("p.break-words").first().click();
+	await page.waitForURL(/\/t\//);
+	await expect(page.getByRole("heading", { name: /评论/ })).toBeVisible();
+
+	const trigger = page.locator("main").getByRole("button", { name: /里程碑/ });
+	await expect(trigger).toContainText("0");
+
+	// 勾选 MS → 计数 1。
+	await trigger.click();
+	await page.getByRole("button", { name: "关联MS", exact: true }).click();
+	await expect(trigger).toContainText("1", { timeout: 5000 });
+});
