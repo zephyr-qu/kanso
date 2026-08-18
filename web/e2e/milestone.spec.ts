@@ -98,9 +98,9 @@ test("分享进度卡:卡片含里程碑进度,可下载PNG", async ({ page }) =
 	await expect(page.getByText("进度分享卡")).toBeVisible();
 
 	// 卡片含品牌头/项目名/里程碑名称 + 生成时间(无任务明细)。
-	await expect(page.getByText(/Kanso/).first()).toBeVisible();
+	await expect(page.getByText(/KANSO/).first()).toBeVisible();
 	await expect(page.getByText("进展MS").first()).toBeVisible();
-	await expect(page.getByText(/生成于/).first()).toBeVisible();
+	await expect(page.getByText(/完成/).first()).toBeVisible();
 
 	// 下载 PNPPNG。
 	const dl = page.waitForEvent("download", { timeout: 10000 });
