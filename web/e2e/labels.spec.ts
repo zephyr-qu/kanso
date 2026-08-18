@@ -40,7 +40,7 @@ test("标签库：创建→重命名→删除全流程", async ({ page }) => {
 	await manager.getByRole("button", { name: `删除 ${renamed}`, exact: true }).click();
 	const dialog = page.getByRole("dialog").last();
 	await expect(dialog).toBeVisible();
-	await dialog.getByRole("button", { name: `确认删除 ${renamed}`, exact: true }).click();
+	await dialog.getByRole("button", { name: "删除", exact: true }).last().click();
 	await expect(manager.getByText(renamed, { exact: true })).toHaveCount(0);
 });
 

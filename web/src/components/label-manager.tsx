@@ -11,6 +11,7 @@ import {
 	DialogPopup,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import { Popover, PopoverPopup, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Label as LabelType } from "@/types/label";
@@ -28,8 +29,6 @@ export default function LabelManagerDialog(props: {
 	const [editing, setEditing] = useState<LabelType | null>(null);
 	const [editName, setEditName] = useState("");
 	const [busy, setBusy] = useState(false);
-	// 删除二次确认：点垃圾桶进入「确认/取消」态（列/任务删除都有确认，标签删除补上）。
-	const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -103,29 +102,7 @@ export default function LabelManagerDialog(props: {
 													保存
 												</Button>
 											</>
-										) : confirmingDelete === label.id ? (
-												<>
-													<span className="flex-1 truncate text-sm text-destructive">{label.name}</span>
-													<Button
-														size="sm"
-														variant="destructive"
-														className="h-7 px-2 text-xs"
-														aria-label={`确认删除 ${label.name}`}
-														onClick={() => { setConfirmingDelete(null); void onDelete(label.id); }}
-													>
-														删除
-													</Button>
-													<Button
-														size="sm"
-														variant="ghost"
-														className="h-7 px-2 text-xs"
-														aria-label="取消删除"
-														onClick={() => setConfirmingDelete(null)}
-													>
-														取消
-													</Button>
-												</>
-											) : (
+						) : (
 												<>
 													<span className="flex-1 text-sm">{label.name}</span>
 													<Button
@@ -136,20 +113,11 @@ export default function LabelManagerDialog(props: {
 														onClick={() => {
 															setEditing(label);
 															setEditName(label.name);
-															setConfirmingDelete(null);
 														}}
 													>
 														<PencilIcon />
 													</Button>
-													<Button
-														variant="ghost"
-														size="icon"
-														className="size-7 text-destructive"
-														aria-label={`删除 ${label.name}`}
-														onClick={() => setConfirmingDelete(label.id)}
-													>
-														<TrashIcon />
-													</Button>
+									<LabelDeleteButton name={label.name} onDelete={() => { void onDelete(label.id); }} />
 												</>
 											)}
 									</li>
@@ -160,5 +128,27 @@ export default function LabelManagerDialog(props: {
 				</DialogPopup>
 			</DialogPortal>
 		</Dialog>
+	);
+}
+
+
+/** 标签删除:内联小弹窗确认(与归档/里程碑删除一致)。 */
+function LabelDeleteButton(props: { name: string; onDelete: () => void }) {
+	const [open, setOpen] = useState(false);
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger
+				render={<Button variant="ghost" size="icon" className="size-7 text-destructive" aria-label={`删除 ${props.name}`}><TrashIcon /></Button>}
+			/>
+			<PopoverPopup className="w-52 p-2" align="end">
+				<div className="space-y-2 p-1">
+					<p className="break-words text-xs leading-relaxed text-muted-foreground">删除标签「{props.name}」？</p>
+					<div className="flex justify-end gap-2">
+						<Button size="sm" variant="ghost" onClick={() => setOpen(false)}>取消</Button>
+						<Button size="sm" variant="destructive" onClick={() => { setOpen(false); props.onDelete(); }}>删除</Button>
+					</div>
+				</div>
+			</PopoverPopup>
+		</Popover>
 	);
 }

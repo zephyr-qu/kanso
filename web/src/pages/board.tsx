@@ -206,7 +206,6 @@ export default function BoardPage() {
 	const [newMilestone, setNewMilestone] = useState("");
 	// 里程碑行内编辑/删除状态。
 	const [editingMilestone, setEditingMilestone] = useState<{ id: string; name: string } | null>(null);
-	const [deletingMilestone, setDeletingMilestone] = useState<Milestone | null>(null);
 	const [reducedMotion, setReducedMotion] = useState(false);
 	useEffect(() => {
 		const media = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -261,7 +260,6 @@ export default function BoardPage() {
 	const deleteMilestoneMutation = useMutation({
 		mutationFn: (id: string) => api<void>(buildPath("milestone", { id }), { method: "DELETE" }),
 		onSuccess: () => {
-			setDeletingMilestone(null);
 			queryClient.invalidateQueries({ queryKey: queryKeys.milestones(projectId) });
 		},
 	});
@@ -442,11 +440,11 @@ export default function BoardPage() {
 											onPointerUp={clearLinkPress}
 											onKeyDown={(e) => { if (e.key === "Enter") setDetailMilestone(m); }}
 											className="kanso-surface-card group relative flex w-40 flex-col gap-1 p-3 text-left outline-none transition-colors hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-ring">
-											<button type="button" aria-label={`删除里程碑 ${m.name}`} title="删除里程碑"
-												onClick={(e) => { e.stopPropagation(); setDeletingMilestone(m); }}
-												className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100">
-												<TrashIcon className="size-3.5" />
-											</button>
+											<MilestoneDeleteButton
+												milestone={m}
+												onDelete={(mm) => { void deleteMilestoneMutation.mutateAsync(mm.id); }}
+												className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+											/>
 											<span className="pr-4 truncate text-sm font-medium">{m.name}</span>
 											<span className="text-[11px] text-muted-foreground">{m.dueDate ? `截止 ${m.dueDate}` : "未设截止"}</span>
 											<span className="h-1.5 w-full overflow-hidden rounded-full bg-muted"><span className="block h-full rounded-full bg-primary" style={{ width: `${pct}%` }} /></span>
@@ -681,7 +679,7 @@ export default function BoardPage() {
 															placeholder="设置日期"
 														/>
 											<button type="button" aria-label={`重命名 ${milestone.name}`} title="重命名" className="text-muted-foreground hover:text-foreground" onClick={() => setEditingMilestone({ id: milestone.id, name: milestone.name })}><PencilIcon className="size-3.5" /></button>
-											<button type="button" aria-label={`删除里程碑 ${milestone.name}`} title="删除" className="text-muted-foreground hover:text-destructive" onClick={() => setDeletingMilestone(milestone)}><TrashIcon className="size-3.5" /></button>
+											<MilestoneDeleteButton milestone={milestone} onDelete={(mm) => { void deleteMilestoneMutation.mutateAsync(mm.id); }} className="text-muted-foreground hover:text-destructive" />
 										</div>
 									);
 								})}
@@ -690,13 +688,6 @@ export default function BoardPage() {
 					</DialogPanel>
 				</DialogPopup></DialogPortal>
 			</Dialog>
-			<ConfirmDialog
-				open={deletingMilestone !== null}
-				onOpenChange={(open) => { if (!open) setDeletingMilestone(null); }}
-				title="删除里程碑"
-				description={`确定删除里程碑「${deletingMilestone?.name}」吗？其任务关联将一并解除，此操作不可撤销。`}
-				onConfirm={async () => { if (deletingMilestone) await deleteMilestoneMutation.mutateAsync(deletingMilestone.id); }}
-			/>
 		
 			{milestoneLink ? (
 				<svg className="pointer-events-none fixed inset-0 z-[120]">
@@ -787,6 +778,37 @@ function ArchiveDeleteButton(props: { task: Task; onDelete: (task: Task) => void
 						>
 							删除
 						</Button>
+					</div>
+				</div>
+			</PopoverPopup>
+		</Popover>
+	);
+}
+
+
+/** 里程碑删除:内联小弹窗确认(仿归档删除,不叠第二个模态框)。 */
+function MilestoneDeleteButton(props: { milestone: Milestone; onDelete: (m: Milestone) => void; className?: string }) {
+	const [open, setOpen] = useState(false);
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger
+				render={
+					<button type="button" aria-label={`删除里程碑 ${props.milestone.name}`} title="删除里程碑"
+						className={props.className ?? ""}
+						onPointerDown={(e) => e.stopPropagation()}
+						onClick={(e) => e.stopPropagation()}>
+						<TrashIcon className="size-3.5" />
+					</button>
+				}
+			/>
+			<PopoverPopup className="w-52 p-2" align="end">
+				<div className="space-y-2 p-1">
+					<p className="break-words text-xs leading-relaxed text-muted-foreground">
+						删除里程碑「{props.milestone.name}」？其关联任务将一并解除，此操作不可撤销。
+					</p>
+					<div className="flex justify-end gap-2">
+						<Button size="sm" variant="ghost" onClick={() => setOpen(false)}>取消</Button>
+						<Button size="sm" variant="destructive" onClick={() => { setOpen(false); props.onDelete(props.milestone); }}>删除</Button>
 					</div>
 				</div>
 			</PopoverPopup>
