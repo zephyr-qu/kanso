@@ -386,7 +386,6 @@ export default function BoardPage() {
 						<div className="mb-3">
 							<div className="mb-1.5 flex items-center justify-between">
 								<span className="text-xs font-medium text-muted-foreground">里程碑进度</span>
-								<button type="button" className="text-xs text-primary hover:underline" onClick={() => setMilestoneOpen(true)}>管理</button>
 									<button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setShareOpen(true)}>分享进度</button>
 							</div>
 							<div className="flex flex-wrap gap-2">
