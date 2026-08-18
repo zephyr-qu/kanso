@@ -171,16 +171,12 @@ export const handlers = [
 	http.post(mswPattern("workspaceProjects"), async ({ params, request }) => {
 		const workspaceId = textParam(params.workspaceId);
 		if (!getMockDb().workspaces.some((item) => item.id === workspaceId)) return error("工作区不存在", 404);
-		const body = await request.json() as { name?: string; template?: string };
+		const body = await request.json() as { name?: string };
 		const projects = getMockDb().projects[workspaceId] ??= [];
 		const project = { id: newMockId("project"), workspaceId, name: body.name?.trim() || "新项目", position: projects.length, createdAt: now(), updatedAt: now() };
 		projects.push(project);
-		// 项目模板决定默认列：board=看板列，quadrant=重要四象限。
-		const columnTemplates: Record<string, string[]> = {
-			board: ["待办", "进行中", "已阻塞", "已完成"],
-			quadrant: ["重要紧急", "重要不紧急", "紧急不重要", "不重要不紧急"],
-		};
-		const columnNames = columnTemplates[body.template ?? "board"] ?? columnTemplates.board;
+		// 0008：模板已移除，固定种子看板默认列。
+		const columnNames = ["待办", "进行中", "已阻塞", "已完成"];
 		const columns: BoardColumn[] = columnNames.map((name, position) => ({ id: newMockId("column"), projectId: project.id, name, position, createdAt: now(), wipLimit: null, tasks: [] }));
 		getMockDb().boards[project.id] = { project, columns, labels: getMockDb().labels[project.id] ?? [] };
 		getMockDb().milestones[project.id] = [];

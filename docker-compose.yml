@@ -11,6 +11,7 @@ services:
       - "${KANSO_PORT:-8080}:8080"
     environment:
       KANSO_ADDR: ":8080"
+      # 可用 `openssl rand -hex 32` 生成随机访问密钥
       KANSO_ACCESS_KEY: ${KANSO_ACCESS_KEY:-change-me}
       KANSO_DATA_DIR: /data
       KANSO_CONFIG_FILE: /data/kanso-config.json

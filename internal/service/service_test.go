@@ -156,7 +156,7 @@ func TestProjectLifecycle(t *testing.T) {
 	wsID := defaultWorkspaceID(t, env)
 
 	// 创建 board 模板项目 → 4 默认列。
-	project, err := env.svc.CreateProject(ctx, wsID, "看板项目", "board")
+	project, err := env.svc.CreateProject(ctx, wsID, "看板项目")
 	requireNoErr(t, err)
 	board, err := env.svc.GetBoard(ctx, project.ID)
 	requireNoErr(t, err)
@@ -165,24 +165,6 @@ func TestProjectLifecycle(t *testing.T) {
 	}
 	if board.Columns[0].Name != "待办" || board.Columns[3].Name != "已完成" {
 		t.Fatalf("默认列顺序不符: %v", board.Columns)
-	}
-
-	// quadrant 模板 → 四象限列。
-	qProject, err := env.svc.CreateProject(ctx, wsID, "四象限", "quadrant")
-	requireNoErr(t, err)
-	qBoard, err := env.svc.GetBoard(ctx, qProject.ID)
-	requireNoErr(t, err)
-	if len(qBoard.Columns) != 4 || qBoard.Columns[0].Name != "重要紧急" {
-		t.Fatalf("quadrant 模板列不符: %v", qBoard.Columns)
-	}
-
-	// 未知模板回退 board。
-	uProject, err := env.svc.CreateProject(ctx, wsID, "未知", "unknown")
-	requireNoErr(t, err)
-	uBoard, err := env.svc.GetBoard(ctx, uProject.ID)
-	requireNoErr(t, err)
-	if uBoard.Columns[0].Name != "待办" {
-		t.Fatalf("未知模板应回退 board 列: %v", uBoard.Columns)
 	}
 
 	// 重命名。
@@ -198,15 +180,15 @@ func TestProjectLifecycle(t *testing.T) {
 	// 列表统计。
 	summaries, err := env.svc.ListProjects(ctx, wsID)
 	requireNoErr(t, err)
-	if len(summaries) != 3 {
-		t.Fatalf("应有 3 个项目，实际 %d", len(summaries))
+	if len(summaries) != 1 {
+		t.Fatalf("应有 1 个项目，实际 %d", len(summaries))
 	}
 	if summaries[0].ColumnCount != 4 || summaries[0].TaskCount != 0 {
 		t.Fatalf("项目统计不符: %+v", summaries[0])
 	}
 
 	// 删除 + 不存在。
-	requireNoErr(t, env.svc.DeleteProject(ctx, qProject.ID))
+	requireNoErr(t, env.svc.DeleteProject(ctx, project.ID))
 	if err := env.svc.DeleteProject(ctx, "nope"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("删除不存在项目应 ErrNotFound，实际 %v", err)
 	}
@@ -216,7 +198,7 @@ func TestSearchTasks(t *testing.T) {
 	env := newTestService(t)
 	ctx := context.Background()
 	wsID := defaultWorkspaceID(t, env)
-	project, err := env.svc.CreateProject(ctx, wsID, "搜索项目", "board")
+	project, err := env.svc.CreateProject(ctx, wsID, "搜索项目")
 	requireNoErr(t, err)
 	board, err := env.svc.GetBoard(ctx, project.ID)
 	requireNoErr(t, err)
@@ -252,7 +234,7 @@ func TestGetActivities(t *testing.T) {
 	env := newTestService(t)
 	ctx := context.Background()
 	wsID := defaultWorkspaceID(t, env)
-	project, err := env.svc.CreateProject(ctx, wsID, "活动项目", "board")
+	project, err := env.svc.CreateProject(ctx, wsID, "活动项目")
 	requireNoErr(t, err)
 	board, err := env.svc.GetBoard(ctx, project.ID)
 	requireNoErr(t, err)

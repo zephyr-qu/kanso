@@ -34,11 +34,11 @@ test("settings 服务配置：可编辑保存，数据卡含备份导入导出",
 	await page.getByRole("link", { name: "设置", exact: true }).click();
 	// 页头副标题含「外观 · 服务配置 · 数据 · 关于」，用 exact 命中卡片标题。
 	await expect(page.getByText("服务配置", { exact: true })).toBeVisible();
-	// 字段说明展示（环境变量优先于配置文件）。
-	await expect(page.getByText("KANSO_ADDR · 默认值 :8080")).toBeVisible();
-	await expect(page.getByText("KANSO_DATA_DIR · 默认值 ./data")).toBeVisible();
+	// 字段说明展示（保存到配置文件）。
+	await expect(page.getByText("KANSO_ADDR · :8080")).toBeVisible();
+	await expect(page.getByText("KANSO_DATA_DIR · ./data")).toBeVisible();
 	await expect(
-		page.getByText("KANSO_ACCESS_KEY · 留空表示未设置（下次启动随机生成）"),
+		page.getByText("KANSO_ACCESS_KEY · 留空则随机生成"),
 	).toBeVisible();
 	// 可编辑保存（保存到配置文件，密钥热生效）。
 	await expect(page.getByRole("button", { name: "保存配置" })).toBeVisible();

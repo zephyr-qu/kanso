@@ -21,6 +21,8 @@ test("项目：创建 → 重命名 → 删除（确认框）", async ({ page })
 	// 页头与项目网格末尾各有一个「新建项目」按钮，点页头那个（DOM 序首个）。
 	await page.getByRole("button", { name: "新建项目" }).first().click();
 	const dialog = page.getByRole("dialog");
+	// 0008：模板选择器已移除，对话框不再出现模板选项。
+	await expect(dialog.getByText("重要四象限")).toHaveCount(0);
 	await dialog.getByPlaceholder(/名称|项目/).fill(projName);
 	await dialog.getByRole("button", { name: "创建" }).click();
 	const card = page.locator('a[href*="/p/"]', { hasText: projName });

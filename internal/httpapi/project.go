@@ -19,11 +19,10 @@ func (a *API) listProjects(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, projects)
 }
 
-// createProject 创建项目（自动按模板种子默认列；template: board|quadrant，0006 Phase 4）。
+// createProject 创建项目（自动种子固定看板默认列；0008：模板已移除，忽略请求中的 template 字段）。
 func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name     string `json:"name"`
-		Template string `json:"template"`
+		Name string `json:"name"`
 	}
 	if !decodeBody(w, r, &body) {
 		return
@@ -32,7 +31,7 @@ func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "项目名称不能为空")
 		return
 	}
-	project, err := a.svc.CreateProject(r.Context(), chi.URLParam(r, "id"), body.Name, body.Template)
+	project, err := a.svc.CreateProject(r.Context(), chi.URLParam(r, "id"), body.Name)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "创建项目失败")
 		return

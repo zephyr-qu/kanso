@@ -12,7 +12,7 @@ func setupBoard(t *testing.T, env *testService) (wsID, projectID string, cols []
 	t.Helper()
 	ctx := context.Background()
 	wsID = defaultWorkspaceID(t, env)
-	project, err := env.svc.CreateProject(ctx, wsID, "列任务项目", "board")
+	project, err := env.svc.CreateProject(ctx, wsID, "列任务项目")
 	requireNoErr(t, err)
 	board, err := env.svc.GetBoard(ctx, project.ID)
 	requireNoErr(t, err)
@@ -223,7 +223,7 @@ func TestTaskLabels(t *testing.T) {
 	}
 
 	// 跨项目标签 → ErrCrossProjectMove。
-	other, err := env.svc.CreateProject(ctx, defaultWorkspaceID(t, env), "另一项目", "board")
+	other, err := env.svc.CreateProject(ctx, defaultWorkspaceID(t, env), "另一项目")
 	requireNoErr(t, err)
 	otherBoard, err := env.svc.GetBoard(ctx, other.ID)
 	requireNoErr(t, err)
@@ -257,9 +257,9 @@ func TestMoveTaskCrossProject(t *testing.T) {
 	env := newTestService(t)
 	ctx := context.Background()
 	wsID := defaultWorkspaceID(t, env)
-	projA, err := env.svc.CreateProject(ctx, wsID, "A", "board")
+	projA, err := env.svc.CreateProject(ctx, wsID, "A")
 	requireNoErr(t, err)
-	projB, err := env.svc.CreateProject(ctx, wsID, "B", "board")
+	projB, err := env.svc.CreateProject(ctx, wsID, "B")
 	requireNoErr(t, err)
 	boardA, err := env.svc.GetBoard(ctx, projA.ID)
 	requireNoErr(t, err)

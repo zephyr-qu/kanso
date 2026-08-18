@@ -14,7 +14,6 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
-import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
 import { formatUpdated } from "@/lib/format-relative";
@@ -28,11 +27,6 @@ export default function WorkspacePage() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const [createOpen, setCreateOpen] = useState(false);
-	// 新建项目模板：看板列 / 重要四象限（打开时重置为看板）。
-	const [projectTemplate, setProjectTemplate] = useState<"board" | "quadrant">("board");
-	useEffect(() => {
-		if (createOpen) setProjectTemplate("board");
-	}, [createOpen]);
 	const [renaming, setRenaming] = useState<Project | null>(null);
 	const [deleting, setDeleting] = useState<Project | null>(null);
 	const [wsRenaming, setWsRenaming] = useState(false);
@@ -85,7 +79,7 @@ export default function WorkspacePage() {
 		mutationFn: (name: string) =>
 			api<Project>(buildPath("workspaceProjects", { workspaceId }), {
 				method: "POST",
-				body: JSON.stringify({ name, template: projectTemplate }),
+				body: JSON.stringify({ name }),
 			}),
 		onSuccess: invalidateProjects,
 	});
@@ -232,36 +226,6 @@ export default function WorkspacePage() {
 					await createMutation.mutateAsync(name);
 				}}
 			>
-				<div className="space-y-1.5">
-					<Label>模板</Label>
-					<div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="项目模板">
-						{[
-							{ value: "board", label: "看板", desc: "待办 / 进行中 / 已阻塞 / 已完成" },
-							{ value: "quadrant", label: "重要四象限", desc: "重要紧急 / 重要不紧急 / 紧急不重要 / 不重要不紧急" },
-						].map((option) => {
-							const selected = projectTemplate === option.value;
-							return (
-								<button
-									key={option.value}
-									type="button"
-									role="radio"
-									aria-checked={selected}
-									onClick={() => setProjectTemplate(option.value as "board" | "quadrant")}
-									className={`rounded-lg border px-3 py-2 text-left transition-colors ${
-										selected
-											? "border-primary bg-primary/5 text-foreground"
-											: "border-input text-muted-foreground hover:border-primary/40"
-									}`}
-								>
-									<span className="block text-sm font-medium">{option.label}</span>
-									<span className="mt-0.5 block text-[11px] leading-relaxed opacity-80">
-										{option.desc}
-									</span>
-								</button>
-							);
-						})}
-					</div>
-				</div>
 			</NameDialog>
 			<NameDialog
 				open={renaming !== null}

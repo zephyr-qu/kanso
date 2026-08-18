@@ -1,6 +1,12 @@
 // 设置页：外观（主题）/ 服务配置（可编辑并保存，重启生效 + 密钥热生效）/ 数据（导出备份）/ 关于（版本）。
 import { useEffect, useRef, useState } from "react";
-import { DownloadIcon, EyeIcon, EyeOffIcon, FileUpIcon, SaveIcon } from "lucide-react";
+import {
+	DownloadIcon,
+	EyeIcon,
+	EyeOffIcon,
+	FileUpIcon,
+	SaveIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -37,7 +43,6 @@ export default function SettingsPage() {
 	const [addr, setAddr] = useState("");
 	const [dataDir, setDataDir] = useState("");
 	const [accessKey, setAccessKeyValue] = useState("");
-	const [mode, setMode] = useState("personal");
 	const [wsOrigins, setWsOrigins] = useState("");
 	const [showKey, setShowKey] = useState(false);
 	const [configFile, setConfigFile] = useState("kanso-config.json");
@@ -50,8 +55,6 @@ export default function SettingsPage() {
 				setAddr(cfg.addr);
 				setDataDir(cfg.dataDir);
 				setAccessKeyValue(cfg.accessKey);
-				setMode(cfg.mode || "personal");
-				setWsOrigins(cfg.wsOrigins ?? "");
 				setConfigFile(cfg.configFile);
 			})
 			.catch(() =>
@@ -146,7 +149,10 @@ export default function SettingsPage() {
 
 	const importBackup = async (file: File) => {
 		// 全量替换恢复：覆盖当前全部数据，需二次确认。
-		if (!window.confirm("导入备份将覆盖当前全部数据（恢复为快照状态），确定继续？")) return;
+		if (
+			!window.confirm("导入备份将覆盖当前全部数据（恢复为快照状态），确定继续？")
+		)
+			return;
 		setImporting(true);
 		try {
 			// 原始文本即 JSON body：非法 JSON 由服务端 400 拒绝（鉴权/401 由 api 层统一处理）。
@@ -213,78 +219,67 @@ export default function SettingsPage() {
 				<SurfaceCard className="kanso-settings-card mt-3.5 p-5">
 					<div className="text-sm font-semibold">服务配置</div>
 					<div className="mb-3 mt-1 text-xs text-muted-foreground/70">
-						保存到 {configFile}；环境变量优先于配置文件
+						保存到 {configFile}
 					</div>
 					<div className="grid gap-x-6 sm:grid-cols-2">
 						{/* 左栏：核心运行参数 */}
 						<div className="min-w-0">
 							<SettingField
-						label="监听地址"
-						description="KANSO_ADDR · 默认值 :8080"
-						value={addr}
-						onChange={setAddr}
-					/>
-					<SettingField
-						label="数据目录"
-						description="KANSO_DATA_DIR · 默认值 ./data"
-						value={dataDir}
-						onChange={setDataDir}
-					/>
-					<div className="setting-field">
-						<div className="text-sm font-semibold">访问密钥</div>
-						<div className="mb-2 mt-1 text-xs text-muted-foreground/70">
-							KANSO_ACCESS_KEY · 留空表示未设置（下次启动随机生成）
-						</div>
-						<div className="flex max-w-[640px] items-center gap-2">
-							<Input
-								type={showKey ? "text" : "password"}
-								value={accessKey}
-								onChange={(e) => setAccessKeyValue(e.target.value)}
-								placeholder="••••••••••••••••"
-								className="h-10 flex-1 font-mono"
+								label="监听地址"
+								description="KANSO_ADDR · :8080"
+								value={addr}
+								onChange={setAddr}
 							/>
-							<Button
-								type="button"
-								variant="ghost"
-								size="sm"
-								className="shrink-0"
-								onClick={() => setShowKey((v) => !v)}
-								aria-label={showKey ? "隐藏密钥" : "显示密钥"}
-							>
-								{showKey ? (
-									<EyeOffIcon className="size-4" />
-								) : (
-									<EyeIcon className="size-4" />
-								)}
-							</Button>
-						</div>
-					</div>
-						</div>
-						{/* 右栏：模式与访问控制 */}
-						<div className="min-w-0">
 							<div className="setting-field">
-						<div className="text-sm font-semibold">运行模式</div>
-						<div className="mb-2 mt-1 text-xs text-muted-foreground/70">
-							KANSO_MODE · 个人模式（默认）/ 团队模式（多成员）
+								<div className="text-sm font-semibold">访问密钥</div>
+								<div className="mb-2 mt-1 text-xs text-muted-foreground/70">
+									KANSO_ACCESS_KEY · 留空则随机生成
+								</div>
+								<div className="flex max-w-[640px] items-center gap-2">
+									<Input
+										type={showKey ? "text" : "password"}
+										value={accessKey}
+										onChange={(e) => setAccessKeyValue(e.target.value)}
+										placeholder="••••••••••••••••"
+										className="h-10 flex-1 font-mono"
+									/>
+									<Button
+										type="button"
+										variant="ghost"
+										size="sm"
+										className="shrink-0"
+										onClick={() => setShowKey((v) => !v)}
+										aria-label={showKey ? "隐藏密钥" : "显示密钥"}
+									>
+										{showKey ? (
+											<EyeOffIcon className="size-4" />
+										) : (
+											<EyeIcon className="size-4" />
+										)}
+									</Button>
+								</div>
+							</div>
 						</div>
-						<div className="flex items-center">
-							<span className="rounded-md border border-kanso-primary/30 bg-kanso-primary/10 px-2.5 py-1 text-[13px] font-medium text-kanso-primary">
-								{mode === "team" ? "团队模式" : "个人模式"}
-							</span>
-						</div>
-					</div>
-					<div className="setting-field">
-						<div className="text-sm font-semibold">WebSocket 白名单</div>
-						<div className="mb-2 mt-1 text-xs text-muted-foreground/70">
-							KANSO_WS_ORIGINS · 逗号分隔，留空仅放行同源
-						</div>
-						<Input
-							value={wsOrigins}
-							onChange={(e) => setWsOrigins(e.target.value)}
-							placeholder="https://app.example.com, http://localhost:5173"
-							className="h-10 max-w-[640px] font-mono"
-						/>
-						</div>
+						{/* 右栏：访问控制 */}
+						<div className="min-w-0">
+							<SettingField
+							label="数据目录"
+							description="KANSO_DATA_DIR · ./data"
+							value={dataDir}
+							onChange={setDataDir}
+							/>
+							<div className="setting-field">
+								<div className="text-sm font-semibold">WebSocket 白名单</div>
+								<div className="mb-2 mt-1 text-xs text-muted-foreground/70">
+									KANSO_WS_ORIGINS · 逗号分隔，留空仅同源
+								</div>
+								<Input
+									value={wsOrigins}
+									onChange={(e) => setWsOrigins(e.target.value)}
+									placeholder="https://app.example.com, http://localhost:5173"
+									className="h-10 max-w-[640px] font-mono"
+								/>
+							</div>
 						</div>
 					</div>
 
@@ -295,8 +290,7 @@ export default function SettingsPage() {
 						</Button>
 					</div>
 					<p className="mt-3 text-xs text-muted-foreground/70">
-						监听地址、数据目录与 WS
-						白名单为启动参数，重启服务后生效；运行模式由 KANSO_MODE 启动时决定；访问密钥修改后立即生效（旧密钥将失效）。
+						重启后生效：监听地址、数据目录、WS 白名单；访问密钥立即生效。
 					</p>
 				</SurfaceCard>
 
@@ -306,24 +300,30 @@ export default function SettingsPage() {
 					<div className="mb-2 mt-1 text-xs text-muted-foreground/70">
 						导出全量数据快照（JSON），用于备份与迁移。
 					</div>
-					<Button variant="outline" onClick={exportBackup} loading={backingUp}>
-						<DownloadIcon className="size-4" />
-						导出备份
-					</Button>
-					<input
-						ref={fileInputRef}
-						type="file"
-						accept="application/json,.json"
-						className="hidden"
-						onChange={(e) => {
-							const f = e.currentTarget.files?.[0];
-							if (f) importBackup(f);
-						}}
-					/>
-					<Button variant="outline" onClick={() => fileInputRef.current?.click()} loading={importing}>
-						<FileUpIcon className="size-4" />
-						导入备份
-					</Button>
+					<div className="mt-1 flex items-center gap-2">
+						<Button variant="outline" onClick={exportBackup} loading={backingUp}>
+							<DownloadIcon className="size-4" />
+							导出备份
+						</Button>
+						<input
+							ref={fileInputRef}
+							type="file"
+							accept="application/json,.json"
+							className="hidden"
+							onChange={(e) => {
+								const f = e.currentTarget.files?.[0];
+								if (f) importBackup(f);
+							}}
+						/>
+						<Button
+							variant="outline"
+							onClick={() => fileInputRef.current?.click()}
+							loading={importing}
+						>
+							<FileUpIcon className="size-4" />
+							导入备份
+						</Button>
+					</div>
 				</SurfaceCard>
 
 				{/* 关于 */}

@@ -247,3 +247,30 @@ it("reports milestone progress and non-empty completed trend", async () => {
 	);
 	expect(totalCompleted).toBeGreaterThan(0);
 });
+
+// 0008：创建项目固定种子看板列，忽略 template 参数（后端不再接受模板）。
+it("creates projects with fixed kanban columns, ignoring template", async () => {
+	const workspaces = await json<Array<{ id: string }>>("/api/workspaces");
+	const wsId = workspaces.body[0].id;
+
+	// 带 template=quadrant 的请求:与不带模板一致,产出看板四列。
+	const project = await json<{ id: string }>(
+		`/api/workspaces/${wsId}/projects`,
+		{
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ name: "固定列项目", template: "quadrant" }),
+		},
+	);
+	expect(project.response.status).toBe(201);
+
+	const board = await json<{ columns: Array<{ name: string }> }>(
+		`/api/projects/${project.body.id}`,
+	);
+	expect(board.body.columns.map((c) => c.name)).toEqual([
+		"待办",
+		"进行中",
+		"已阻塞",
+		"已完成",
+	]);
+});

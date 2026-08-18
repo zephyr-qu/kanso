@@ -32,7 +32,6 @@ const DIST_TEMPLATES = [
 ] as const;
 type DistTemplateId = (typeof DIST_TEMPLATES)[number]["id"];
 
-
 export default function DashboardPage() {
 	// 全局实时订阅：任何变更（含备份导入）失效聚合查询。
 	useRealtime(undefined);
@@ -110,8 +109,8 @@ export default function DashboardPage() {
 					.map((r) => data.projects.find((p) => p.id === r.projectId))
 					.filter((p) => p !== undefined)
 			: data.projects.slice(0, 20);
-const distributionColumns = data.byColumn;
-const statusColumns = distributionColumns;
+	const distributionColumns = data.byColumn;
+	const statusColumns = distributionColumns;
 	// 固定展示四档优先级（紧急/高/中/低），缺失档位补 0——与「按状态」模板显示全部列的 0 值行一致。
 	const priorityColumns = PRIORITIES.map((prio) => {
 		const hit = data.byPriority.find(
@@ -248,9 +247,7 @@ const statusColumns = distributionColumns;
 						<div className="kanso-distribution-list">
 							{activeDistribution.length === 0 ? (
 								<p className="py-6 text-center text-xs text-muted-foreground">
-									{distTemplate === "priority"
-										? "暂无优先级数据"
-										: "暂无列数据"}
+									{distTemplate === "priority" ? "暂无优先级数据" : "暂无列数据"}
 								</p>
 							) : (
 								<>

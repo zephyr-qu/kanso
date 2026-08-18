@@ -316,6 +316,33 @@ func createProject(t *testing.T, e *testEnv, name string) string {
 }
 
 // TestBoardAggregate 校验看板聚合形状：project + columns（含 tasks 数组）+ labels 数组。
+// TestCreateProjectIgnoresTemplate 0008：template 参数已移除——即使请求携带 template=quadrant 也被忽略，固定种子看板默认列。
+func TestCreateProjectIgnoresTemplate(t *testing.T) {
+	e := newTestEnv(t)
+	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
+	wsID := decode[[]map[string]any](t, body)[0]["id"].(string)
+
+	// 带 template=quadrant 的请求：行为与不带模板一致，产出看板四列。
+	res, body := e.do(t, http.MethodPost, "/api/workspaces/"+wsID+"/projects", `{"name":"带模板请求","template":"quadrant"}`)
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("创建项目应 201，实际 %d", res.StatusCode)
+	}
+	projectID := decode[map[string]any](t, body)["id"].(string)
+
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
+	columns, _ := decode[map[string]any](t, body)["columns"].([]any)
+	if len(columns) != 4 {
+		t.Fatalf("应固定 4 列，实际 %d", len(columns))
+	}
+	want := []string{"待办", "进行中", "已阻塞", "已完成"}
+	for i, c := range columns {
+		name := c.(map[string]any)["name"]
+		if name != want[i] {
+			t.Fatalf("列 %d 应为 %q，实际 %v", i, want[i], name)
+		}
+	}
+}
+
 func TestBoardAggregate(t *testing.T) {
 	e := newTestEnv(t)
 	projectID := createProject(t, e, "聚合项目")
@@ -1770,34 +1797,6 @@ func TestVerifyMultiKey(t *testing.T) {
 	}
 }
 
-// TestTemplateQuadrant 校验项目模板（0006 Phase 4）：quadrant 四象限列、未知回退 board。
-func TestTemplateQuadrant(t *testing.T) {
-	e := newTestEnv(t)
-	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
-	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
-
-	// 未知模板回退 board。
-	res, body := e.do(t, http.MethodPost, "/api/workspaces/"+workspaceID+"/projects", `{"name":"未知模板","template":"weird"}`)
-	if res.StatusCode != http.StatusCreated {
-		t.Fatalf("创建项目应 201，实际 %d", res.StatusCode)
-	}
-	fallbackID := decode[map[string]any](t, body)["id"].(string)
-	_, body = e.do(t, http.MethodGet, "/api/projects/"+fallbackID, "")
-	if names := columnNames(body); !reflect.DeepEqual(names, []string{"待办", "进行中", "已阻塞", "已完成"}) {
-		t.Fatalf("未知模板应回退看板列，实际 %v", names)
-	}
-
-	// quadrant 模板：重要四象限。
-	res, body = e.do(t, http.MethodPost, "/api/workspaces/"+workspaceID+"/projects", `{"name":"四象限项目","template":"quadrant"}`)
-	if res.StatusCode != http.StatusCreated {
-		t.Fatalf("quadrant 创建应 201，实际 %d", res.StatusCode)
-	}
-	projectID := decode[map[string]any](t, body)["id"].(string)
-	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
-	if names := columnNames(body); !reflect.DeepEqual(names, []string{"重要紧急", "重要不紧急", "紧急不重要", "不重要不紧急"}) {
-		t.Fatalf("quadrant 应为四象限列，实际 %v", names)
-	}
-}
 
 func TestCrossProjectLabelRejected(t *testing.T) {
 	e := newTestEnv(t)

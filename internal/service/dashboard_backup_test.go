@@ -156,7 +156,7 @@ func TestImportBackupRoundtrip(t *testing.T) {
 	}
 
 	// 制造「当前待覆盖」的新数据。
-	project2, err := env.svc.CreateProject(ctx, wsID, "覆盖项目", "board")
+	project2, err := env.svc.CreateProject(ctx, wsID, "覆盖项目")
 	requireNoErr(t, err)
 
 	// 导入（全量替换）。

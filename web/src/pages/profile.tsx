@@ -69,6 +69,7 @@ function ActivityHeatmap({ activities }: { activities: Activity[] }) {
 	const monthLabels: (string | null)[] = columns.map((column, wi) => {
 		const first = column.find((cell) => cell !== null);
 		if (!first) return null;
+		if (wi === 0) return null; // 跨年区间首尾同为 8 月，跳过开头标签避免重复
 		const month = first.date.getMonth();
 		const prev = wi === 0 ? null : columns[wi - 1].find((cell) => cell !== null);
 		return prev && prev.date.getMonth() === month ? null : `${month + 1}月`;
@@ -87,7 +88,7 @@ function ActivityHeatmap({ activities }: { activities: Activity[] }) {
 				{monthLabels.map((label, index) => (
 					<span
 						key={index}
-						className="min-w-0 flex-1 overflow-visible whitespace-nowrap text-[9px] leading-none text-muted-foreground/70"
+className="min-w-0 flex-1 overflow-visible whitespace-nowrap text-[9px] leading-none text-muted-foreground/70"
 					>
 						{label ?? ""}
 					</span>
@@ -269,7 +270,23 @@ export default function ProfilePage() {
 					<div className="w-full space-y-4">
 						{/* 当前成员卡 */}
 						<SurfaceCard className="flex items-center gap-4 p-5">
-							{mode === "team" ? (
+							{editing ? (
+								<button
+									type="button"
+									className="group relative shrink-0"
+									aria-label="上传头像"
+									onMouseDown={(e) => e.preventDefault()}
+									onClick={() => fileRef.current?.click()}
+								>
+									<MemberAvatar
+										member={member}
+										className="size-14 text-lg font-semibold text-white"
+									/>
+									<span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/35 text-white opacity-100">
+										<UploadIcon className="size-4" />
+									</span>
+								</button>
+							) : mode === "team" ? (
 								<Popover>
 									<PopoverTrigger
 										render={
@@ -307,21 +324,14 @@ export default function ProfilePage() {
 									</PopoverPopup>
 								</Popover>
 							) : (
-								// personal 模式无成员表，PATCH /api/members/{id} 未注册，头像不可改。
+								// personal 模式：PATCH /api/members/{id} 双模式注册，头像可改（仅 owner 单成员）。
 								<MemberAvatar
 									member={member}
 									className="size-14 text-lg font-semibold text-white"
 								/>
 							)}
 							<div
-								className="min-w-0 flex-1"
-								onBlur={(e) => {
-									// 失焦取消编辑，但点击编辑区内的按钮（上传/移除头像）不应触发。
-									if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-										setEditing(false);
-									}
-								}}
-							>
+								className="min-w-0 flex-1">
 								<div className="flex items-center gap-2">
 									{editing ? (
 										<input
@@ -340,7 +350,6 @@ export default function ProfilePage() {
 													setEditing(false);
 												}
 											}}
-											// 容器 div 的 onBlur（contains 守卫）统一处理失焦取消，避免点击上传/移除头像被误吞。
 											className="h-7 w-40 rounded-md border border-primary px-2 text-[16px] font-[650] tracking-tight outline-none"
 											aria-label="编辑名称"
 										/>
@@ -358,13 +367,6 @@ export default function ProfilePage() {
 								</p>
 								{editing ? (
 									<div className="mt-2 flex items-center gap-2">
-										<Button
-											size="sm"
-											variant="outline"
-											onClick={() => fileRef.current?.click()}
-										>
-											<UploadIcon className="size-3.5" /> 上传头像
-										</Button>
 										{member.avatar ? (
 											<Button
 												size="sm"

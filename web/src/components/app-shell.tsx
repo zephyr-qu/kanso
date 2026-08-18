@@ -93,6 +93,9 @@ export default function AppShell() {
 						簡
 					</span>
 					<span className="kanso-brand-name">Kanso</span>
+					<span className="rounded-full border px-1.5 py-px text-[10px] leading-none text-muted-foreground">
+						{meData?.mode === "team" ? "团队版" : "个人版"}
+					</span>
 				</div>
 
 				<nav className="kanso-sidebar-nav">

@@ -149,7 +149,7 @@ func TestMoveColumnBeginError(t *testing.T) {
 func TestCreateProjectBeginError(t *testing.T) {
 	mock, svc := newMockService(t)
 	mock.ExpectBegin().WillReturnError(errors.New("开启事务失败"))
-	if _, err := svc.CreateProject(context.Background(), "w1", "项目", "board"); err == nil {
+	if _, err := svc.CreateProject(context.Background(), "w1", "项目"); err == nil {
 		t.Fatal("BeginTx 失败时应返回错误")
 	}
 }

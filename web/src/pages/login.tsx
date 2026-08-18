@@ -44,9 +44,11 @@ export default function LoginPage() {
 			<div className="flex flex-1 flex-col justify-between gap-8 p-12 md:px-14 md:py-12">
 				<div className="flex items-center gap-3 animate-[fadeIn_400ms_ease_both]">
 					<span
-						className="kanso-login-mark"
-						aria-hidden
-					/>
+					className="kanso-login-mark"
+					aria-hidden
+					>
+						簡
+					</span>
 					<span className="text-[17px] font-bold tracking-[-0.01em]">Kanso</span>
 				</div>
 

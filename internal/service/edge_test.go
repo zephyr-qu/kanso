@@ -137,7 +137,7 @@ func TestDeleteWorkspaceCleansActivities(t *testing.T) {
 	// 造第二个工作区 + 项目 + 任务（产生活动），删除后活动清空。
 	second, err := env.svc.CreateWorkspace(ctx, "临时工作区")
 	requireNoErr(t, err)
-	project, err := env.svc.CreateProject(ctx, second.ID, "临时项目", "board")
+	project, err := env.svc.CreateProject(ctx, second.ID, "临时项目")
 	requireNoErr(t, err)
 	board, err := env.svc.GetBoard(ctx, project.ID)
 	requireNoErr(t, err)

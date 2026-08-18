@@ -189,7 +189,7 @@ func TestMilestoneLifecycle(t *testing.T) {
 	if err := env.svc.SetTaskMilestone(ctx, task.ID, "nope", true); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("里程碑不存在应 ErrNotFound，实际 %v", err)
 	}
-	other, err := env.svc.CreateProject(ctx, defaultWorkspaceID(t, env), "另一项目", "board")
+	other, err := env.svc.CreateProject(ctx, defaultWorkspaceID(t, env), "另一项目")
 	requireNoErr(t, err)
 	otherMs, err := env.svc.CreateMilestone(ctx, other.ID, "外部里程碑", nil)
 	requireNoErr(t, err)
