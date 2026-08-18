@@ -11,8 +11,6 @@ import {
 	ArchiveIcon,
 	CalendarIcon,
 	ClockIcon,
-
-	PencilIcon,
 	TagIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -36,7 +34,6 @@ export type TaskCardViewProps = {
 	task: Task;
 	labels: Label[];
 	onOpen?: (task: Task) => void;
-	onRename?: (task: Task, title: string) => void;
 	onArchive?: (task: Task) => void;
 	onToggleLabel?: (task: Task, label: Label) => void;
 	className?: string;
@@ -58,7 +55,6 @@ export const TaskCardView = forwardRef<HTMLDivElement, TaskCardViewProps>(
 			task,
 			labels,
 			onOpen,
-			onRename,
 			onArchive,
 			onToggleLabel,
 			attributes,
@@ -71,9 +67,6 @@ export const TaskCardView = forwardRef<HTMLDivElement, TaskCardViewProps>(
 		ref,
 	) {
 		const taskLabels = task.labels ?? [];
-		// 内联改标题（小操作不弹面板）：点铅笔进入编辑态，Enter 保存，Esc/失焦取消。
-		const [editingTitle, setEditingTitle] = useState(false);
-		const [draft, setDraft] = useState("");
 
 		return (
 			<div
@@ -120,32 +113,10 @@ export const TaskCardView = forwardRef<HTMLDivElement, TaskCardViewProps>(
 					</span>
 				</div>
 
-				{/* 标题（原型 .t-title：13.5px/500/1.5）；编辑态内联为输入框 */}
-				{editingTitle ? (
-					<input
-						value={draft}
-						onChange={(e) => setDraft(e.target.value)}
-						autoFocus
-						onFocus={(e) => e.target.select()}
-						onPointerDown={(e) => e.stopPropagation()}
-						onClick={(e) => e.stopPropagation()}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" && draft.trim()) {
-								onRename?.(task, draft.trim());
-								setEditingTitle(false);
-							} else if (e.key === "Escape") {
-								setEditingTitle(false);
-							}
-						}}
-						onBlur={() => setEditingTitle(false)}
-						className="kanso-task-card__title-input"
-						aria-label="编辑任务标题"
-					/>
-				) : (
-					<p className="kanso-task-card__title break-words">{task.title}</p>
-				)}
-
-				{/* 标签（原型 .t-tags chip：圆角胶囊、12% 色底 + 色字、11px） */}
+								{/* 标题（原型 .t-title：13.5px/500/1.5）；修改统一在详情页 */}
+				<p className="kanso-task-card__title break-words">{task.title}</p>
+				
+{/* 标签（原型 .t-tags chip：圆角胶囊、12% 色底 + 色字、11px） */}
 				{taskLabels.length > 0 ? (
 					<div className="kanso-task-card__labels">
 						{taskLabels.map((label) => (
@@ -232,18 +203,6 @@ export const TaskCardView = forwardRef<HTMLDivElement, TaskCardViewProps>(
 						variant="ghost"
 						size="icon"
 						className="kanso-task-card__action"
-						aria-label={`编辑任务 ${task.title}`}
-						onClick={() => {
-							setDraft(task.title);
-							setEditingTitle(true);
-						}}
-					>
-						<PencilIcon />
-					</Button>
-					<Button
-						variant="ghost"
-						size="icon"
-						className="kanso-task-card__action"
 						aria-label={`归档任务 ${task.title}`}
 						onClick={() => onArchive?.(task)}
 					>
@@ -259,11 +218,10 @@ export default function SortableTaskCard(props: {
 	task: Task;
 	labels: Label[];
 	onOpen: (task: Task) => void;
-	onRename: (task: Task, title: string) => void;
 	onArchive: (task: Task) => void;
 	onToggleLabel: (task: Task, label: Label) => void;
 }) {
-	const { task, labels, onOpen, onRename, onArchive, onToggleLabel } = props;
+	const { task, labels, onOpen, onArchive, onToggleLabel } = props;
 	const {
 		attributes,
 		listeners,
@@ -294,7 +252,6 @@ export default function SortableTaskCard(props: {
 			task={task}
 			labels={labels}
 			onOpen={onOpen}
-			onRename={onRename}
 			onArchive={onArchive}
 			onToggleLabel={onToggleLabel}
 			// 拖拽中由 DragOverlay 副本承担主视觉，原卡片弱化为占位残影（opacity 走 CSS data-dragging）。

@@ -114,27 +114,24 @@ test("双窗口：A 改名任务 → B 标题同步", async ({ browser }) => {
 		await login(b);
 		await openBoard(b, "标签冒烟");
 
-		// A 重命名待办第一个任务（hover 卡片显示「编辑任务」按钮 → 对话框改标题）。
+		// A 在详情页重命名待办第一个任务（0008 后卡片无编辑按钮，改名统一在详情页）。
 		const newTitle = `改名同步${Date.now() % 100000}`;
 		const firstCol = a.locator("div[class*='w-[282px]']").first();
 		const task = firstCol.locator("p.break-words").first();
 		const oldTitle = (await task.textContent()) ?? "";
-		// 卡片定位用「打开任务 {title}」（role 稳定）：内联编辑时标题 p 被输入框替换，
-		// 若由 p 链推导 card，点击后惰性解析会断裂（locator 找不到任何元素）。
-		const card = firstCol.getByRole("button", { name: `打开任务 ${oldTitle}` });
-		// hover 卡片显示「编辑任务」按钮 → 卡内联编辑输入框 → Enter 保存。
-		await card.hover();
-		await card
-			.getByRole("button", { name: `编辑任务 ${oldTitle}`, exact: true })
-			.click();
-		const titleInput = card.locator(".kanso-task-card__title-input");
-		await titleInput.fill(newTitle);
-		await titleInput.press("Enter");
+		await task.click();
+		await a.waitForURL(/\/t\//);
+		// 详情页标题点击进入编辑态 → 输入新标题 → Enter 保存。
+		await a.locator("main h2").first().click();
+		await a.locator("main input").first().fill(newTitle);
+		await a.locator("main input").first().press("Enter");
+		await expect(a.locator("main h2").first()).toHaveText(newTitle, { timeout: 5000 });
 
-		// A 自身更新。
+		// 回看板核对两窗口同步。
+		await a.goBack();
+		await a.waitForSelector("text=新建列");
 		await expectTaskInColumn(a, 0, newTitle, true);
 		await expectTaskInColumn(a, 0, oldTitle, false);
-		// B 同步更新。
 		await expectTaskInColumn(b, 0, newTitle, true);
 		await expectTaskInColumn(b, 0, oldTitle, false);
 	} finally {

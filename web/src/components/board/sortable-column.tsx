@@ -33,7 +33,6 @@ export default function SortableColumn(props: {
 	onDelete: (column: BoardColumn) => void;
 	onAddTask: (columnId: string, title: string, priority: string) => void;
 	onOpenTask: (task: Task) => void;
-	onRenameTask: (task: Task, title: string) => void;
 	onArchiveTask: (task: Task) => void;
 	onToggleLabel: (task: Task, label: Label) => void;
 }) {
@@ -50,7 +49,6 @@ export default function SortableColumn(props: {
 		onDelete,
 		onAddTask,
 		onOpenTask,
-		onRenameTask,
 		onArchiveTask,
 		onToggleLabel,
 	} = props;
@@ -113,7 +111,6 @@ export default function SortableColumn(props: {
 						task={task}
 						labels={labels}
 						onOpen={onOpenTask}
-						onRename={onRenameTask}
 						onArchive={onArchiveTask}
 						onToggleLabel={onToggleLabel}
 					/>

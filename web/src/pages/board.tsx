@@ -393,9 +393,6 @@ export default function BoardPage() {
 												`/w/${board?.project.workspaceId ?? ""}/p/${projectId}/t/${task.id}`,
 											)
 										}
-										onRenameTask={(task, title) =>
-											taskOps.updateTask.mutate({ id: task.id, title })
-										}
 										onArchiveTask={(task) => taskOps.setArchived.mutate({ id: task.id, archived: true })}
 										onToggleLabel={(task, label) =>
 											labelOps.toggleLabel.mutate({
