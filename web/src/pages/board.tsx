@@ -695,7 +695,7 @@ export default function BoardPage() {
 			</Dialog>
 		
 			{milestoneLink ? createPortal(
-				<svg className="pointer-events-none fixed inset-0 z-[120]">
+				<svg className="pointer-events-none fixed left-0 top-0 z-[120] h-screen w-screen">
 					<line x1={milestoneLink.fromX} y1={milestoneLink.fromY} x2={milestoneLink.curX} y2={milestoneLink.curY} stroke="#c2410c" strokeWidth={2} strokeDasharray="5 4" />
 					<circle cx={milestoneLink.curX} cy={milestoneLink.curY} r={5} fill={milestoneLink.targetTaskId ? "#c2410c" : "rgba(194,65,12,.45)"} />
 				</svg>
