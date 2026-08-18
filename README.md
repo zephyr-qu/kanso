@@ -1,71 +1,101 @@
 # Kanso
 
-Kanso 是个人自用的小型看板项目管理工具：Go 后端、React 前端、SQLite 单机存储、单端口运行。
+Kanso 是一个轻量的看板项目管理工具，采用 Go 后端、React 前端和 SQLite 存储，构建后通过单端口运行。
+
+## 项目结构
+
+```text
+cmd/kanso/          Go 应用入口
+internal/           后端业务代码和测试
+web/src/            React 前端
+web/e2e/            Playwright E2E 测试
+Dockerfile          Docker 镜像构建文件
+docker-compose.yml  Compose 部署配置
+```
 
 ## 本地开发
 
-环境要求：Go 1.26、Node.js、pnpm。
+环境要求：Go 1.26、Node.js 和 pnpm。
 
 启动后端：
 
-```powershell
-go run .
+```bash
+go run ./cmd/kanso
 ```
 
-嵌入式 SPA 需要 `pnpm --dir web build` 生成前端资源后再 `go run .`（未构建时 web/dist 仅含占位页）；开发模式走 Vite 开发服务器，无需预先构建。
+前端开发另开终端启动 Vite：
 
-另开终端启动前端开发服务器：
-
-```powershell
+```bash
 pnpm --dir web install
 pnpm --dir web dev
 ```
 
-开发前端通过 Vite 代理访问 `http://localhost:8080` 的后端。未设置 `KANSO_ACCESS_KEY` 时，后端会在启动日志中打印本次访问密钥。
+前端通过 Vite 代理访问 `http://localhost:8080`。未设置 `KANSO_ACCESS_KEY` 时，访问密钥会打印在后端日志中。
 
-## Linux 生产构建
+## 本地构建
 
 ```sh
 chmod +x build.sh
 ./build.sh
 ```
 
-这会先构建 `web/dist`，再生成包含前端资源的 `kanso` 二进制。运行时可配置：
+脚本会构建前端并生成包含前端资源的 `kanso` 二进制。版本号可通过 `VERSION` 设置，否则使用 Git tag 或短哈希。
+
+```sh
+VERSION=1.2.0 ./build.sh
+./kanso --version
+```
+
+运行时可配置：
 
 - `KANSO_ADDR`：监听地址，默认 `:8080`
-- `KANSO_ACCESS_KEY`：共享访问密钥；未设置时每次启动随机生成
+- `KANSO_ACCESS_KEY`：访问密钥；未设置时随机生成
 - `KANSO_DATA_DIR`：SQLite 数据目录，默认 `./data`
-- `KANSO_MODE`：运行模式 `personal`（默认，单用户）/ `team`（多成员）；Docker 镜像默认 personal
-- `KANSO_WS_ORIGINS`：WebSocket 跨源白名单（逗号分隔）；默认仅放行同源，e2e/独立前端端口需显式配置
-- `KANSO_CONFIG_FILE`：配置文件路径，默认 `./kanso-config.json`；优先级为 环境变量 > 配置文件 > 默认值
+- `KANSO_MODE`：`personal`（默认）或 `team`
+- `KANSO_WS_ORIGINS`：WebSocket 跨源白名单
+- `KANSO_CONFIG_FILE`：配置文件路径，默认 `./kanso-config.json`
 
-运行模式**仅**由 `KANSO_MODE` 环境变量在启动时决定（不可经设置页保存）；设置页（`/settings`）可编辑并保存 `KANSO_ADDR` / `KANSO_DATA_DIR` / `KANSO_ACCESS_KEY` / `KANSO_WS_ORIGINS` 到配置文件：
-监听地址、数据目录与 WS 白名单为启动参数，重启后生效；访问密钥保存时立即生效（旧密钥失效，需用新密钥登录）。
-设置页另有主题切换（亮色/暗色/跟随系统，存浏览器本地）、备份导出与版本信息。
-Docker 下建议 `-e KANSO_CONFIG_FILE=/data/kanso-config.json` 使配置随数据卷持久化。
+运行模式仅由 `KANSO_MODE` 环境变量决定。二进制支持 `kanso --version`，健康检查接口为 `GET /api/health`。
 
-二进制支持 `kanso --version`，健康检查 `GET /api/health` 返回版本号。
-## Docker
+## Docker 部署
+
+使用 Docker Compose，数据保存到 `kanso-data` volume：
+
+```sh
+KANSO_ACCESS_KEY=your-secret-key docker compose up --build -d
+```
+
+访问 `http://localhost:8080`。停止服务：
+
+```sh
+docker compose down
+```
+
+也可以直接使用 Docker：
 
 ```sh
 docker build -t kanso .
 docker run --rm -p 8080:8080 -v kanso-data:/data -e KANSO_ACCESS_KEY=change-me kanso
 ```
 
-浏览器访问 `http://localhost:8080`。数据保存在 `/data/kanso.db`。
+查看日志：
 
-## 检查
+```sh
+docker compose logs -f kanso
+```
+
+## 测试与检查
 
 ```sh
 export GOCACHE="$PWD/.gocache"
-go test ./...
-go vet ./...
+go test ./internal/...
+go vet ./internal/...
 pnpm --dir web typecheck
 pnpm --dir web test
 pnpm --dir web build
 ```
 
-Playwright E2E 会自动启动 Go 后端和 Vite 开发服务器；运行前设置 `KANSO_ACCESS_KEY`，例如：
+Playwright E2E 测试位于 `web/e2e`，会自动启动 Go 后端和 Vite 开发服务器：
 
 ```sh
 export KANSO_ACCESS_KEY=e2e-key
@@ -76,3 +106,4 @@ export VITE_API_TARGET=http://127.0.0.1:18082
 export KANSO_API_URL=http://127.0.0.1:18082
 pnpm --dir web test:e2e
 ```
+

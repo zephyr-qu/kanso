@@ -6,7 +6,7 @@ const webPort = process.env.KANSO_E2E_WEB_PORT ?? "5173";
 const apiURL = `http://127.0.0.1:${apiPort}`;
 const webURL = `http://127.0.0.1:${webPort}`;
 
-// Playwright E2E 配置：测试自动启动真实后端（go run .）与前端 dev server。
+// Playwright E2E 配置：测试自动启动真实后端（go run ./cmd/kanso）与前端 dev server。
 // 端口可通过 KANSO_E2E_* 环境变量覆盖；未设置 KANSO_ACCESS_KEY 时固定 mock-key
 // 与各 spec 的登录回退一致，无需外部 env 块即可运行。
 export default defineConfig({
@@ -15,7 +15,7 @@ export default defineConfig({
 	fullyParallel: false,
 	webServer: [
 		{
-			command: "go run .",
+			command: "go run ./cmd/kanso",
 			cwd: "..",
 			url: `${apiURL}/api/health`,
 			timeout: 120_000,

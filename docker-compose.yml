@@ -1,0 +1,23 @@
+services:
+  kanso:
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+    image: kanso:local
+    container_name: kanso
+    restart: unless-stopped
+    ports:
+      - "${KANSO_PORT:-8080}:8080"
+    environment:
+      KANSO_ADDR: ":8080"
+      KANSO_ACCESS_KEY: ${KANSO_ACCESS_KEY:-change-me}
+      KANSO_DATA_DIR: /data
+      KANSO_CONFIG_FILE: /data/kanso-config.json
+      KANSO_MODE: ${KANSO_MODE:-personal}
+      KANSO_WS_ORIGINS: ${KANSO_WS_ORIGINS:-}
+    volumes:
+      - kanso-data:/data
+
+volumes:
+  kanso-data:
