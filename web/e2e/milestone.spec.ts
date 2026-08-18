@@ -121,7 +121,7 @@ test("点项目页进度卡:打开该里程碑详情面板(非管理)", async ({
 	await page.keyboard.press("Escape");
 
 	// 点页面顶部这个里程碑的进度卡 → 打开详情面板。
-	await page.locator("button.kanso-surface-card", { hasText: "详情MS" }).click();
+	await page.locator(".kanso-surface-card", { hasText: "详情MS" }).click();
 	const detail = page.getByRole("dialog");
 	await expect(detail.getByText("详情MS")).toBeVisible();
 	await expect(detail.getByText(/关联任务/).first()).toBeVisible();

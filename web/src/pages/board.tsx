@@ -394,13 +394,20 @@ export default function BoardPage() {
 								{milestonesQuery.data.map((m) => {
 									const pct = m.progress && m.progress.total > 0 ? Math.round((m.progress.done / m.progress.total) * 100) : 0;
 									return (
-										<button key={m.id} type="button" onClick={() => setDetailMilestone(m)}
-											className="kanso-surface-card flex w-40 flex-col gap-1 p-3 text-left transition-colors hover:border-primary/40">
-											<span className="truncate text-sm font-medium">{m.name}</span>
+										<div key={m.id} role="button" tabIndex={0}
+											onClick={() => setDetailMilestone(m)}
+											onKeyDown={(e) => { if (e.key === "Enter") setDetailMilestone(m); }}
+											className="kanso-surface-card group relative flex w-40 flex-col gap-1 p-3 text-left outline-none transition-colors hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-ring">
+											<button type="button" aria-label={`删除里程碑 ${m.name}`} title="删除里程碑"
+												onClick={(e) => { e.stopPropagation(); setDeletingMilestone(m); }}
+												className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100">
+												<TrashIcon className="size-3.5" />
+											</button>
+											<span className="pr-4 truncate text-sm font-medium">{m.name}</span>
 											<span className="text-[11px] text-muted-foreground">{m.dueDate ? `截止 ${m.dueDate}` : "未设截止"}</span>
 											<span className="h-1.5 w-full overflow-hidden rounded-full bg-muted"><span className="block h-full rounded-full bg-primary" style={{ width: `${pct}%` }} /></span>
 											<span className="text-[11px] text-muted-foreground">{pct}% 完成</span>
-										</button>
+										</div>
 									);
 								})}
 							</div>
