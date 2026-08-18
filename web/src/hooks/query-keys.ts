@@ -29,6 +29,7 @@ export function invalidateBoardScope(
 	queryClient.invalidateQueries({ queryKey: queryKeys.board(projectId) });
 	queryClient.invalidateQueries({ queryKey: queryKeys.tasks() });
 	queryClient.invalidateQueries({ queryKey: queryKeys.archivedTasks(projectId) });
+	queryClient.invalidateQueries({ queryKey: queryKeys.milestones(projectId) });
 }
 
 // 仅看板（任务详情页不受影响）。

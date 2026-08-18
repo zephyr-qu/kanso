@@ -207,7 +207,7 @@ export default function BoardPage() {
 		},
 	});
 	const updateMilestoneDueMutation = useMutation({
-		mutationFn: ({ id, dueDate }: { id: string; dueDate: string | null }) =>
+		mutationFn: ({ id, dueDate }: { id: string; dueDate: string }) =>
 			api<Milestone>(buildPath("milestone", { id }), { method: "PATCH", body: JSON.stringify({ dueDate }) }),
 		onSuccess: () => {
 			setEditingDue(null);
@@ -621,9 +621,9 @@ export default function BoardPage() {
 												<span className="min-w-0 flex-1 truncate text-sm">{milestone.name}</span>
 											)}
 											<span className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-muted"><span className="block h-full rounded-full bg-primary" style={{ width: `${pct}%` }} /></span>
-											<span className="w-9 shrink-0 text-right font-mono text-[11px] text-muted-foreground">{milestone.progress ? `${pct}%` : "—"}</span>
+											<span className="w-9 shrink-0 text-right font-mono text-[11px] text-muted-foreground">{milestone.progress ? `${pct}% · ${milestone.progress.done}/${milestone.progress.total}` : "—"}</span>
 											{editingDue === milestone.id ? (
-												<DatePicker value={milestone.dueDate ?? ""} onChange={(d) => void updateMilestoneDueMutation.mutateAsync({ id: milestone.id, dueDate: d || null })} ariaLabel="里程碑截止日期" placeholder="设置日期" />
+												<DatePicker value={milestone.dueDate ?? ""} onChange={(d) => void updateMilestoneDueMutation.mutateAsync({ id: milestone.id, dueDate: d })} ariaLabel="里程碑截止日期" placeholder="设置日期" />
 											) : (
 												<button type="button" aria-label={`设截止 ${milestone.name}`} title={milestone.dueDate ? `截止 ${milestone.dueDate}` : "设置截止"} className="text-muted-foreground hover:text-foreground" onClick={() => setEditingDue(milestone.id)}><CalendarIcon className="size-3.5" /></button>
 											)}
