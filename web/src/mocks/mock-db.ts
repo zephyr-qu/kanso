@@ -391,7 +391,7 @@ export function loadMockDb(): void {
 			parsed.activities
 		) {
 			db = parsed;
-			// v5 迁移：早期种子的「阻塞中」列统一改名为规范名「已阻塞」（项目模板口径）。
+			// v5 迁移：早期种子的「阻塞中」列统一改名为规范名「已阻塞」。
 			for (const board of Object.values(db.boards)) {
 				for (const column of board.columns) {
 					if (column.name === "阻塞中") column.name = "已阻塞";

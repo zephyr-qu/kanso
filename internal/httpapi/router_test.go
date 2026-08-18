@@ -2058,7 +2058,7 @@ func TestDashboardFocusExcludesDone(t *testing.T) {
 	}
 }
 
-// 列名提取见文件中部 columnNames(body)（既有辅助，TestTemplateQuadrant 复用）。
+// 列名提取见文件中部 columnNames(body)（既有辅助）。
 
 // ---- 契约与回归测试（2026-08-16 补）----
 

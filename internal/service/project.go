@@ -24,7 +24,7 @@ type ProjectSummary struct {
 }
 
 // listProjectStatsSQL 一次聚合工作区下全部项目的统计（避免 N+1）。
-// "进行中"按列位置口径（0006 Phase 3 任务 3.3）：不在首列也不在末列，模板无关；
+// "进行中"按列位置口径（0006 Phase 3 任务 3.3）：不在首列也不在末列；
 // 与前端/Mock 一致（此前按列名 '进行中' 匹配，列改名后统计失真）。
 const listProjectStatsSQL = `
 SELECT
