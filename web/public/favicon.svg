@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#c2410c"/>
+  <rect x="1" y="1" width="62" height="62" rx="13" fill="none" stroke="rgba(255,248,240,0.25)" stroke-width="1"/>
+  <text x="32" y="45" font-family="'Noto Serif SC', Georgia, serif" font-size="38" font-weight="600" fill="#fff8f0" text-anchor="middle">簡</text>
+</svg>
