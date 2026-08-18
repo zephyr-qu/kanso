@@ -82,6 +82,7 @@ export const TaskCardView = forwardRef<HTMLDivElement, TaskCardViewProps>(
 				{...listeners}
 
 				data-dragging={dragging || undefined}
+				data-task-id={task.id}
 				// 键盘可访问（W-6）：整卡挂 attributes，Tab 聚焦 + Enter 打开详情，Space 开始键盘拖拽；
 				// 仅响应根节点自身按键，避免吞掉内部输入框/按钮的事件。
 				role={onOpen ? "button" : undefined}

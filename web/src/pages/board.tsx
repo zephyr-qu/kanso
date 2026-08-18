@@ -1,5 +1,5 @@
 // 看板页：编排与渲染。数据/缓存/乐观更新逻辑都在领域 hooks 里（架构候选 1）。
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	DndContext,
@@ -159,6 +159,50 @@ export default function BoardPage() {
 	const [milestoneOpen, setMilestoneOpen] = useState(false);
 	const [shareOpen, setShareOpen] = useState(false);
 	const [detailMilestone, setDetailMilestone] = useState<Milestone | null>(null);
+	// 长按里程碑卡 → 拖线关联任务(松手时 attach 到目标任务)。
+	const [milestoneLink, setMilestoneLink] = useState<{
+		fromX: number; fromY: number; curX: number; curY: number;
+		milestoneId: string; targetTaskId: string | null;
+	} | null>(null);
+	const linkPressRef = useRef<{ x: number; y: number; timer: number } | null>(null);
+	const suppressClickRef = useRef(false);
+	const clearLinkPress = () => { if (linkPressRef.current) { window.clearTimeout(linkPressRef.current.timer); linkPressRef.current = null; } };
+	const startMilestoneLink = (e: React.PointerEvent, milestoneId: string) => {
+		clearLinkPress();
+		const x = e.clientX, y = e.clientY;
+		const t = window.setTimeout(() => {
+			suppressClickRef.current = true;
+			setMilestoneLink({ fromX: x, fromY: y, curX: x, curY: y, milestoneId, targetTaskId: null });
+		}, 300);
+		linkPressRef.current = { x, y, timer: t };
+	};
+	const attachMilestoneLink = (taskId: string, milestoneId: string) => {
+		api<void>(buildPath("taskMilestones", { taskId, milestoneId }), { method: "POST" })
+			.then(() => {
+				queryClient.invalidateQueries({ queryKey: queryKeys.milestones(projectId) });
+				queryClient.invalidateQueries({ queryKey: queryKeys.board(projectId) });
+			})
+			.catch(() => {});
+	};
+	useEffect(() => {
+		const detectTask = (target: EventTarget | null): string | null => {
+			const card = (target as Element | null)?.closest?.("[data-task-id]");
+			return card ? card.getAttribute("data-task-id") : null;
+		};
+		const move = (ev: PointerEvent) => {
+			setMilestoneLink((l) => (l ? { ...l, curX: ev.clientX, curY: ev.clientY, targetTaskId: detectTask(ev.target) } : l));
+		};
+		const up = (ev: PointerEvent) => {
+			setMilestoneLink((l) => {
+				if (l) { const tid = detectTask(ev.target); if (tid) attachMilestoneLink(tid, l.milestoneId); }
+				return null;
+			});
+			clearLinkPress();
+		};
+		window.addEventListener("pointermove", move);
+		window.addEventListener("pointerup", up);
+		return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+	}, []);
 	const [newMilestone, setNewMilestone] = useState("");
 	// 里程碑行内编辑/删除状态。
 	const [editingMilestone, setEditingMilestone] = useState<{ id: string; name: string } | null>(null);
@@ -395,7 +439,9 @@ export default function BoardPage() {
 									const pct = m.progress && m.progress.total > 0 ? Math.round((m.progress.done / m.progress.total) * 100) : 0;
 									return (
 										<div key={m.id} role="button" tabIndex={0}
-											onClick={() => setDetailMilestone(m)}
+											onClick={() => { if (suppressClickRef.current) { suppressClickRef.current = false; return; } setDetailMilestone(m); }}
+											onPointerDown={(e) => startMilestoneLink(e, m.id)}
+											onPointerUp={clearLinkPress}
 											onKeyDown={(e) => { if (e.key === "Enter") setDetailMilestone(m); }}
 											className="kanso-surface-card group relative flex w-40 flex-col gap-1 p-3 text-left outline-none transition-colors hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-ring">
 											<button type="button" aria-label={`删除里程碑 ${m.name}`} title="删除里程碑"
@@ -654,6 +700,12 @@ export default function BoardPage() {
 				onConfirm={async () => { if (deletingMilestone) await deleteMilestoneMutation.mutateAsync(deletingMilestone.id); }}
 			/>
 		
+			{milestoneLink ? (
+				<svg className="pointer-events-none fixed inset-0 z-[120]">
+					<line x1={milestoneLink.fromX} y1={milestoneLink.fromY} x2={milestoneLink.curX} y2={milestoneLink.curY} stroke="#c2410c" strokeWidth={2} strokeDasharray="5 4" />
+					<circle cx={milestoneLink.curX} cy={milestoneLink.curY} r={5} fill={milestoneLink.targetTaskId ? "#c2410c" : "rgba(194,65,12,.45)"} />
+				</svg>
+			) : null}
 			<ShareMilestoneDialog open={shareOpen} onOpenChange={setShareOpen} projectName={board?.project.name ?? ""} milestones={milestonesQuery.data ?? []} />
 			<MilestoneDetailDialog
 				open={detailMilestone !== null}
