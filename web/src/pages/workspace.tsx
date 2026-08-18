@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClockIcon, PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
+import { ClockIcon, PencilIcon, PlusIcon, Share2Icon, TrashIcon } from "lucide-react";
 import ConfirmDialog from "@/components/confirm-dialog";
 import NameDialog from "@/components/name-dialog";
+import ShareMilestoneDialog from "@/components/share-milestone-dialog";
 import { Button } from "@/components/ui/button";
 import {
 	Empty,
@@ -19,6 +20,7 @@ import { buildPath } from "@/lib/endpoints";
 import { formatUpdated } from "@/lib/format-relative";
 import { queryKeys } from "@/hooks/query-keys";
 import type { Project } from "@/types/project";
+import type { Milestone } from "@/types/board";
 import type { Workspace } from "@/types/workspace";
 import { PageContent, PageHeader, PrimaryButton } from "@/components/kanso-ui";
 
@@ -29,6 +31,7 @@ export default function WorkspacePage() {
 	const [createOpen, setCreateOpen] = useState(false);
 	const [renaming, setRenaming] = useState<Project | null>(null);
 	const [deleting, setDeleting] = useState<Project | null>(null);
+	const [shareProject, setShareProject] = useState<Project | null>(null);
 	const [wsRenaming, setWsRenaming] = useState(false);
 	const [wsDeleting, setWsDeleting] = useState(false);
 
@@ -75,6 +78,12 @@ export default function WorkspacePage() {
 		enabled: workspaceId !== "",
 	});
 
+	// 分享进度卡:按项目查里程碑(M5)。
+	const shareMilestones = useQuery({
+		queryKey: queryKeys.milestones(shareProject?.id ?? ""),
+		queryFn: () => api<Milestone[]>(buildPath("projectMilestones", { id: shareProject!.id })),
+		enabled: shareProject !== null,
+	});
 	const createMutation = useMutation({
 		mutationFn: (name: string) =>
 			api<Project>(buildPath("workspaceProjects", { workspaceId }), {
@@ -178,6 +187,15 @@ export default function WorkspacePage() {
 								onClick={(e) => e.preventDefault()}
 								onPointerDown={(e) => e.stopPropagation()}
 							>
+									<Button
+										variant="ghost"
+										size="icon"
+										className="size-7"
+										aria-label={`分享 ${project.name}`}
+										onClick={() => setShareProject(project)}
+									>
+										<Share2Icon />
+									</Button>
 								<Button
 									variant="ghost"
 									size="icon"
@@ -227,6 +245,13 @@ export default function WorkspacePage() {
 				}}
 			>
 			</NameDialog>
+
+			<ShareMilestoneDialog
+				open={shareProject !== null}
+				onOpenChange={(o) => { if (!o) setShareProject(null); }}
+				projectName={shareProject?.name ?? ""}
+				milestones={shareMilestones.data ?? []}
+			/>
 			<NameDialog
 				open={renaming !== null}
 				onOpenChange={(open) => {
