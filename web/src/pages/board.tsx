@@ -23,7 +23,8 @@ import {
 	horizontalListSortingStrategy,
 	sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
-import { ArchiveIcon, ArrowDownIcon, ArrowUpIcon, CalendarIcon, MilestoneIcon, PlusIcon, TagIcon } from "lucide-react";
+import { ArchiveIcon, ArrowDownIcon, ArrowUpIcon, CalendarIcon, MilestoneIcon, PencilIcon, PlusIcon, TagIcon, TrashIcon } from "lucide-react";
+import DatePicker from "@/components/date-picker";
 import { CSS } from "@dnd-kit/utilities";
 import { Link, useNavigate, useParams } from "react-router";
 import ConfirmDialog from "@/components/confirm-dialog";
@@ -155,6 +156,10 @@ export default function BoardPage() {
 	const [viewMode, setViewMode] = useState<"columns" | "swimlane">("columns");
 	const [milestoneOpen, setMilestoneOpen] = useState(false);
 	const [newMilestone, setNewMilestone] = useState("");
+	// 里程碑行内编辑/删除状态。
+	const [editingMilestone, setEditingMilestone] = useState<{ id: string; name: string } | null>(null);
+	const [editingDue, setEditingDue] = useState<string | null>(null);
+	const [deletingMilestone, setDeletingMilestone] = useState<Milestone | null>(null);
 	const [reducedMotion, setReducedMotion] = useState(false);
 	useEffect(() => {
 		const media = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -188,6 +193,29 @@ export default function BoardPage() {
 			api<Milestone>(buildPath("projectMilestones", { id: projectId }), { method: "POST", body: JSON.stringify({ name }) }),
 		onSuccess: () => {
 			setNewMilestone("");
+			queryClient.invalidateQueries({ queryKey: queryKeys.milestones(projectId) });
+		},
+	});
+	const renameMilestoneMutation = useMutation({
+		mutationFn: ({ id, name }: { id: string; name: string }) =>
+			api<Milestone>(buildPath("milestone", { id }), { method: "PATCH", body: JSON.stringify({ name }) }),
+		onSuccess: () => {
+			setEditingMilestone(null);
+			queryClient.invalidateQueries({ queryKey: queryKeys.milestones(projectId) });
+		},
+	});
+	const updateMilestoneDueMutation = useMutation({
+		mutationFn: ({ id, dueDate }: { id: string; dueDate: string | null }) =>
+			api<Milestone>(buildPath("milestone", { id }), { method: "PATCH", body: JSON.stringify({ dueDate }) }),
+		onSuccess: () => {
+			setEditingDue(null);
+			queryClient.invalidateQueries({ queryKey: queryKeys.milestones(projectId) });
+		},
+	});
+	const deleteMilestoneMutation = useMutation({
+		mutationFn: (id: string) => api<void>(buildPath("milestone", { id }), { method: "DELETE" }),
+		onSuccess: () => {
+			setDeletingMilestone(null);
 			queryClient.invalidateQueries({ queryKey: queryKeys.milestones(projectId) });
 		},
 	});
@@ -324,15 +352,13 @@ export default function BoardPage() {
 					>
 						<ArchiveIcon />
 					</QuietButton>
-					{(milestonesQuery.data?.length ?? 0) > 0 ? (
-						<QuietButton
-							size="icon"
-							aria-label="里程碑"
-							onClick={() => setMilestoneOpen(true)}
-						>
-							<MilestoneIcon />
-						</QuietButton>
-					) : null}
+					<QuietButton
+						size="icon"
+						aria-label="里程碑"
+						onClick={() => setMilestoneOpen(true)}
+					>
+						<MilestoneIcon />
+					</QuietButton>
 					<div className="kanso-view-toggle" role="group" aria-label="看板视图">
 						<button type="button" aria-pressed={viewMode === "columns"} onClick={() => setViewMode("columns")}>列</button>
 						<button type="button" aria-pressed={viewMode === "swimlane"} onClick={() => setViewMode("swimlane")}>泳</button>
@@ -539,20 +565,54 @@ export default function BoardPage() {
 							<Button type="submit">创建</Button>
 						</form>
 						<div className="space-y-2">
-							{milestonesQuery.data?.map((milestone) => {
-								const pct = milestone.progress && milestone.progress.total > 0 ? Math.round((milestone.progress.done / milestone.progress.total) * 100) : 0;
-								return (
-									<div key={milestone.id} className="flex items-center gap-3 rounded-md border border-border px-3 py-2">
-										<span className="min-w-0 flex-1 truncate text-sm">{milestone.name}</span>
-										<span className="h-1.5 w-28 overflow-hidden rounded-full bg-muted"><span className="block h-full rounded-full bg-primary" style={{ width: `${pct}%` }} /></span>
-										<span className="font-mono text-[11px] text-muted-foreground">{milestone.progress ? `${pct}%` : "—"}{milestone.dueDate ? ` · ${milestone.dueDate}` : ""}</span>
-									</div>
-								);
-							})}
+								{milestonesQuery.data?.map((milestone) => {
+									const pct = milestone.progress && milestone.progress.total > 0 ? Math.round((milestone.progress.done / milestone.progress.total) * 100) : 0;
+									const editing = editingMilestone?.id === milestone.id;
+									return (
+										<div key={milestone.id} className="group flex items-center gap-2.5 rounded-md border border-border px-3 py-2">
+											{editing ? (
+												<input
+													autoFocus
+													defaultValue={milestone.name}
+													aria-label="重命名里程碑"
+													className="kanso-input min-w-0 flex-1 rounded-md border px-2 py-1 text-sm"
+													onKeyDown={(e) => {
+														if (e.key === "Enter" && (e.target as HTMLInputElement).value.trim())
+															void renameMilestoneMutation.mutateAsync({ id: milestone.id, name: (e.target as HTMLInputElement).value.trim() });
+														if (e.key === "Escape") setEditingMilestone(null);
+													}}
+													onBlur={(e) => {
+														if (e.target.value.trim() && e.target.value.trim() !== milestone.name)
+															void renameMilestoneMutation.mutateAsync({ id: milestone.id, name: e.target.value.trim() });
+														else setEditingMilestone(null);
+													}}
+												/>
+											) : (
+												<span className="min-w-0 flex-1 truncate text-sm">{milestone.name}</span>
+											)}
+											<span className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-muted"><span className="block h-full rounded-full bg-primary" style={{ width: `${pct}%` }} /></span>
+											<span className="w-9 shrink-0 text-right font-mono text-[11px] text-muted-foreground">{milestone.progress ? `${pct}%` : "—"}</span>
+											{editingDue === milestone.id ? (
+												<DatePicker value={milestone.dueDate ?? ""} onChange={(d) => void updateMilestoneDueMutation.mutateAsync({ id: milestone.id, dueDate: d || null })} ariaLabel="里程碑截止日期" placeholder="设置日期" />
+											) : (
+												<button type="button" aria-label={`设截止 ${milestone.name}`} title={milestone.dueDate ? `截止 ${milestone.dueDate}` : "设置截止"} className="text-muted-foreground hover:text-foreground" onClick={() => setEditingDue(milestone.id)}><CalendarIcon className="size-3.5" /></button>
+											)}
+											<button type="button" aria-label={`重命名 ${milestone.name}`} title="重命名" className="text-muted-foreground hover:text-foreground" onClick={() => setEditingMilestone({ id: milestone.id, name: milestone.name })}><PencilIcon className="size-3.5" /></button>
+											<button type="button" aria-label={`删除里程碑 ${milestone.name}`} title="删除" className="text-muted-foreground hover:text-destructive" onClick={() => setDeletingMilestone(milestone)}><TrashIcon className="size-3.5" /></button>
+										</div>
+									);
+								})}
 						</div>
 					</DialogPanel>
 				</DialogPopup></DialogPortal>
 			</Dialog>
+			<ConfirmDialog
+				open={deletingMilestone !== null}
+				onOpenChange={(open) => { if (!open) setDeletingMilestone(null); }}
+				title="删除里程碑"
+				description={`确定删除里程碑「${deletingMilestone?.name}」吗？其任务关联将一并解除，此操作不可撤销。`}
+				onConfirm={async () => { if (deletingMilestone) await deleteMilestoneMutation.mutateAsync(deletingMilestone.id); }}
+			/>
 		</div>
 	);
 }
