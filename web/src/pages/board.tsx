@@ -184,7 +184,7 @@ export default function BoardPage() {
 	const milestonesQuery = useQuery({
 		queryKey: queryKeys.milestones(projectId),
 		queryFn: () => api<Milestone[]>(buildPath("projectMilestones", { id: projectId })),
-		enabled: milestoneOpen && projectId !== "",
+		enabled: projectId !== "",
 	});
 	// 里程碑创建与其他 mutation 一致：成功失效列表查询（此前裸 api + refetch 风格不统一）。
 	const queryClient = useQueryClient();
@@ -379,6 +379,33 @@ export default function BoardPage() {
 				</p>
 			) : board && board.columns.length > 0 ? (
 				<PageContent className="kanso-board-content overflow-auto px-[26px] pb-7 pt-5">
+{/* M2 项目页里程碑进度卡(常驻概览,点击进管理);无里程碑给空态。 */}
+{milestonesQuery.data && milestonesQuery.data.length > 0 ? (
+						<div className="mb-3">
+							<div className="mb-1.5 flex items-center justify-between">
+								<span className="text-xs font-medium text-muted-foreground">里程碑进度</span>
+								<button type="button" className="text-xs text-primary hover:underline" onClick={() => setMilestoneOpen(true)}>管理</button>
+							</div>
+							<div className="flex flex-wrap gap-2">
+								{milestonesQuery.data.map((m) => {
+									const pct = m.progress && m.progress.total > 0 ? Math.round((m.progress.done / m.progress.total) * 100) : 0;
+									return (
+										<button key={m.id} type="button" onClick={() => setMilestoneOpen(true)}
+											className="kanso-surface-card flex w-40 flex-col gap-1 p-3 text-left transition-colors hover:border-primary/40">
+											<span className="truncate text-sm font-medium">{m.name}</span>
+											<span className="text-[11px] text-muted-foreground">{m.dueDate ? `截止 ${m.dueDate}` : "未设截止"}</span>
+											<span className="h-1.5 w-full overflow-hidden rounded-full bg-muted"><span className="block h-full rounded-full bg-primary" style={{ width: `${pct}%` }} /></span>
+											<span className="text-[11px] text-muted-foreground">{pct}% 完成</span>
+										</button>
+									);
+								})}
+							</div>
+						</div>
+) : milestonesQuery.data ? (
+						<div className="mb-3 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+							暂无里程碑，点击右上角「里程碑」创建。
+						</div>
+) : null}
 					<DndContext
 						accessibility={{
 							announcements,

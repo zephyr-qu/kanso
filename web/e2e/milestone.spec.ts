@@ -30,6 +30,10 @@ test("里程碑:看板头弹层 新建→重命名→设截止→删除", async 
 	await dialog.getByRole("button", { name: "创建", exact: true }).click();
 	await expect(dialog.getByText("M1阶段")).toBeVisible({ timeout: 5000 });
 
+	// M2:页面顶部(主区域,非弹层)出现里程碑进度卡。
+	await expect(page.locator("main").getByText("里程碑进度")).toBeVisible();
+	await expect(page.locator("main").getByText("M1阶段")).toBeVisible();
+
 	// 重命名(行内 input)。
 	await dialog.getByRole("button", { name: "重命名 M1阶段" }).click();
 	const renameInput = dialog.getByLabel("重命名里程碑");
