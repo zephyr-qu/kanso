@@ -86,6 +86,61 @@ func (s *Service) ListProjects(ctx context.Context, workspaceID string) ([]Proje
 	return summaries, nil
 }
 
+// PinnedProject 是侧边栏"置顶"分组的跨工作区项目条目。
+type PinnedProject struct {
+	ProjectID   string `json:"projectId"`
+	WorkspaceID string `json:"workspaceId"`
+	Name        string `json:"name"`
+}
+
+// listPinnedProjectsSQL 列出全部置顶项目（跨工作区），最近创建的在前。
+const listPinnedProjectsSQL = `
+SELECT p.id, p.workspace_id, p.name
+FROM project p
+WHERE p.pinned = 1
+ORDER BY p.created_at DESC
+`
+
+// setProjectPinnedSQL 更新项目置顶位（0 行 = 项目不存在）。
+const setProjectPinnedSQL = `UPDATE project SET pinned = ? WHERE id = ?`
+
+// ListPinnedProjects 返回全部置顶项目（跨工作区）。
+func (s *Service) ListPinnedProjects(ctx context.Context) ([]PinnedProject, error) {
+	rows, err := s.db.QueryContext(ctx, listPinnedProjectsSQL)
+	if err != nil {
+		return nil, fmt.Errorf("查询置顶项目失败: %w", err)
+	}
+	defer rows.Close()
+	result := []PinnedProject{}
+	for rows.Next() {
+		var p PinnedProject
+		if err := rows.Scan(&p.ProjectID, &p.WorkspaceID, &p.Name); err != nil {
+			return nil, fmt.Errorf("扫描置顶项目失败: %w", err)
+		}
+		result = append(result, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("遍历置顶项目失败: %w", err)
+	}
+	return result, nil
+}
+
+// SetProjectPinned 设置/取消项目置顶；项目不存在时返回 ErrNotFound。
+func (s *Service) SetProjectPinned(ctx context.Context, projectID string, pinned bool) error {
+	res, err := s.db.ExecContext(ctx, setProjectPinnedSQL, pinned, projectID)
+	if err != nil {
+		return fmt.Errorf("更新置顶失败: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("读取影响行失败: %w", err)
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // CreateProject 创建项目并在同一事务内种子固定看板默认列（0008：模板已移除）。
 func (s *Service) CreateProject(ctx context.Context, workspaceID, name string) (gen.Project, error) {
 	tx, q, err := beginTx(ctx, s.db)

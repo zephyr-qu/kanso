@@ -17,6 +17,8 @@ export const ENDPOINT_TEMPLATES = {
 	memberKey: "/api/members/:id/key",
 	// 项目
 	project: "/api/projects/:id",
+	setProjectPinned: "/api/projects/:id/pinned",
+	pinnedProjects: "/api/pinned-projects",
 	projectArchivedTasks: "/api/projects/:id/archived-tasks",
 	projectColumns: "/api/projects/:projectId/columns",
 	projectLabels: "/api/projects/:projectId/labels",

@@ -3,6 +3,7 @@ import { mswPattern } from "@/lib/endpoints";
 import type { BoardColumn } from "@/types/board";
 import type { Label } from "@/types/label";
 import type { Task } from "@/types/task";
+import type { PinnedProject } from "@/types/pinned-project";
 import {
 	activities,
 	backup,
@@ -63,7 +64,28 @@ function findMilestone(milestoneId: string): { projectId: string; index: number 
 	}
 }
 
+// 置顶项目（dev mock 会话内内存态；不改写 mock-db 种子）。
+let pinnedProjectIds: string[] = [];
+
 export const handlers = [
+	http.get(mswPattern("pinnedProjects"), async () => {
+		await mockDelay();
+		const all = Object.values(getMockDb().projects).flat();
+		const items: PinnedProject[] = all
+			.filter((p) => pinnedProjectIds.includes(p.id))
+			.map((p) => ({ projectId: p.id, workspaceId: p.workspaceId, name: p.name }));
+		return HttpResponse.json(items);
+	}),
+
+	http.post(mswPattern("setProjectPinned"), async ({ params, request }) => {
+		const id = String(params.id);
+		const body = (await request.json()) as { pinned?: unknown };
+		const pinned = Boolean(body.pinned);
+		pinnedProjectIds = pinned
+			? [...new Set([...pinnedProjectIds, id])]
+			: pinnedProjectIds.filter((x) => x !== id);
+		return new HttpResponse(null, { status: 204 });
+	}),
 	http.post(mswPattern("authVerify"), async ({ request }) => {
 		await mockDelay();
 		// 与后端一致：密钥必须命中已授权成员密钥（memberKeys）才通过。

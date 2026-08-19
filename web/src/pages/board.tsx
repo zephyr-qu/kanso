@@ -10,8 +10,6 @@ import {
 	closestCenter,
 	pointerWithin,
 	rectIntersection,
-	useDraggable,
-	useDroppable,
 	useSensor,
 	useSensors,
 	type CollisionDetection,
@@ -24,7 +22,7 @@ import {
 	horizontalListSortingStrategy,
 	sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
-import { ArchiveIcon, ArrowDownIcon, ArrowUpIcon, CalendarIcon, MilestoneIcon, PencilIcon, PlusIcon, Share2Icon, TagIcon, TrashIcon } from "lucide-react";
+import { ArchiveIcon, ArrowDownIcon, ArrowUpIcon, MilestoneIcon, PencilIcon, PlusIcon, Share2Icon, TagIcon, TrashIcon } from "lucide-react";
 import DatePicker from "@/components/date-picker";
 import { CSS } from "@dnd-kit/utilities";
 import { Link, useNavigate, useParams } from "react-router";
@@ -46,10 +44,12 @@ import {
 import { Dialog, DialogBackdrop, DialogDescription, DialogHeader, DialogPanel, DialogPopup, DialogPortal, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverPopup, PopoverTrigger } from "@/components/ui/popover";
 import { recordProjectOpen } from "@/lib/recent-projects";
+import { PinToggleButton } from "@/components/pin-toggle-button";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
 import { queryKeys } from "@/hooks/query-keys";
 import { sortTasks, type SortConfig, type SortField } from "@/lib/sort-tasks";
+import { progressPct } from "@/lib/milestone-progress";
 import {
 	Empty,
 	EmptyDescription,
@@ -62,7 +62,8 @@ import { useBoardSort, SORT_FIELDS } from "@/hooks/use-board-sort";
 import { useLabelMutations } from "@/hooks/use-label-mutations";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useTaskMutations } from "@/hooks/use-task-mutations";
-import { useBoardDrag, swimlaneGroups, type DragPlacement, type SwimlaneGroup } from "@/hooks/use-board-drag";
+import { useBoardDrag, swimlaneGroups, type OverType } from "@/hooks/use-board-drag";
+import { SwimlaneRow } from "@/components/board/swimlane-row";
 import type { Board, BoardColumn, Milestone } from "@/types/board";
 import type { Task } from "@/types/task";
 import type { Workspace } from "@/types/workspace";
@@ -97,42 +98,18 @@ const boardCollisionDetection: CollisionDetection = (args) => {
 	return closestCenter({ ...args, droppableContainers: columns });
 };
 
-function taskPlacement(event: DragOverEvent | DragEndEvent, board: Board | undefined): DragPlacement | undefined {
-	if (!board || event.active.data.current?.type !== "task" || !event.over) return undefined;
-
-	const overType = event.over.data.current?.type;
-	const targetColumnId = overType === "column"
-		? String(event.over.id)
-		: String(event.over.data.current?.columnId ?? "");
-	const targetColumn = board.columns.find((column) => column.id === targetColumnId);
-	if (!targetColumn) return undefined;
-
-	const targetTasks = targetColumn.tasks.filter((task) => !task.archivedAt);
-	const overIndex = overType === "task"
-		? targetTasks.findIndex((task) => task.id === String(event.over?.id))
-		: -1;
-	if (overIndex < 0) return { columnId: targetColumnId, index: targetTasks.length };
-
-	const activeRect = event.active.rect.current.translated ?? event.active.rect.current.initial;
-	const overRect = event.over.rect;
-	const activeCenter = activeRect ? activeRect.top + activeRect.height / 2 : overRect.top;
-	const overCenter = overRect.top + overRect.height / 2;
-	// 拖拽卡中心到达/越过目标卡中心 → 插入其后（= 落到目标卡上「放后面」，整卡拖拽时中心精确跟指针，
-	// 与手柄时代的既有手感一致：拖到目标卡中心即放其后，拖到末尾只需瞄准最后一张卡）。
-	let index = overIndex + (activeCenter >= overCenter ? 1 : 0);
-	const sourceColumn = board.columns.find((column) =>
-		column.tasks.some((task) => task.id === String(event.active.id)),
-	);
-	const sourceIndex = sourceColumn
-		? sourceColumn.tasks.filter((task) => !task.archivedAt).findIndex((task) => task.id === String(event.active.id))
-		: -1;
-	if (sourceColumn?.id === targetColumnId && sourceIndex >= 0 && sourceIndex < index) index -= 1;
-
-
-	return {
-		columnId: targetColumnId,
-		index: Math.max(0, Math.min(index, targetTasks.length - (sourceColumn?.id === targetColumnId ? 1 : 0))),
-	};
+// 从 dnd-kit 事件提取 reducer 所需的语义载荷（overType + 半程布尔），其余索引数学全在 reducer 内。
+function overSignal(event: DragOverEvent | DragEndEvent): {
+	overId: string;
+	overType: OverType;
+	halfPassed: boolean;
+} {
+	const overId = event.over ? String(event.over.id) : "";
+	const overType: OverType = event.over?.data.current?.type === "column" ? "column" : "task";
+	const ar = event.active.rect.current.translated ?? event.active.rect.current.initial;
+	// 半程规则：拖拽卡中心到达/越过目标卡中心，则插入其后。
+	const halfPassed = ar && event.over ? ar.top + ar.height / 2 >= event.over.rect.top + event.over.rect.height / 2 : false;
+	return { overId, overType, halfPassed };
 }
 
 export default function BoardPage() {
@@ -287,8 +264,8 @@ export default function BoardPage() {
 
 	// dragend：状态机产出提交计划，这里只做 命令 → mutation 的映射（列/任务/标签各归其 hook）。
 	function handleDragEnd(event: DragEndEvent) {
-		const overId = event.over ? String(event.over.id) : "";
-		const commands = onDragEnd(String(event.active.id), overId, taskPlacement(event, board));
+		const { overId, overType, halfPassed } = overSignal(event);
+		const commands = onDragEnd(String(event.active.id), overId, overType, halfPassed);
 		for (const command of commands) {
 			if (command.type === "moveTask") {
 				taskOps.moveTask.mutate({ id: command.id, columnId: command.columnId, position: command.position });
@@ -337,6 +314,7 @@ export default function BoardPage() {
 					<h1 className="truncate text-[17px] font-[650] tracking-tight">
 						{board?.project.name ?? "看板"}
 					</h1>
+					{board && <PinToggleButton projectId={projectId} name={board.project.name} />}
 				</div>
 				<div className="kanso-board-toolbar flex gap-2">
 					{/* 显示层排序切换器：字段（原顺序/标题/创建时间/优先级）+ 方向；不改写 position。 */}
@@ -437,7 +415,7 @@ export default function BoardPage() {
 							</div>
 							<div className="flex flex-wrap gap-2">
 								{milestonesQuery.data.map((m) => {
-									const pct = m.progress && m.progress.total > 0 ? Math.round((m.progress.done / m.progress.total) * 100) : 0;
+									const pct = progressPct(m);
 									return (
 										<div key={m.id} role="button" tabIndex={0}
 											onClick={() => { if (suppressClickRef.current) { suppressClickRef.current = false; return; } setDetailMilestone(m); }}
@@ -475,7 +453,10 @@ export default function BoardPage() {
 						collisionDetection={boardCollisionDetection}
 						onDragStart={(event) => onDragStart(String(event.active.id))}
 						onDragEnd={handleDragEnd}
-						onDragOver={(event) => onDragOver(String(event.active.id), event.over ? String(event.over.id) : "", taskPlacement(event, board))}
+						onDragOver={(event) => {
+							const { overId, overType, halfPassed } = overSignal(event);
+							onDragOver(String(event.active.id), overId, overType, halfPassed);
+						}}
 						onDragCancel={onDragCancel}
 					>
 						<SortableContext
@@ -651,7 +632,7 @@ export default function BoardPage() {
 						</form>
 						<div className="space-y-2">
 								{milestonesQuery.data?.map((milestone) => {
-									const pct = milestone.progress && milestone.progress.total > 0 ? Math.round((milestone.progress.done / milestone.progress.total) * 100) : 0;
+									const pct = progressPct(milestone);
 									const editing = editingMilestone?.id === milestone.id;
 									return (
 										<div key={milestone.id} className="group flex items-center gap-2.5 rounded-md border border-border px-3 py-2">
@@ -704,7 +685,7 @@ export default function BoardPage() {
 			<MilestoneDetailDialog
 				open={detailMilestone !== null}
 				onOpenChange={(open) => { if (!open) setDetailMilestone(null); }}
-				milestone={detailMilestone}
+				milestone={detailMilestone ? (milestonesQuery.data?.find((m) => m.id === detailMilestone.id) ?? detailMilestone) : null}
 				workspaceId={workspaceId}
 				projectId={projectId}
 			/>
@@ -713,48 +694,6 @@ export default function BoardPage() {
 }
 
 
-function SwimlaneRow(props: {
-	group: SwimlaneGroup;
-	columns: BoardColumn[];
-	onOpen: (task: Task) => void;
-	onEdit: (task: Task) => void;
-	onArchive: (task: Task) => void;
-}) {
-	return (
-		<section className="kanso-swimlane">
-			<header className="kanso-swimlane__header">
-				<span className="kanso-label-chip">{props.group.name}</span>
-				<span className="text-xs text-muted-foreground">{props.group.tasks.length} 任务</span>
-			</header>
-			<div className="kanso-swimlane__grid">
-				{props.columns.map((column) => {
-					const tasks = props.group.tasks.filter((task) => task.columnId === column.id);
-					return <SwimlaneCell key={column.id} id={`swimlane:${props.group.id}:${column.id}`} columnName={column.name} tasks={tasks} onOpen={props.onOpen} onEdit={props.onEdit} onArchive={props.onArchive} />;
-				})}
-			</div>
-		</section>
-	);
-}
-
-function SwimlaneCell(props: { id: string; columnName: string; tasks: Task[]; onOpen: (task: Task) => void; onEdit: (task: Task) => void; onArchive: (task: Task) => void }) {
-	const { setNodeRef, isOver } = useDroppable({ id: props.id });
-	return <div ref={setNodeRef} className={`kanso-swimlane__cell ${isOver ? "is-over" : ""}`}>
-		<div className="kanso-swimlane__column-name">{props.columnName}</div>
-		{props.tasks.length === 0 ? <span className="kanso-swimlane__empty">无任务</span> : props.tasks.map((task) => <SwimlaneTask key={task.id} task={task} onOpen={props.onOpen} onEdit={props.onEdit} onArchive={props.onArchive} />)}
-	</div>;
-}
-
-function SwimlaneTask(props: { task: Task; onOpen: (task: Task) => void; onEdit: (task: Task) => void; onArchive: (task: Task) => void }) {
-	const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: props.task.id });
-	return <article ref={setNodeRef} {...attributes} {...listeners} style={{ transform: CSS.Transform.toString(transform) }} className="kanso-task-card kanso-swimlane__task" data-dragging={isDragging || undefined} onClick={() => props.onOpen(props.task)}>
-		<span className="kanso-task-card__title">{props.task.title}</span>
-		{props.task.dueDate ? <span className="kanso-due-badge text-muted-foreground"><CalendarIcon className="size-3" />{props.task.dueDate}</span> : null}
-		<div className="kanso-task-card__actions" onClick={(event) => event.stopPropagation()}>
-			<button type="button" className="kanso-icon-button" aria-label={`编辑任务 ${props.task.title}`} onClick={() => props.onEdit(props.task)}>✎</button>
-			<button type="button" className="kanso-icon-button" aria-label={`归档任务 ${props.task.title}`} onClick={() => props.onArchive(props.task)}>⌁</button>
-		</div>
-	</article>;
-}
 
 /** 归档列表里的删除：内联小弹窗确认（不叠第二个模态框）。 */
 function ArchiveDeleteButton(props: { task: Task; onDelete: (task: Task) => void }) {

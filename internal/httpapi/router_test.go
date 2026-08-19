@@ -1797,7 +1797,6 @@ func TestVerifyMultiKey(t *testing.T) {
 	}
 }
 
-
 func TestCrossProjectLabelRejected(t *testing.T) {
 	e := newTestEnv(t)
 	projectA := createProject(t, e, "标签任务项目")
@@ -2391,5 +2390,35 @@ func TestCrossProjectMilestoneDetachRejected(t *testing.T) {
 	}
 	if _, ok := decode[map[string]any](t, body)["error"]; !ok {
 		t.Fatalf("400 响应应为 {error} 信封，实际 %s", body)
+	}
+}
+
+// TestProjectPinned 校验项目置顶闭环：置顶→列出→取消。
+func TestProjectPinned(t *testing.T) {
+	e := newTestEnv(t)
+	projectID := createProject(t, e, "置顶测试项目")
+
+	_, body := e.do(t, http.MethodGet, "/api/pinned-projects", "")
+	if items := decode[[]map[string]any](t, body); len(items) != 0 {
+		t.Fatalf("初始置顶应为空，实际 %d", len(items))
+	}
+
+	res, _ := e.do(t, http.MethodPost, "/api/projects/"+projectID+"/pinned", `{"pinned":true}`)
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("置顶应 204，实际 %d", res.StatusCode)
+	}
+	_, body = e.do(t, http.MethodGet, "/api/pinned-projects", "")
+	items := decode[[]map[string]any](t, body)
+	if len(items) != 1 || items[0]["projectId"] != projectID {
+		t.Fatalf("置顶后应含该项目，实际 %v", items)
+	}
+
+	res, _ = e.do(t, http.MethodPost, "/api/projects/"+projectID+"/pinned", `{"pinned":false}`)
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("取消置顶应 204，实际 %d", res.StatusCode)
+	}
+	_, body = e.do(t, http.MethodGet, "/api/pinned-projects", "")
+	if items := decode[[]map[string]any](t, body); len(items) != 0 {
+		t.Fatalf("取消后应为空，实际 %v", items)
 	}
 }

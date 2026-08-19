@@ -1,8 +1,11 @@
 // M5:里程碑详情面板——点击项目页进度卡打开,查看该里程碑的进度与关联任务(可点进任务)。
 import { useNavigate } from "react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
+import { queryKeys } from "@/hooks/query-keys";
+import { progressPct } from "@/lib/milestone-progress";
 import { Spinner } from "@/components/ui/spinner";
 import {
 	Dialog,
@@ -40,10 +43,22 @@ export default function MilestoneDetailDialog(props: {
 		enabled: open && !!milestone,
 	});
 
-	const pct =
-		milestone?.progress && milestone.progress.total > 0
-			? Math.round((milestone.progress.done / milestone.progress.total) * 100)
-			: 0;
+	const queryClient = useQueryClient();
+	const unlinkMutation = useMutation({
+		mutationFn: (taskId: string) =>
+			api<void>(
+				buildPath("taskMilestones", { taskId, milestoneId: milestone!.id }),
+				{ method: "DELETE" }
+			),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["milestone-tasks", milestone?.id] });
+			queryClient.invalidateQueries({
+				queryKey: queryKeys.milestones(props.projectId),
+			});
+		},
+	});
+
+	const pct = progressPct(milestone);
 
 	return (
 		<Dialog open={props.open} onOpenChange={props.onOpenChange}>
@@ -84,10 +99,10 @@ export default function MilestoneDetailDialog(props: {
 						) : tasks && tasks.length > 0 ? (
 							<ul className="max-h-72 space-y-1 overflow-auto pr-1">
 								{tasks.map((t) => (
-									<li key={t.id}>
+									<li key={t.id} className="group flex items-center gap-1.5 rounded-md border border-border px-2 py-1.5 hover:bg-accent/50">
 										<button
 											type="button"
-											className="flex w-full items-center gap-2 rounded-md border border-border px-3 py-2 text-left text-sm hover:bg-accent/50"
+											className="flex min-w-0 flex-1 items-center gap-2 rounded px-1.5 py-1 text-left text-sm"
 											onClick={() => {
 												props.onOpenChange(false);
 												navigate(`/w/${props.workspaceId}/p/${props.projectId}/t/${t.id}`);
@@ -102,6 +117,18 @@ export default function MilestoneDetailDialog(props: {
 													已归档
 												</span>
 											) : null}
+										</button>
+										<button
+											type="button"
+											aria-label={`从里程碑移除 ${t.title}`}
+											title="从里程碑移除"
+											className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+											onClick={(e) => {
+												e.stopPropagation();
+												unlinkMutation.mutate(t.id);
+											}}
+										>
+											<Trash2 className="size-3.5" />
 										</button>
 									</li>
 								))}

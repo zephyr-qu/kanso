@@ -6,6 +6,7 @@ import {
 	type DragAction,
 	type DragEvent,
 	type DragViewMode,
+	type OverType,
 } from "@/hooks/use-board-drag";
 import type { Board } from "@/types/board";
 import type { Task } from "@/types/task";
@@ -89,11 +90,10 @@ function act(
 	} satisfies DragAction);
 }
 
-const over = (activeId: string, overId: string) =>
-	({ type: "over", activeId, overId }) as const;
-const end = (activeId: string, overId: string) =>
-	({ type: "end", activeId, overId }) as const;
-const placement = (columnId: string, index: number) => ({ columnId, index });
+const over = (activeId: string, overId: string, overType: OverType = "task", halfPassed = false) =>
+	({ type: "over", activeId, overId, overType, halfPassed }) as const;
+const end = (activeId: string, overId: string, overType: OverType = "task", halfPassed = false) =>
+	({ type: "end", activeId, overId, overType, halfPassed }) as const;
 
 describe("start / cancel", () => {
 	it("start 记录 activeId，清空视觉反馈", () => {
@@ -139,7 +139,7 @@ describe("dragOver：跨列临时落点", () => {
 	it("悬停任务 → 使用碰撞层计算出的前后投影", () => {
 		const start = act({ type: "start", activeId: "t1" }, fixtureBoard());
 		const result = dragTransition(start.state, {
-			event: { type: "over", activeId: "t1", overId: "t3", placement: placement("c2", 1) },
+			event: over("t1", "t3", "task", true), // 半程已过 → 落在 t3 之后（index 1）
 			ctx: { board: fixtureBoard(), viewMode: "columns" },
 		});
 		expect(result.state.dragPos).toEqual({ columnId: "c2", index: 1 });
@@ -227,7 +227,7 @@ describe("dragEnd：提交计划", () => {
 	it("任务拖拽 → dragend 使用最终投影而不是过时的 overId 索引", () => {
 		const board = fixtureBoard();
 		const result = dragTransition(initialDragState, {
-			event: { type: "end", activeId: "t1", overId: "t3", placement: placement("c2", 1) },
+			event: end("t1", "t3", "task", true), // 半程已过 → 最终投影 index 1（而非未过半的 0）
 			ctx: { board, viewMode: "columns" },
 		});
 		expect(result.commands).toEqual([

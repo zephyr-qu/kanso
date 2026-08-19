@@ -72,3 +72,32 @@ func (a *API) deleteProject(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// listPinnedProjects 返回跨工作区置顶项目列表。
+func (a *API) listPinnedProjects(w http.ResponseWriter, r *http.Request) {
+	projects, err := a.svc.ListPinnedProjects(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "查询置顶项目失败")
+		return
+	}
+	writeJSON(w, http.StatusOK, projects)
+}
+
+// setProjectPinned 设置/取消项目置顶。
+func (a *API) setProjectPinned(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Pinned bool `json:"pinned"`
+	}
+	if !decodeBody(w, r, &body) {
+		return
+	}
+	if err := a.svc.SetProjectPinned(r.Context(), chi.URLParam(r, "id"), body.Pinned); err != nil {
+		if errors.Is(err, service.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "项目不存在")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "更新置顶失败")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

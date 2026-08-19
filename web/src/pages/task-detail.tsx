@@ -33,10 +33,10 @@ import { PageContent, PageHeader } from "@/components/kanso-ui";
 import DatePicker from "@/components/date-picker";
 import {
 	normalizePriority,
-	PRIORITIES,
 	PRIORITY_LABEL,
 	priorityColor,
 } from "@/lib/priority";
+import { PriorityPicker } from "@/components/priority-picker";
 import type { Comment, TaskDetail } from "@/types/task-detail";
 import type { Milestone } from "@/types/board";
 import type { Task } from "@/types/task";
@@ -285,21 +285,12 @@ export default function TaskDetailPage() {
 											}
 										/>
 										<PopoverPopup className="w-fit p-2">
-											<div className="flex gap-1">
-												{PRIORITIES.map((p) => (
-													<button
-														key={p}
-														type="button"
-														title={`设为${PRIORITY_LABEL[normalizePriority(p)]}优先级`}
-														onClick={() => updateTaskMutation.mutate({ priority: p })}
-														className={`kanso-priority-option kanso-priority-option--${p} px-1.5 py-0.5 text-[11px]`}
-														data-selected={normalizePriority(data.task.priority) === p}
-													>
-														<span className="kanso-priority-option__dot" aria-hidden="true" />
-														{PRIORITY_LABEL[normalizePriority(p)]}
-													</button>
-												))}
-											</div>
+										<PriorityPicker
+											value={normalizePriority(data.task.priority)}
+											onChange={(p) => updateTaskMutation.mutate({ priority: p })}
+											titlePrefix="设为"
+											size="px-1.5 py-0.5 text-[11px]"
+										/>
 										</PopoverPopup>
 									</Popover>
 									{data.labels.map((label) => (

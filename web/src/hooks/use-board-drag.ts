@@ -19,11 +19,26 @@ export type DragState = {
 	dragPos: { columnId: string; index: number } | null;
 };
 
+/** 落点目标是列还是任务（reducer 内部解析 index 所需的语义载荷，保持框架无关）。 */
+export type OverType = "column" | "task";
+
 /** 归一化后的拖拽事件（绑定层从 dnd-kit 事件提取，框架无关）。 */
 export type DragEvent =
 	| { type: "start"; activeId: string }
-	| { type: "over"; activeId: string; overId: string; placement?: DragPlacement }
-	| { type: "end"; activeId: string; overId: string; placement?: DragPlacement }
+	| {
+		type: "over";
+		activeId: string;
+		overId: string;
+		overType: OverType;
+		halfPassed: boolean;
+	}
+	| {
+		type: "end";
+		activeId: string;
+		overId: string;
+		overType: OverType;
+		halfPassed: boolean;
+	}
 	| { type: "cancel" };
 
 /** dragend 提交计划：页面按 type 映射到对应 mutation。 */
@@ -88,13 +103,50 @@ function resolveOverColumn(
 	);
 }
 
-/** 落点 index：over 是任务则插到其位置，否则列尾。 */
-function resolveIndex(column: BoardColumn, overId: string): number {
-	if (overId !== column.id) {
-		const idx = column.tasks.findIndex((task) => task.id === overId);
-		if (idx >= 0) return idx;
+/** 落点解析（单一真相源）：over 是列→列尾；over 是任务→半程规则决定插入其前/后，并做同列让位修正。 */
+function resolvePlacement(
+	board: Board,
+	activeId: string,
+	overId: string,
+	overType: OverType,
+	halfPassed: boolean,
+	/** shift=true：悬停投影时做同列让位（拖拽卡自身占位随位置游移）；end 无 dragPos 兜底时 false（插到 over 位置）。 */
+	shift: boolean,
+): DragPlacement | undefined {
+	const targetColumnId =
+		overType === "column"
+			? overId
+			: (findTask(board, overId)?.columnId ?? "");
+	const targetColumn = board.columns.find((c) => c.id === targetColumnId);
+	if (!targetColumn) return undefined;
+
+	const tasks = activeTasks(targetColumn);
+	const overIndex =
+		overType === "task" ? tasks.findIndex((task) => task.id === overId) : -1;
+	if (overIndex < 0) return { columnId: targetColumnId, index: tasks.length };
+
+	// 半程规则：拖拽卡中心到达/越过目标卡中心 → 插入其后。
+	let index = overIndex + (halfPassed ? 1 : 0);
+	// 同列让位：目标列即源列时，拖拽卡自身占一个空位（仅悬停投影阶段需要）。
+	if (shift) {
+		const sourceColumn = board.columns.find((c) =>
+			c.tasks.some((task) => task.id === activeId),
+		);
+		const sourceIndex = sourceColumn
+			? activeTasks(sourceColumn).findIndex((task) => task.id === activeId)
+			: -1;
+		const sameColumn = sourceColumn?.id === targetColumnId;
+		if (sameColumn && sourceIndex >= 0 && sourceIndex < index) index -= 1;
+		return {
+			columnId: targetColumnId,
+			index: Math.max(0, Math.min(index, tasks.length - (sameColumn ? 1 : 0))),
+		};
 	}
-	return activeTasks(column).length;
+
+	return {
+		columnId: targetColumnId,
+		index: Math.max(0, Math.min(index, tasks.length)),
+	};
 }
 
 const resetState: DragState = {
@@ -122,7 +174,7 @@ export function dragTransition(
 			return { state: resetState, commands: [] };
 
 		case "over": {
-			const { activeId, overId, placement } = event;
+			const { activeId, overId, overType, halfPassed } = event;
 			// 无落点 / 泳道视图不做临时重排：清空列高亮与跨列落点。
 			if (!overId || viewMode !== "columns") {
 				return {
@@ -149,14 +201,13 @@ export function dragTransition(
 					commands: [],
 				};
 
+			const placement = resolvePlacement(board, activeId, overId, overType, halfPassed, true);
+			const index = placement?.index ?? activeTasks(overColumn).length;
 			const currentColId = state.dragPos?.columnId ?? activeTask.columnId;
 			// 悬停回当前所属列：已在列内则跟随更新插入位，否则撤销临时跨列恢复原状。
 			if (currentColId === dragOverId) {
 				if (state.dragPos) {
 					if (state.dragPos.columnId === dragOverId) {
-						const index = placement?.columnId === dragOverId
-							? placement.index
-							: resolveIndex(overColumn, overId);
 						return state.dragPos.index === index
 							? { state: { ...state, dragOverId }, commands: [] }
 							: {
@@ -169,9 +220,6 @@ export function dragTransition(
 				return { state: { ...state, dragOverId }, commands: [] };
 			}
 			// 跨列：计算目标列插入位并临时移入。
-			const index = placement?.columnId === dragOverId
-				? placement.index
-				: resolveIndex(overColumn, overId);
 			if (
 				state.dragPos?.columnId === dragOverId &&
 				state.dragPos.index === index
@@ -188,7 +236,7 @@ export function dragTransition(
 		}
 
 		case "end": {
-			const { activeId, overId, placement } = event;
+			const { activeId, overId, overType, halfPassed } = event;
 			if (!overId || activeId === overId)
 				return { state: resetState, commands: [] };
 
@@ -223,12 +271,11 @@ export function dragTransition(
 				targetColumn = board.columns.find((column) => column.id === dragPos.columnId);
 				targetIndex = dragPos.index;
 			} else {
-				targetColumn = resolveOverColumn(board, overId);
-				targetIndex = placement && placement.columnId === targetColumn?.id
-					? placement.index
-					: targetColumn
-						? resolveIndex(targetColumn, overId)
-						: 0;
+				const placement = resolvePlacement(board, activeId, overId, overType, halfPassed, false);
+				targetColumn = placement
+					? board.columns.find((column) => column.id === placement.columnId)
+					: resolveOverColumn(board, overId);
+				targetIndex = placement?.index ?? (targetColumn ? activeTasks(targetColumn).length : 0);
 			}
 			if (!targetColumn) return { state: resetState, commands: [] };
 
@@ -254,6 +301,9 @@ export function dragTransition(
 				],
 			};
 		}
+		default:
+			// 未来新增事件类型若无处理，宁可显式失败也不静默吞掉。
+			return { state, commands: [] };
 	}
 }
 
@@ -352,10 +402,10 @@ export function useBoardDrag(board: Board | undefined, viewMode: DragViewMode) {
 
 	const onDragStart = (activeId: string) =>
 		void transition({ type: "start", activeId });
-	const onDragOver = (activeId: string, overId: string, placement?: DragPlacement) =>
-		void transition({ type: "over", activeId, overId, placement });
-	const onDragEnd = (activeId: string, overId: string, placement?: DragPlacement): DragCommand[] =>
-		transition({ type: "end", activeId, overId, placement });
+	const onDragOver = (activeId: string, overId: string, overType: OverType, halfPassed: boolean) =>
+		void transition({ type: "over", activeId, overId, overType, halfPassed });
+	const onDragEnd = (activeId: string, overId: string, overType: OverType, halfPassed: boolean): DragCommand[] =>
+		transition({ type: "end", activeId, overId, overType, halfPassed });
 	const onDragCancel = () => void transition({ type: "cancel" });
 
 	// DragOverlay 数据源 + 列内让位动画所需派生值。

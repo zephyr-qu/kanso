@@ -18,6 +18,7 @@ import { QuickCapture, QuickCaptureFab } from "@/components/quick-capture";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
 import { queryKeys } from "@/hooks/query-keys";
+import { usePinnedProjects } from "@/lib/pinned-projects";
 import { useAuthStore } from "@/store/auth";
 import type { MeResponse } from "@/types/me";
 import type { Workspace } from "@/types/workspace";
@@ -30,6 +31,7 @@ export default function AppShell() {
 	const [createOpen, setCreateOpen] = useState(false);
 	const [cmdOpen, setCmdOpen] = useState(false);
 	const [qcOpen, setQcOpen] = useState(false);
+	const { items: pinnedProjects } = usePinnedProjects();
 
 	// 快捷键：⌘K/Ctrl+K 命令面板；Q 快速捕获（非输入场景，避免与打字冲突）。
 	useEffect(() => {
@@ -116,6 +118,24 @@ export default function AppShell() {
 						日历
 					</NavLink>
 					</section>
+
+					{pinnedProjects.length > 0 && (
+						<section className="kanso-sidebar-group">
+							<p className="kanso-sidebar-group-label">置顶</p>
+							<ul>
+								{pinnedProjects.map((p) => (
+									<li key={p.projectId}>
+										<NavLink
+											to={`/w/${p.workspaceId}/p/${p.projectId}`}
+											className="kanso-sidebar-item"
+										>
+											{p.name}
+										</NavLink>
+									</li>
+								))}
+							</ul>
+						</section>
+						)}
 
 					<section className="kanso-sidebar-group">
 						<p className="kanso-sidebar-group-label">工作区</p>

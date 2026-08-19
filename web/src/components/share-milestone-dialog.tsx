@@ -25,12 +25,7 @@ const LINE = "rgba(55,53,47,.14)";
 const SERIF = "Noto Serif SC, Georgia, serif";
 const MONO = "IBM Plex Mono, ui-monospace, monospace";
 
-function pctOf(m: Milestone): number {
-	return m.progress && m.progress.total > 0
-		? Math.round((m.progress.done / m.progress.total) * 100)
-		: 0;
-}
-
+import { progressPct } from "@/lib/milestone-progress";
 // 竖向 S 形蜿蜒路径(三段贝塞尔),宽 400。
 function pathD(H: number): string {
 	return [
@@ -47,8 +42,11 @@ const NODE_STEP = 92; // 每节点纵向间距
 function Journey({ milestones }: { milestones: Milestone[] }) {
 	const pathRef = useRef<SVGPathElement | null>(null);
 	const [pts, setPts] = useState<{ x: number; y: number }[]>([]);
+	const [totalLen, setTotalLen] = useState(0);
 	const n = Math.max(milestones.length, 1);
 	const H = n * NODE_STEP + 36;
+	const doneCount = milestones.filter((m) => progressPct(m) >= 100).length;
+	const donePct = n > 0 ? doneCount / n : 0;
 
 	useLayoutEffect(() => {
 		const p = pathRef.current;
@@ -59,6 +57,7 @@ function Journey({ milestones }: { milestones: Milestone[] }) {
 			return { x: pt.x, y: pt.y };
 		});
 		setPts(arr);
+		setTotalLen(len);
 	}, [milestones.length, H]);
 
 	return (
@@ -75,14 +74,23 @@ function Journey({ milestones }: { milestones: Milestone[] }) {
 					strokeWidth={3}
 					strokeLinecap="round"
 					strokeDasharray="1 9"
-				/>
+					/>
+					{/* 已完成部分的橙色描线 */}
+					<path
+						d={pathD(H)}
+						fill="none"
+						stroke={ORANGE}
+						strokeWidth={3}
+						strokeLinecap="round"
+						strokeDasharray={`${totalLen * donePct} ${totalLen}`}
+					/>
 			</svg>
 
 			{/* 里程碑节点 + 标签 */}
 			{milestones.map((m, i) => {
 				const pt = pts[i];
 				if (!pt) return null;
-				const done = pctOf(m) >= 100;
+				const done = progressPct(m) >= 100;
 				const left = pt.x < 200;
 				return (
 					<div
@@ -105,20 +113,35 @@ function Journey({ milestones }: { milestones: Milestone[] }) {
 							}}
 						>
 							{done ? (
-								<CheckIcon size={15} color={ORANGE} strokeWidth={3} />
+								<span
+									style={{
+										width: 20,
+										height: 20,
+										borderRadius: 10,
+										background: ORANGE,
+										display: "flex",
+										alignItems: "center",
+										justifyContent: "center",
+										flex: "0 0 auto",
+									}}
+								>
+									<CheckIcon size={12} color="#fff" strokeWidth={3.5} />
+								</span>
 							) : (
 								<span
 									style={{
-										width: 7,
-										height: 7,
-										borderRadius: 99,
-										background: SOFT,
+										width: 20,
+										height: 20,
+										borderRadius: 10,
+										border: `1.5px solid ${ORANGE}66`,
+										background: PAPER,
 										flex: "0 0 auto",
 									}}
 								/>
 							)}
 							<span
 								style={{
+									fontFamily: SERIF,
 									fontSize: 15,
 									fontWeight: 600,
 									color: INK,
@@ -136,7 +159,7 @@ function Journey({ milestones }: { milestones: Milestone[] }) {
 								letterSpacing: ".05em",
 							}}
 						>
-							{pctOf(m)}% {m.dueDate ? `· ${m.dueDate}` : ""}
+							{progressPct(m)}% {m.dueDate ? `· ${m.dueDate}` : ""}
 						</div>
 					</div>
 				);
@@ -161,7 +184,8 @@ function CardVisual({
 	return (
 		<div
 			style={{
-				width: 480,
+				width: "100%",
+				maxWidth: 480,
 				background: PAPER,
 				overflow: "hidden",
 				borderRadius: 16,
@@ -169,14 +193,8 @@ function CardVisual({
 				boxShadow: "0 1px 0 rgba(55,53,47,.05)",
 			}}
 		>
-			<div
-				style={{
-					height: 8,
-					background: `linear-gradient(90deg, ${ORANGE}, #e0601f, #f0a563)`,
-				}}
-			/>
-			<div style={{ padding: "26px 34px 24px" }}>
-				{/* 品牌行 */}
+			<div style={{ padding: "28px 26px 0" }}>
+				{/* 品牌行：左 logo+字标，右生成日期 */}
 				<div
 					style={{
 						display: "flex",
@@ -211,39 +229,45 @@ function CardVisual({
 							KANSO
 						</span>
 					</div>
-					<span style={{ fontSize: 10, letterSpacing: ".14em", color: FAINT }}>
-						里程碑旅程
+					<span style={{ fontFamily: MONO, fontSize: 10, color: FAINT }}>
+						{generatedAt.getFullYear()}·
+						{String(generatedAt.getMonth() + 1).padStart(2, "0")}·
+						{String(generatedAt.getDate()).padStart(2, "0")}
 					</span>
 				</div>
 
-				{/* 项目名 */}
+				{/* 项目名 + 副标（两侧细线饰线） */}
 				<h2
 					style={{
 						fontFamily: SERIF,
-						fontSize: 32,
-						lineHeight: 1.25,
+						fontSize: 34,
+						lineHeight: 1.2,
 						color: INK,
-						margin: "22px 0 0",
+						margin: "28px 0 0",
 						textAlign: "center",
 						letterSpacing: "-0.01em",
 					}}
 				>
 					{projectName}
 				</h2>
-				<p
+				<div
 					style={{
-						fontSize: 10,
-						color: FAINT,
-						margin: "8px 0 0",
-						textAlign: "center",
-						letterSpacing: ".18em",
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "center",
+						gap: 14,
+						marginTop: 12,
 					}}
 				>
-					MILESTONE JOURNEY
-				</p>
+					<span style={{ width: 36, height: 1, background: LINE }} />
+					<span style={{ fontSize: 10, letterSpacing: ".22em", color: FAINT }}>
+						MILESTONE JOURNEY
+					</span>
+					<span style={{ width: 36, height: 1, background: LINE }} />
+				</div>
 
 				{/* 旅程曲线 */}
-				<div style={{ marginTop: 26 }}>
+				<div style={{ marginTop: 30 }}>
 					{milestones.length === 0 ? (
 						<p
 							style={{
@@ -261,28 +285,21 @@ function CardVisual({
 				</div>
 			</div>
 
-			{/* 底部汇总 */}
+			{/* 底部：完成数 + 进度条 */}
 			<div
 				style={{
+					marginTop: 28,
 					borderTop: `1px solid ${LINE}`,
-					padding: "14px 34px",
-					display: "flex",
-					justifyContent: "space-between",
-					alignItems: "center",
+					padding: "16px 26px 20px",
 				}}
 			>
-				<span style={{ fontSize: 11, color: SOFT }}>
-					{total > 0 ? (
-						<><span style={{ fontFamily: MONO, fontWeight: 700, color: ORANGE }}>{done}</span>/{total} 完成</>
-					) : (
-						<span style={{ fontFamily: MONO, fontWeight: 700, color: ORANGE }}>未启动</span>
-					)}
-				</span>
-				<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-					<span style={{ fontSize: 10, color: FAINT, letterSpacing: ".08em" }}>
-						{generatedAt.getFullYear()}·
-						{String(generatedAt.getMonth() + 1).padStart(2, "0")}·
-						{String(generatedAt.getDate()).padStart(2, "0")}
+				<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+					<span style={{ fontSize: 11, color: SOFT }}>
+						{total > 0 ? (
+							<><span style={{ fontFamily: MONO, fontWeight: 700, color: ORANGE }}>{done}</span>/{total} 完成</>
+						) : (
+							<span style={{ fontFamily: MONO, fontWeight: 700, color: ORANGE }}>未启动</span>
+						)}
 					</span>
 					<span
 						style={{
@@ -294,6 +311,24 @@ function CardVisual({
 					>
 						KANSO
 					</span>
+				</div>
+				<div
+					style={{
+						marginTop: 12,
+						height: 4,
+						borderRadius: 99,
+						background: "rgba(55,53,47,.08)",
+						overflow: "hidden",
+					}}
+				>
+					<div
+						style={{
+							height: "100%",
+							width: `${total > 0 ? Math.round((done / total) * 100) : 0}%`,
+							borderRadius: 99,
+							background: ORANGE,
+						}}
+					/>
 				</div>
 			</div>
 		</div>

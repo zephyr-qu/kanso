@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { PlusIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { PRIORITIES, PRIORITY_LABEL, normalizePriority } from "@/lib/priority";
+import { PriorityPicker } from "@/components/priority-picker";
 
 export default function AddTaskForm(props: {
 	onAdd: (title: string, priority: string) => void;
@@ -43,21 +43,7 @@ export default function AddTaskForm(props: {
 				className="h-8 text-sm"
 			/>
 			{/* 优先级分段按钮：与 Quick Capture 同款交互。 */}
-			<div className="mt-1.5 flex flex-wrap gap-1">
-				{PRIORITIES.map((p) => (
-					<button
-						key={p}
-						type="button"
-						onClick={() => setPriority(p)}
-						onMouseDown={(e) => e.preventDefault()}
-						className={`kanso-priority-option kanso-priority-option--${p} px-2 py-1 text-[11px]`}
-						data-selected={priority === p}
-					>
-						<span className="kanso-priority-option__dot" aria-hidden="true" />
-						{PRIORITY_LABEL[normalizePriority(p)]}
-					</button>
-				))}
-			</div>
+			<PriorityPicker value={priority} onChange={setPriority} preventFocusLoss className="mt-1.5" />
 		</form>
 	);
 }

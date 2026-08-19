@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClockIcon, PencilIcon, PlusIcon, Share2Icon, TrashIcon } from "lucide-react";
 import ConfirmDialog from "@/components/confirm-dialog";
 import NameDialog from "@/components/name-dialog";
+import { PinToggleButton } from "@/components/pin-toggle-button";
 import ShareMilestoneDialog from "@/components/share-milestone-dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -99,13 +100,19 @@ export default function WorkspacePage() {
 				method: "PATCH",
 				body: JSON.stringify({ name }),
 			}),
-		onSuccess: invalidateProjects,
+		onSuccess: () => {
+			invalidateProjects();
+			queryClient.invalidateQueries({ queryKey: ["pinned-projects"] });
+		},
 	});
 
 	const deleteMutation = useMutation({
 		mutationFn: (id: string) =>
 			api<void>(buildPath("project", { id }), { method: "DELETE" }),
-		onSuccess: invalidateProjects,
+		onSuccess: () => {
+			invalidateProjects();
+			queryClient.invalidateQueries({ queryKey: ["pinned-projects"] });
+		},
 	});
 
 	return (
@@ -172,32 +179,22 @@ export default function WorkspacePage() {
 													{project.inProgressCount ?? 0} 进行中
 								</span>
 							</div>
-							{/* 时间（对齐原型 proj-meta：12px、gap 6px；未更新过显示创建时间，更新过显示更新时间） */}
-							<p className="kanso-project-card__meta">
+							<p className="kanso-project-card__meta pr-12">
 														<ClockIcon className="size-3 shrink-0" />
 								{project.updatedAt
 									? formatUpdated(project.updatedAt)
 									: `创建于 ${project.createdAt.slice(0, 10)}`}
 							</p>
 
-							{/* hover 操作：重命名 / 删除（阻止冒泡避免触发跳转） */}
+							{/* hover 操作：分享单独右下角、重命名/删除右上角（阻止冒泡避免触发跳转） */}
 							<div
-							// 对齐原型 .proj-actions：右上角 12px、hover 显示。
 							className="kanso-project-card__actions"
 								onClick={(e) => e.preventDefault()}
 								onPointerDown={(e) => e.stopPropagation()}
 							>
+								<PinToggleButton projectId={project.id} name={project.name} className="size-7" />
 									<Button
 										variant="ghost"
-										size="icon"
-										className="size-7"
-										aria-label={`分享 ${project.name}`}
-										onClick={() => setShareProject(project)}
-									>
-										<Share2Icon />
-									</Button>
-								<Button
-									variant="ghost"
 									size="icon"
 									className="size-7"
 									aria-label={`重命名 ${project.name}`}
@@ -213,6 +210,23 @@ export default function WorkspacePage() {
 									onClick={() => setDeleting(project)}
 								>
 									<TrashIcon />
+								</Button>
+							</div>
+
+							{/* 分享按钮：右下角（hover 显示；阻止冒泡避免触发跳转） */}
+							<div
+							className="kanso-project-card__share"
+								onClick={(e) => e.preventDefault()}
+								onPointerDown={(e) => e.stopPropagation()}
+							>
+								<Button
+									variant="ghost"
+									size="icon"
+									className="size-7"
+									aria-label={`分享 ${project.name}`}
+									onClick={() => setShareProject(project)}
+								>
+									<Share2Icon />
 								</Button>
 							</div>
 						</Link>

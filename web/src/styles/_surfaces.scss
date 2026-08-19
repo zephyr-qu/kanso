@@ -785,10 +785,6 @@
     height: var(--component-project-meta-icon-size);
   }
 
-  .kanso-project-card__actions {
-    top: 12px;
-    right: 12px;
-  }
 
 
   .kanso-new-project-card {
@@ -888,10 +884,21 @@
     transition: opacity var(--primitive-duration-fast) ease;
   }
 
+  // 项目卡：分享按钮单独沉底右下角，贴着 meta 行；hover 显示。
+  .kanso-project-card__share {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    opacity: 0;
+    transition: opacity var(--primitive-duration-fast) ease;
+  }
+
   .kanso-task-card:hover .kanso-task-card__actions,
   .kanso-project-card:hover .kanso-project-card__actions,
+  .kanso-project-card:hover .kanso-project-card__share,
   .kanso-task-card:focus-within .kanso-task-card__actions,
-  .kanso-project-card:focus-within .kanso-project-card__actions { opacity: 1; }
+  .kanso-project-card:focus-within .kanso-project-card__actions,
+  .kanso-project-card:focus-within .kanso-project-card__share { opacity: 1; }
 
   .kanso-column-empty {
     border: 1px dashed var(--semantic-border-default);

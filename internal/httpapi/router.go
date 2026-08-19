@@ -80,6 +80,8 @@ func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.
 		pr.Get("/api/workspaces/{id}/projects", a.listProjects)
 		pr.Post("/api/workspaces/{id}/projects", a.createProject)
 		pr.Patch("/api/projects/{id}", a.renameProject)
+		pr.Get("/api/pinned-projects", a.listPinnedProjects)
+		pr.Post("/api/projects/{id}/pinned", a.setProjectPinned)
 		pr.Delete("/api/projects/{id}", a.deleteProject)
 		pr.Get("/api/projects/{id}", a.getBoard)
 		pr.Get("/api/projects/{id}/archived-tasks", a.listArchivedTasks)
