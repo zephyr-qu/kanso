@@ -1,7 +1,7 @@
 // 看板页：编排与渲染。数据/缓存/乐观更新逻辑都在领域 hooks 里（架构候选 1）。
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
 	DndContext,
 	DragOverlay,
@@ -60,6 +60,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useBoardData } from "@/hooks/use-board-data";
 import { useBoardSort, SORT_FIELDS } from "@/hooks/use-board-sort";
 import { useLabelMutations } from "@/hooks/use-label-mutations";
+import { useMilestoneMutations } from "@/hooks/use-milestone-mutations";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useTaskMutations } from "@/hooks/use-task-mutations";
 import { useBoardDrag, swimlaneGroups, type OverType } from "@/hooks/use-board-drag";
@@ -155,14 +156,6 @@ export default function BoardPage() {
 		}, 300);
 		linkPressRef.current = { x, y, timer: t };
 	};
-	const attachMilestoneLink = (taskId: string, milestoneId: string) => {
-		api<void>(buildPath("taskMilestones", { taskId, milestoneId }), { method: "POST" })
-			.then(() => {
-				queryClient.invalidateQueries({ queryKey: queryKeys.milestones(projectId) });
-				queryClient.invalidateQueries({ queryKey: queryKeys.board(projectId) });
-			})
-			.catch(() => {});
-	};
 	useEffect(() => {
 		const detectTask = (target: EventTarget | null): string | null => {
 			const card = (target as Element | null)?.closest?.("[data-task-id]");
@@ -174,7 +167,7 @@ export default function BoardPage() {
 		};
 		const up = (ev: PointerEvent) => {
 			setMilestoneLink((l) => {
-				if (l) { const tid = detectTask(ev.target); if (tid) attachMilestoneLink(tid, l.milestoneId); }
+				if (l) { const tid = detectTask(ev.target); if (tid) milestoneOps.attach.mutate({ taskId: tid, milestoneId: l.milestoneId }); }
 				return null;
 			});
 			clearLinkPress();
@@ -214,37 +207,8 @@ export default function BoardPage() {
 		queryFn: () => api<Milestone[]>(buildPath("projectMilestones", { id: projectId })),
 		enabled: projectId !== "",
 	});
-	// 里程碑创建与其他 mutation 一致：成功失效列表查询（此前裸 api + refetch 风格不统一）。
-	const queryClient = useQueryClient();
-	const createMilestoneMutation = useMutation({
-		mutationFn: (name: string) =>
-			api<Milestone>(buildPath("projectMilestones", { id: projectId }), { method: "POST", body: JSON.stringify({ name }) }),
-		onSuccess: () => {
-			setNewMilestone("");
-			queryClient.invalidateQueries({ queryKey: queryKeys.milestones(projectId) });
-		},
-	});
-	const renameMilestoneMutation = useMutation({
-		mutationFn: ({ id, name }: { id: string; name: string }) =>
-			api<Milestone>(buildPath("milestone", { id }), { method: "PATCH", body: JSON.stringify({ name }) }),
-		onSuccess: () => {
-			setEditingMilestone(null);
-			queryClient.invalidateQueries({ queryKey: queryKeys.milestones(projectId) });
-		},
-	});
-	const updateMilestoneDueMutation = useMutation({
-		mutationFn: ({ id, dueDate }: { id: string; dueDate: string }) =>
-			api<Milestone>(buildPath("milestone", { id }), { method: "PATCH", body: JSON.stringify({ dueDate }) }),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: queryKeys.milestones(projectId) });
-		},
-	});
-	const deleteMilestoneMutation = useMutation({
-		mutationFn: (id: string) => api<void>(buildPath("milestone", { id }), { method: "DELETE" }),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: queryKeys.milestones(projectId) });
-		},
-	});
+	// 里程碑所有操作收敛到领域 hook（建/改名/设截止/删除/关联，成功统一失效列表）。
+	const milestoneOps = useMilestoneMutations(projectId);
 
 	// 实时：其他窗口的写操作经 WS 推送后 invalidate 本页查询。
 	useRealtime(projectId, { deferInvalidation: dragState.activeId !== null });
@@ -425,7 +389,7 @@ export default function BoardPage() {
 											className="kanso-surface-card group relative flex w-40 flex-col gap-1 p-3 text-left outline-none transition-colors hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-ring">
 											<MilestoneDeleteButton
 												milestone={m}
-												onDelete={(mm) => { void deleteMilestoneMutation.mutateAsync(mm.id); }}
+												onDelete={(mm) => { void milestoneOps.remove.mutateAsync(mm.id); }}
 												className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
 											/>
 											<span className="pr-4 truncate text-sm font-medium">{m.name}</span>
@@ -626,7 +590,7 @@ export default function BoardPage() {
 				<DialogPortal><DialogBackdrop /><DialogPopup>
 					<DialogHeader><DialogTitle>里程碑</DialogTitle><DialogDescription>项目阶段节点 · 进度按任务位置推导</DialogDescription></DialogHeader>
 					<DialogPanel>
-						<form className="mb-4 flex gap-2" onSubmit={(event) => { event.preventDefault(); if (newMilestone.trim()) void createMilestoneMutation.mutateAsync(newMilestone.trim()); }}>
+						<form className="mb-4 flex gap-2" onSubmit={(event) => { event.preventDefault(); if (newMilestone.trim()) { void milestoneOps.create.mutateAsync(newMilestone.trim()); setNewMilestone(""); } }}>
 							<input className="kanso-input min-w-0 flex-1 rounded-md border px-3 text-sm" value={newMilestone} onChange={(event) => setNewMilestone(event.target.value)} placeholder="新里程碑名称" />
 							<Button type="submit">创建</Button>
 						</form>
@@ -644,12 +608,12 @@ export default function BoardPage() {
 													className="kanso-input min-w-0 flex-1 rounded-md border px-2 py-1 text-sm"
 													onKeyDown={(e) => {
 														if (e.key === "Enter" && (e.target as HTMLInputElement).value.trim())
-															void renameMilestoneMutation.mutateAsync({ id: milestone.id, name: (e.target as HTMLInputElement).value.trim() });
+														void milestoneOps.rename.mutateAsync({ id: milestone.id, name: (e.target as HTMLInputElement).value.trim() }).then(() => setEditingMilestone(null));
 														if (e.key === "Escape") setEditingMilestone(null);
 													}}
 													onBlur={(e) => {
 														if (e.target.value.trim() && e.target.value.trim() !== milestone.name)
-															void renameMilestoneMutation.mutateAsync({ id: milestone.id, name: e.target.value.trim() });
+														void milestoneOps.rename.mutateAsync({ id: milestone.id, name: e.target.value.trim() }).then(() => setEditingMilestone(null));
 														else setEditingMilestone(null);
 													}}
 												/>
@@ -660,12 +624,12 @@ export default function BoardPage() {
 											<span className="w-9 shrink-0 text-right font-mono text-[11px] text-muted-foreground">{milestone.progress ? `${pct}%` : "—"}</span>
 														<DatePicker
 															value={milestone.dueDate ?? ""}
-															onChange={(d) => void updateMilestoneDueMutation.mutateAsync({ id: milestone.id, dueDate: d })}
+													onChange={(d) => void milestoneOps.updateDueDate.mutateAsync({ id: milestone.id, dueDate: d })}
 															ariaLabel="里程碑截止日期"
 															placeholder="设置日期"
 														/>
 											<button type="button" aria-label={`重命名 ${milestone.name}`} title="重命名" className="text-muted-foreground hover:text-foreground" onClick={() => setEditingMilestone({ id: milestone.id, name: milestone.name })}><PencilIcon className="size-3.5" /></button>
-											<MilestoneDeleteButton milestone={milestone} onDelete={(mm) => { void deleteMilestoneMutation.mutateAsync(mm.id); }} className="text-muted-foreground hover:text-destructive" />
+										<MilestoneDeleteButton milestone={milestone} onDelete={(mm) => { void milestoneOps.remove.mutateAsync(mm.id); }} className="text-muted-foreground hover:text-destructive" />
 										</div>
 									);
 								})}
