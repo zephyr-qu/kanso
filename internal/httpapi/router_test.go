@@ -2101,7 +2101,14 @@ func newTestEnvModeOrigins(t *testing.T, mode config.Mode, wsOrigins []string) *
 	if err := svc.SeedOwnerMember(context.Background(), testKey); err != nil {
 		t.Fatalf("种子 owner 成员失败: %v", err)
 	}
-	cfg := config.Config{Addr: "127.0.0.1:0", AccessKey: testKey, Mode: mode, WSOrigins: wsOrigins}
+	cfg := config.Config{
+		Addr:                 "127.0.0.1:0",
+		AccessKey:            testKey,
+		Mode:                 mode,
+		WSOrigins:            wsOrigins,
+		AutoArchiveEnabled:   config.DefaultAutoArchiveEnabled,
+		AutoArchiveAfterDays: config.DefaultAutoArchiveAfterDays,
+	}
 	srv := httptest.NewServer(httpapi.NewRouter(cfg, svc, realtime.NewHub()))
 	t.Cleanup(srv.Close)
 	return &testEnv{srv: srv, db: database}

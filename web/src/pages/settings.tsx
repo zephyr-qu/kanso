@@ -2,13 +2,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
 	DownloadIcon,
-	EyeIcon,
-	EyeOffIcon,
 	FileUpIcon,
 	SaveIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { toastManager } from "@/components/ui/toast";
 import { PageContent, PageHeader, SurfaceCard } from "@/components/kanso-ui";
@@ -17,7 +16,6 @@ import {
 	api,
 	clearAccessKey,
 	getAccessKey,
-	setAccessKey,
 } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
 import { THEMES, getTheme, setTheme, type Theme } from "@/lib/theme";
@@ -25,11 +23,12 @@ import { THEMES, getTheme, setTheme, type Theme } from "@/lib/theme";
 type SettingsConfig = {
 	addr: string;
 	dataDir: string;
-	accessKey: string;
-	mode: string;
 	wsOrigins: string;
+	autoArchiveAfterDays: number;
 	configFile: string;
 };
+
+const AUTO_ARCHIVE_OPTIONS = [1, 3, 7, 14, 30, 90];
 
 // 运行模式：personal（默认，单用户）/ team（多成员，ADR-0013）。
 // 仅由后端 KANSO_MODE 环境变量在启动时决定，此处只读展示。
@@ -42,10 +41,9 @@ export default function SettingsPage() {
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [addr, setAddr] = useState("");
 	const [dataDir, setDataDir] = useState("");
-	const [accessKey, setAccessKeyValue] = useState("");
 	const [wsOrigins, setWsOrigins] = useState("");
-	const [showKey, setShowKey] = useState(false);
 	const [configFile, setConfigFile] = useState("kanso-config.json");
+	const [autoArchiveAfterDays, setAutoArchiveAfterDays] = useState(7);
 	const [theme, setThemeValue] = useState<Theme>(getTheme());
 	const [version, setVersion] = useState("");
 
@@ -54,7 +52,8 @@ export default function SettingsPage() {
 			.then((cfg) => {
 				setAddr(cfg.addr);
 				setDataDir(cfg.dataDir);
-				setAccessKeyValue(cfg.accessKey);
+				setWsOrigins(cfg.wsOrigins);
+				setAutoArchiveAfterDays(cfg.autoArchiveAfterDays || 7);
 				setConfigFile(cfg.configFile);
 			})
 			.catch(() =>
@@ -80,27 +79,21 @@ export default function SettingsPage() {
 		try {
 			const res = await api<{
 				ok: boolean;
-				accessKeyApplied: boolean;
 				configFile: string;
 			}>(buildPath("settingsConfig"), {
 				method: "PUT",
-				body: JSON.stringify({ addr, dataDir, accessKey, wsOrigins }),
+				body: JSON.stringify({
+					addr,
+					dataDir,
+					wsOrigins,
+					autoArchiveAfterDays,
+				}),
 			});
-			if (res.accessKeyApplied) {
-				// 密钥已热生效：同步本地密钥，避免当前会话下次请求即 401。
-				if (accessKey) setAccessKey(accessKey);
-				toastManager.add({
-					title: "已保存",
-					description: `访问密钥已更新并立即生效（${res.configFile}）。`,
-					type: "success",
-				});
-			} else {
-				toastManager.add({
-					title: "已保存",
-					description: `已写入 ${res.configFile}；监听地址、数据目录与 WS 白名单将在重启服务后生效（运行模式由 KANSO_MODE 启动时决定）。`,
-					type: "success",
-				});
-			}
+			toastManager.add({
+				title: "已保存",
+				description: `已写入 ${res.configFile}；监听地址、数据目录与 WS 白名单将在重启服务后生效。`,
+				type: "success",
+			});
 		} catch (error) {
 			toastManager.add({
 				title: "保存失败",
@@ -215,7 +208,7 @@ export default function SettingsPage() {
 					</div>
 				</SurfaceCard>
 
-				{/* 服务配置：服务端运行参数（保存到配置文件，重启生效；密钥热生效） */}
+				{/* 服务配置：服务端运行参数（保存到配置文件，重启生效） */}
 				<SurfaceCard className="kanso-settings-card mt-3.5 p-5">
 					<div className="text-sm font-semibold">服务配置</div>
 					<div className="mb-3 mt-1 text-xs text-muted-foreground/70">
@@ -230,33 +223,31 @@ export default function SettingsPage() {
 								value={addr}
 								onChange={setAddr}
 							/>
-							<div className="setting-field">
-								<div className="text-sm font-semibold">访问密钥</div>
-								<div className="mb-2 mt-1 text-xs text-muted-foreground/70">
-									KANSO_ACCESS_KEY · 留空则随机生成
+							{/* 自动归档：放在移除访问密钥后的左栏空位 */}
+							<div className="mt-4">
+								<div className="text-sm font-semibold">自动归档</div>
+								<div className="mt-1 text-xs text-muted-foreground/70">
+									完成任务保留 {autoArchiveAfterDays} 天后自动归档。
 								</div>
-								<div className="flex max-w-[640px] items-center gap-2">
-									<Input
-										type={showKey ? "text" : "password"}
-										value={accessKey}
-										onChange={(e) => setAccessKeyValue(e.target.value)}
-										placeholder="••••••••••••••••"
-										className="h-10 flex-1 font-mono"
-									/>
-									<Button
-										type="button"
-										variant="ghost"
-										size="sm"
-										className="shrink-0"
-										onClick={() => setShowKey((v) => !v)}
-										aria-label={showKey ? "隐藏密钥" : "显示密钥"}
+								<div className="mt-3">
+									<Select
+										value={String(autoArchiveAfterDays)}
+										onValueChange={(value) => {
+											const days = Number(value);
+											if (Number.isInteger(days)) setAutoArchiveAfterDays(days);
+										}}
 									>
-										{showKey ? (
-											<EyeOffIcon className="size-4" />
-										) : (
-											<EyeIcon className="size-4" />
-										)}
-									</Button>
+										<SelectTrigger className="w-[132px]" aria-label="自动归档保留时长">
+											<SelectValue>{autoArchiveAfterDays} 天</SelectValue>
+										</SelectTrigger>
+										<SelectPopup>
+											{AUTO_ARCHIVE_OPTIONS.map((days) => (
+												<SelectItem key={days} value={String(days)}>
+													{days} 天
+												</SelectItem>
+											))}
+										</SelectPopup>
+									</Select>
 								</div>
 							</div>
 						</div>
@@ -271,7 +262,7 @@ export default function SettingsPage() {
 							<div className="setting-field">
 								<div className="text-sm font-semibold">WebSocket 白名单</div>
 								<div className="mb-2 mt-1 text-xs text-muted-foreground/70">
-									KANSO_WS_ORIGINS · 逗号分隔，留空仅同源
+								跨域部署时填写前端地址，多个用逗号分隔；同源访问留空即可。
 								</div>
 								<Input
 									value={wsOrigins}
@@ -282,7 +273,6 @@ export default function SettingsPage() {
 							</div>
 						</div>
 					</div>
-
 					<div className="mt-4 flex items-center gap-3">
 						<Button onClick={save} loading={saving}>
 							<SaveIcon className="size-4" />
@@ -290,7 +280,7 @@ export default function SettingsPage() {
 						</Button>
 					</div>
 					<p className="mt-3 text-xs text-muted-foreground/70">
-						重启后生效：监听地址、数据目录、WS 白名单；访问密钥立即生效。
+						重启后生效：监听地址、数据目录、WS 白名单；自动归档立即生效。
 					</p>
 				</SurfaceCard>
 
@@ -330,7 +320,13 @@ export default function SettingsPage() {
 				<SurfaceCard className="kanso-settings-card mt-3.5 p-5">
 					<div className="text-sm font-semibold">关于</div>
 					<div className="mt-1 text-xs text-muted-foreground/70">
-						Kanso {version || "…"}
+						{version && version !== "dev" ? `Kanso ${version}` : "Kanso"}
+					</div>
+					<div className="mt-2 text-xs text-muted-foreground/70">
+						轻量、可自托管的看板与任务管理工具。
+					</div>
+					<div className="mt-1 text-xs text-muted-foreground/70">
+						作者：Zephyr
 					</div>
 				</SurfaceCard>
 			</PageContent>

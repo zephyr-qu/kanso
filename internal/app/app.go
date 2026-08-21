@@ -27,6 +27,7 @@ const defaultShutdownTimeout = 10 * time.Second
 type App struct {
 	database dbHandle
 	server   *http.Server
+	service  *service.Service
 }
 
 // dbHandle 只暴露 Close，避免 App 的公开接口泄漏数据库实现细节。
@@ -68,6 +69,7 @@ func New(ctx context.Context, cfg config.Config, version string, assets fs.FS) (
 	log.Printf("数据库已就绪: data_dir=%s migrations=%d", cfg.DataDir, migrationCount)
 
 	svc := service.New(database, cfg.Mode)
+	svc.SetAutoArchiveSettings(cfg.AutoArchiveEnabled, cfg.AutoArchiveAfterDays)
 	svc.SetBackupDir(filepath.Join(cfg.DataDir, "backups"))
 	if err := svc.SeedDefaultWorkspace(ctx); err != nil {
 		return fail(fmt.Errorf("初始化默认工作区失败: %w", err))
@@ -95,7 +97,7 @@ func New(ctx context.Context, cfg config.Config, version string, assets fs.FS) (
 	}
 	log.Printf("Kanso %s 已启动: http://%s （模式 %s, health=/api/health, ready=/api/ready）", version, cfg.Addr, cfg.Mode)
 
-	return &App{database: database, server: server}, nil
+	return &App{database: database, server: server, service: svc}, nil
 }
 
 // Handler 返回已组装的应用路由，主要用于嵌入式测试和宿主集成。
@@ -105,6 +107,10 @@ func (a *App) Handler() http.Handler {
 
 // Run 启动 HTTP 服务，并在 ctx 取消后执行优雅关闭。
 func (a *App) Run(ctx context.Context) error {
+	runCtx, cancelAutoArchive := context.WithCancel(ctx)
+	defer cancelAutoArchive()
+	go a.runAutoArchive(runCtx)
+
 	serverErr := make(chan error, 1)
 	go func() {
 		if err := a.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -125,6 +131,33 @@ func (a *App) Run(ctx context.Context) error {
 			return fmt.Errorf("优雅关闭失败: %w", err)
 		}
 		return nil
+	}
+}
+
+const autoArchiveInterval = time.Minute
+
+// runAutoArchive periodically applies the current settings. The first pass is
+// immediate so tasks are not left behind until the next interval after startup.
+func (a *App) runAutoArchive(ctx context.Context) {
+	archive := func() {
+		enabled, days := a.service.AutoArchiveSettings()
+		if !enabled {
+			return
+		}
+		if _, err := a.service.ArchiveDueCompletedTasks(ctx, days); err != nil && ctx.Err() == nil {
+			log.Printf("⚠️ 自动归档失败: %v", err)
+		}
+	}
+	archive()
+	ticker := time.NewTicker(autoArchiveInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			archive()
+		}
 	}
 }
 

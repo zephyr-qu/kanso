@@ -5,6 +5,9 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
+
+	"kanso/internal/db/gen"
 )
 
 // setupBoard 创建项目并返回其列（待办/进行中/已阻塞/已完成）。
@@ -198,6 +201,45 @@ func TestTaskLifecycle(t *testing.T) {
 		if !env.hub.hasType(ev) {
 			t.Fatalf("缺少事件 %s，实际 %v", ev, env.hub.types())
 		}
+	}
+}
+
+func TestArchiveDueCompletedTasks(t *testing.T) {
+	env := newTestService(t)
+	ctx := context.Background()
+	_, _, cols := setupBoard(t, env)
+
+	due, _, err := env.svc.CreateTask(ctx, cols[3], "到期完成任务", "", "", nil, nil)
+	requireNoErr(t, err)
+	notCompleted, _, err := env.svc.CreateTask(ctx, cols[0], "未完成任务", "", "", nil, nil)
+	requireNoErr(t, err)
+	recent, _, err := env.svc.CreateTask(ctx, cols[3], "刚完成任务", "", "", nil, nil)
+	requireNoErr(t, err)
+
+	old := time.Now().UTC().Add(-48 * time.Hour).Format(time.RFC3339)
+	if _, err := env.db.ExecContext(ctx, "UPDATE task SET created_at = ?, updated_at = ? WHERE id IN (?, ?)", old, old, due.ID, notCompleted.ID); err != nil {
+		t.Fatalf("准备历史完成任务失败: %v", err)
+	}
+
+	count, err := env.svc.ArchiveDueCompletedTasks(ctx, 1)
+	requireNoErr(t, err)
+	if count != 1 {
+		t.Fatalf("应自动归档 1 个任务，实际 %d", count)
+	}
+	archived, err := gen.New(env.db).GetTask(ctx, due.ID)
+	requireNoErr(t, err)
+	if archived.ArchivedAt == nil {
+		t.Fatal("到期完成任务应已归档")
+	}
+	active, err := gen.New(env.db).GetTask(ctx, notCompleted.ID)
+	requireNoErr(t, err)
+	if active.ArchivedAt != nil {
+		t.Fatal("未完成任务不应被自动归档")
+	}
+	active, err = gen.New(env.db).GetTask(ctx, recent.ID)
+	requireNoErr(t, err)
+	if active.ArchivedAt != nil {
+		t.Fatal("未达到时限的完成任务不应被自动归档")
 	}
 }
 

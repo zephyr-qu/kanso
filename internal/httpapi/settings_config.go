@@ -1,5 +1,5 @@
 // 设置页配置端点：读取/保存服务端运行配置（kanso-config.json）。
-// addr/dataDir/wsOrigins 为启动参数，保存后重启生效；运行模式仅由 KANSO_MODE 环境变量在启动时决定（不可经设置页保存）；accessKey 保存时热同步成员表（立即生效，旧密钥失效）。
+// addr/dataDir/wsOrigins 为启动参数，保存后重启生效；运行模式仅由 KANSO_MODE 环境变量在启动时决定（不可经设置页保存）。
 package httpapi
 
 import (
@@ -10,11 +10,11 @@ import (
 )
 
 type settingsConfigRequest struct {
-	Addr      string `json:"addr"`
-	DataDir   string `json:"dataDir"`
-	AccessKey string `json:"accessKey"`
+	Addr    string `json:"addr"`
+	DataDir string `json:"dataDir"`
 	// WSOrigins 逗号分隔白名单（可空）。运行模式不在其中：仅由 KANSO_MODE 启动时决定。
-	WSOrigins string `json:"wsOrigins"`
+	WSOrigins            string `json:"wsOrigins"`
+	AutoArchiveAfterDays *int   `json:"autoArchiveAfterDays"`
 }
 
 // getSettingsConfig 返回当前生效配置（GET /api/settings/config）。
@@ -26,12 +26,13 @@ func (a *API) getSettingsConfig(w http.ResponseWriter, r *http.Request) {
 	cfg := a.cfg
 	a.cfgMu.RUnlock()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"addr":       cfg.Addr,
-		"dataDir":    cfg.DataDir,
-		"accessKey":  cfg.AccessKey,
-		"mode":       string(cfg.Mode),
-		"wsOrigins":  strings.Join(cfg.WSOrigins, ","),
-		"configFile": a.configFile,
+		"addr":                 cfg.Addr,
+		"dataDir":              cfg.DataDir,
+		"mode":                 string(cfg.Mode),
+		"wsOrigins":            strings.Join(cfg.WSOrigins, ","),
+		"autoArchiveEnabled":   cfg.AutoArchiveEnabled,
+		"autoArchiveAfterDays": config.NormalizeAutoArchiveAfterDays(cfg.AutoArchiveAfterDays),
+		"configFile":           a.configFile,
 	})
 }
 
@@ -55,32 +56,34 @@ func (a *API) updateSettingsConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "运行配置无效: "+err.Error())
 		return
 	}
-	// accessKey 可留空：表示未设置（下次启动随机生成，沿用既有行为）。
-
+	// 自动归档开关只允许通过配置文件控制；设置页只能调整保留时长。
+	autoArchiveEnabled := a.cfg.AutoArchiveEnabled
+	autoArchiveAfterDays := config.NormalizeAutoArchiveAfterDays(a.cfg.AutoArchiveAfterDays)
+	if req.AutoArchiveAfterDays != nil {
+		autoArchiveAfterDays = *req.AutoArchiveAfterDays
+	}
+	if !config.ValidAutoArchiveAfterDays(autoArchiveAfterDays) {
+		writeError(w, http.StatusBadRequest, "自动归档时长无效，应为 1-3650 天")
+		return
+	}
 	if err := config.SaveFile(a.configFile, config.FileConfig{
-		Addr:      req.Addr,
-		DataDir:   req.DataDir,
-		AccessKey: req.AccessKey,
-		WSOrigins: req.WSOrigins,
+		Addr:                 req.Addr,
+		DataDir:              req.DataDir,
+		AccessKey:            a.cfg.AccessKey,
+		WSOrigins:            req.WSOrigins,
+		AutoArchiveEnabled:   &autoArchiveEnabled,
+		AutoArchiveAfterDays: autoArchiveAfterDays,
 	}); err != nil {
 		writeServiceError(w, err, "写入配置文件失败")
 		return
 	}
 
-	// accessKey 热生效：非空且与当前不同 → 同步成员表，旧密钥立即失效（前端需提示重新登录）。
-	accessKeyApplied := false
-	if req.AccessKey != "" && req.AccessKey != a.cfg.AccessKey {
-		if err := a.svc.SeedOwnerMember(r.Context(), req.AccessKey); err != nil {
-			writeServiceError(w, err, "密钥已写入文件但同步成员表失败")
-			return
-		}
-		a.cfg.AccessKey = req.AccessKey
-		accessKeyApplied = true
-	}
+	a.cfg.AutoArchiveEnabled = autoArchiveEnabled
+	a.cfg.AutoArchiveAfterDays = autoArchiveAfterDays
+	a.svc.SetAutoArchiveSettings(autoArchiveEnabled, autoArchiveAfterDays)
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":               true,
-		"configFile":       a.configFile,
-		"accessKeyApplied": accessKeyApplied,
+		"ok":         true,
+		"configFile": a.configFile,
 	})
 }

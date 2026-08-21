@@ -32,7 +32,7 @@ export default function ConfirmDialog(props: {
 						<DialogTitle>{props.title}</DialogTitle>
 						<DialogDescription>{props.description}</DialogDescription>
 					</DialogHeader>
-					<DialogFooter className="p-4 pt-0">
+					<DialogFooter variant="bare" className="p-4 pt-0">
 						<DialogClose render={<Button variant="ghost">取消</Button>} />
 						<Button
 							variant="destructive"

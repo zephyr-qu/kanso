@@ -274,15 +274,16 @@ export const handlers = [
 		return HttpResponse.json({
 			addr: ":8080",
 			dataDir: "./data",
-			accessKey: "mock-access-key",
 			mode: "personal",
 			wsOrigins: "",
+			autoArchiveEnabled: true,
+			autoArchiveAfterDays: 7,
 			configFile: "kanso-config.json",
 		});
 	}),
 	http.put(mswPattern("settingsConfig"), async () => {
 		await mockDelay();
-		return HttpResponse.json({ ok: true, configFile: "kanso-config.json", accessKeyApplied: false });
+		return HttpResponse.json({ ok: true, configFile: "kanso-config.json" });
 	}),
 	http.get(mswPattern("health"), async () => {
 		await mockDelay();

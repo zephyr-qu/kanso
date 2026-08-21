@@ -154,6 +154,23 @@ func TestLoadFileWSOriginsOnly(t *testing.T) {
 	if len(cfg.WSOrigins) != 2 || cfg.WSOrigins[0] != "http://a.dev" || cfg.WSOrigins[1] != "http://b.dev" {
 		t.Fatalf("文件 WSOrigins 应解析为 2 项（去空白），实际 %v", cfg.WSOrigins)
 	}
+	if !cfg.AutoArchiveEnabled {
+		t.Fatal("未配置时自动归档应默认开启")
+	}
+}
+
+func TestLoadFileAutoArchiveCanBeDisabled(t *testing.T) {
+	falseValue := false
+	path := filepath.Join(t.TempDir(), "kanso-config.json")
+	if err := SaveFile(path, FileConfig{AutoArchiveEnabled: &falseValue}); err != nil {
+		t.Fatalf("写入配置文件失败: %v", err)
+	}
+	t.Setenv("KANSO_CONFIG_FILE", path)
+
+	cfg := Load()
+	if cfg.AutoArchiveEnabled {
+		t.Fatal("配置文件显式关闭时自动归档不应被默认值覆盖")
+	}
 }
 
 func TestValidateRejectsInvalidRuntimeConfig(t *testing.T) {

@@ -30,8 +30,15 @@ func ParseMode(v string) Mode {
 }
 
 // DefaultConfigFile 是持久化配置文件默认路径（可用 KANSO_CONFIG_FILE 覆盖）。
-// 保存后重启生效（addr/dataDir 为启动参数），accessKey 保存时热同步成员表。
+// 保存后重启生效（addr/dataDir 为启动参数）。
 const DefaultConfigFile = "kanso-config.json"
+
+const (
+	// DefaultAutoArchiveEnabled 表示自动归档默认开启；需要关闭时通过配置文件设置为 false。
+	DefaultAutoArchiveEnabled   = true
+	DefaultAutoArchiveAfterDays = 7
+	MaxAutoArchiveAfterDays     = 3650
+)
 
 // FileConfig 是持久化到磁盘的运行配置（JSON），不含运行模式（模式仅由 KANSO_MODE 启动时决定）。
 // 优先级：环境变量 > 配置文件 > 内置默认值。
@@ -41,6 +48,10 @@ type FileConfig struct {
 	AccessKey string `json:"accessKey"`
 	// WSOrigins 逗号分隔的 WS 白名单。
 	WSOrigins string `json:"wsOrigins"`
+	// AutoArchiveEnabled 控制是否自动归档已完成任务；指针用于区分缺省值与显式 false。
+	AutoArchiveEnabled *bool `json:"autoArchiveEnabled"`
+	// AutoArchiveAfterDays 是任务进入完成列后保留的天数。
+	AutoArchiveAfterDays int `json:"autoArchiveAfterDays"`
 }
 
 // ConfigFilePath 返回配置文件路径：KANSO_CONFIG_FILE 显式指定时用之，否则默认 ./kanso-config.json。
@@ -94,6 +105,10 @@ type Config struct {
 	// 空时仅放行同源（或缺失 Origin 的）连接；浏览器经 Vite 代理连接时 Origin 与请求
 	// Host 一致，天然命中同源分支，无需配置。
 	WSOrigins []string
+	// AutoArchiveEnabled 控制是否自动归档已完成任务。
+	AutoArchiveEnabled bool
+	// AutoArchiveAfterDays 是任务进入完成列后保留的天数。
+	AutoArchiveAfterDays int
 }
 
 // Validate 检查启动所需的运行配置，避免服务已初始化一半才因地址或数据目录失败。
@@ -159,13 +174,36 @@ func Load() Config {
 	} else {
 		fileCfg = fc
 	}
-	return Config{
-		Addr:      firstNonEmpty(os.Getenv("KANSO_ADDR"), fileCfg.Addr, ":8080"),
-		AccessKey: firstNonEmpty(os.Getenv("KANSO_ACCESS_KEY"), fileCfg.AccessKey),
-		DataDir:   firstNonEmpty(os.Getenv("KANSO_DATA_DIR"), fileCfg.DataDir, "./data"),
-		Mode:      ParseMode(os.Getenv("KANSO_MODE")),
-		WSOrigins: parseOrigins(firstNonEmpty(os.Getenv("KANSO_WS_ORIGINS"), fileCfg.WSOrigins)),
+	autoArchiveAfterDays := fileCfg.AutoArchiveAfterDays
+	if autoArchiveAfterDays <= 0 {
+		autoArchiveAfterDays = DefaultAutoArchiveAfterDays
 	}
+	autoArchiveEnabled := DefaultAutoArchiveEnabled
+	if fileCfg.AutoArchiveEnabled != nil {
+		autoArchiveEnabled = *fileCfg.AutoArchiveEnabled
+	}
+	return Config{
+		Addr:                 firstNonEmpty(os.Getenv("KANSO_ADDR"), fileCfg.Addr, ":8080"),
+		AccessKey:            firstNonEmpty(os.Getenv("KANSO_ACCESS_KEY"), fileCfg.AccessKey),
+		DataDir:              firstNonEmpty(os.Getenv("KANSO_DATA_DIR"), fileCfg.DataDir, "./data"),
+		Mode:                 ParseMode(os.Getenv("KANSO_MODE")),
+		WSOrigins:            parseOrigins(firstNonEmpty(os.Getenv("KANSO_WS_ORIGINS"), fileCfg.WSOrigins)),
+		AutoArchiveEnabled:   autoArchiveEnabled,
+		AutoArchiveAfterDays: autoArchiveAfterDays,
+	}
+}
+
+// NormalizeAutoArchiveAfterDays 兼容旧配置文件中缺失的时长字段。
+func NormalizeAutoArchiveAfterDays(days int) int {
+	if days <= 0 {
+		return DefaultAutoArchiveAfterDays
+	}
+	return days
+}
+
+// ValidAutoArchiveAfterDays 判断自动归档时长是否在可接受范围内。
+func ValidAutoArchiveAfterDays(days int) bool {
+	return days >= 1 && days <= MaxAutoArchiveAfterDays
 }
 
 // firstNonEmpty 返回第一个非空值；全为空返回 ""。

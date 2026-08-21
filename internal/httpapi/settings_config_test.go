@@ -1,4 +1,4 @@
-// 设置页配置端点测试：GET 返回生效配置、PUT 写入文件、accessKey 热同步成员表、认证与校验。
+// 设置页配置端点测试：GET 返回生效配置、PUT 写入文件、认证与校验。
 package httpapi_test
 
 import (
@@ -15,14 +15,17 @@ func TestSettingsConfigLifecycle(t *testing.T) {
 	t.Setenv("KANSO_CONFIG_FILE", cfgPath)
 	e := newTestEnv(t)
 
-	// GET：返回当前生效配置（测试环境密钥 + configFile 路径）。
+	// GET：返回当前生效配置，但不暴露访问密钥。
 	res, body := e.do(t, http.MethodGet, "/api/settings/config", "")
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("GET 配置应 200，实际 %d", res.StatusCode)
 	}
 	cfg := decode[map[string]any](t, body)
-	if cfg["accessKey"] != testKey {
-		t.Fatalf("accessKey 应为 %q，实际 %v", testKey, cfg["accessKey"])
+	if _, ok := cfg["accessKey"]; ok {
+		t.Fatal("设置接口不应返回 accessKey")
+	}
+	if enabled, ok := cfg["autoArchiveEnabled"].(bool); !ok || !enabled {
+		t.Fatalf("自动归档默认应开启，实际 %v", cfg["autoArchiveEnabled"])
 	}
 	if cfg["configFile"] != cfgPath {
 		t.Fatalf("configFile 应为 %q，实际 %v", cfgPath, cfg["configFile"])
@@ -46,28 +49,37 @@ func TestSettingsConfigLifecycle(t *testing.T) {
 		t.Fatalf("尾随 JSON 应 400，实际 %d", res.StatusCode)
 	}
 
-	// PUT 合法配置（新密钥 + wsOrigins；运行模式仅由 KANSO_MODE 启动时决定，不接受保存）→ 200 + ok + 热生效标志。
-	const newKey = "new-saved-key-123"
+	// PUT 合法配置（wsOrigins；运行模式仅由 KANSO_MODE 启动时决定，不接受保存）→ 200 + ok。
 	res, body = e.do(t, http.MethodPut, "/api/settings/config",
-		`{"addr":":9999","dataDir":"/saved-data","accessKey":"`+newKey+`","wsOrigins":"http://a.dev,http://b.dev"}`)
+		`{"addr":":9999","dataDir":"/saved-data","wsOrigins":"http://a.dev,http://b.dev","autoArchiveEnabled":false}`)
 	// 文件内容已持久化。
 	fileCfg, err := config.ReadFile(cfgPath)
 	if err != nil {
 		t.Fatalf("读取配置文件失败: %v", err)
 	}
-	if fileCfg.Addr != ":9999" || fileCfg.DataDir != "/saved-data" || fileCfg.AccessKey != newKey {
+	if fileCfg.Addr != ":9999" || fileCfg.DataDir != "/saved-data" || fileCfg.AccessKey != testKey {
 		t.Fatalf("文件内容不符: %+v", fileCfg)
 	}
 	if fileCfg.WSOrigins != "http://a.dev,http://b.dev" {
 		t.Fatalf("文件 wsOrigins 不符: %+v", fileCfg)
 	}
-
-	// accessKey 热生效：新密钥可访问，旧密钥立即失效。
-	if res, _ := e.doAuth(t, newKey, http.MethodGet, "/api/workspaces", ""); res.StatusCode != http.StatusOK {
-		t.Fatalf("新密钥应 200，实际 %d", res.StatusCode)
+	if fileCfg.AutoArchiveEnabled == nil || !*fileCfg.AutoArchiveEnabled {
+		t.Fatalf("设置页不能关闭自动归档，配置文件应保留开启状态: %+v", fileCfg)
 	}
-	if res, _ := e.doAuth(t, testKey, http.MethodGet, "/api/workspaces", ""); res.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("旧密钥应 401，实际 %d", res.StatusCode)
+
+	// 页面保存不会提交开关字段，自动归档开关仍由配置文件控制。
+	if res, _ := e.do(t, http.MethodPut, "/api/settings/config",
+		`{"addr":":9999","dataDir":"/saved-data","wsOrigins":"http://a.dev,http://b.dev"}`); res.StatusCode != http.StatusOK {
+		t.Fatalf("不提交自动归档开关时仍应保存成功，实际 %d", res.StatusCode)
+	}
+	fileCfg, err = config.ReadFile(cfgPath)
+	if err != nil || fileCfg.AutoArchiveEnabled == nil || !*fileCfg.AutoArchiveEnabled {
+		t.Fatalf("页面保存不应改变自动归档开关: %+v, err=%v", fileCfg, err)
+	}
+
+	// 保存设置不应改变当前访问密钥。
+	if res, _ := e.doAuth(t, testKey, http.MethodGet, "/api/workspaces", ""); res.StatusCode != http.StatusOK {
+		t.Fatalf("当前密钥应继续可用，实际 %d", res.StatusCode)
 	}
 }
 

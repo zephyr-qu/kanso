@@ -37,10 +37,10 @@ test("settings 服务配置：可编辑保存，数据卡含备份导入导出",
 	// 字段说明展示（保存到配置文件）。
 	await expect(page.getByText("KANSO_ADDR · :8080")).toBeVisible();
 	await expect(page.getByText("KANSO_DATA_DIR · ./data")).toBeVisible();
-	await expect(
-		page.getByText("KANSO_ACCESS_KEY · 留空则随机生成"),
-	).toBeVisible();
-	// 可编辑保存（保存到配置文件，密钥热生效）。
+	await expect(page.getByText("自动归档", { exact: true })).toBeVisible();
+	await expect(page.getByText("完成任务保留 7 天后自动归档。", { exact: true })).toBeVisible();
+	await expect(page.getByText("跨域部署时填写前端地址，多个用逗号分隔；同源访问留空即可。", { exact: true })).toBeVisible();
+	// 可编辑保存（保存到配置文件；自动归档开关只在配置文件中控制）。
 	await expect(page.getByRole("button", { name: "保存配置" })).toBeVisible();
 	// 数据卡：备份导出/导入入口。
 	await expect(page.getByRole("button", { name: "导出备份" })).toBeVisible();

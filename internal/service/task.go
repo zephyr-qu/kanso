@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"kanso/internal/config"
 	"kanso/internal/db/gen"
 	"kanso/internal/id"
 )
@@ -270,6 +271,59 @@ func (s *Service) SetTaskArchived(ctx context.Context, taskID string, archived b
 	}
 	s.broadcastEvent(event)
 	return task, nil
+}
+
+// ArchiveDueCompletedTasks archives active tasks that have remained in the
+// project's final column for at least days. Candidates and updates share one
+// transaction so a task moved out of the final column cannot be archived from
+// a stale list.
+func (s *Service) ArchiveDueCompletedTasks(ctx context.Context, days int) (int, error) {
+	days = config.NormalizeAutoArchiveAfterDays(days)
+	cutoff := time.Now().UTC().Add(-time.Duration(days) * 24 * time.Hour).Format(time.RFC3339)
+
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	tasks, err := q.ListCompletedTasksDueForArchive(ctx, gen.ListCompletedTasksDueForArchiveParams{
+		CreatedAt:   cutoff,
+		CreatedAt_2: cutoff,
+		CreatedAt_3: cutoff,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("查询待自动归档任务失败: %w", err)
+	}
+
+	var events []Event
+	for _, task := range tasks {
+		archivedAt := time.Now().UTC().Format(time.RFC3339)
+		if _, err := q.ArchiveTask(ctx, gen.ArchiveTaskParams{
+			ArchivedAt: &archivedAt,
+			UpdatedAt:  archivedAt,
+			ID:         task.ID,
+		}); err != nil {
+			return 0, fmt.Errorf("自动归档任务失败: %w", err)
+		}
+		event := Event{
+			Action:         EventTaskArchived,
+			ProjectID:      task.ProjectID,
+			EntityID:       task.ID,
+			Data:           map[string]any{"archivedAt": &archivedAt, "title": task.Title, "automatic": true},
+			RecordActivity: true,
+		}
+		if err := s.recordEvent(ctx, q, event); err != nil {
+			return 0, err
+		}
+		events = append(events, event)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("提交自动归档事务失败: %w", err)
+	}
+	for _, event := range events {
+		s.broadcastEvent(event)
+	}
+	return len(events), nil
 }
 
 // MoveTask 把任务移动到目标列的目标位置（0 起），源/目标列分别 reindex。

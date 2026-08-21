@@ -162,6 +162,102 @@ func (q *Queries) ListArchivedTasksByProject(ctx context.Context, projectID stri
 	return items, nil
 }
 
+const listCompletedTasksDueForArchive = `-- name: ListCompletedTasksDueForArchive :many
+SELECT t.id, t.project_id, t.column_id, t.title, t.description, t.position, t.priority, t.due_date, t.archived_at, t.created_at, t.updated_at
+FROM task AS t
+INNER JOIN column AS c ON c.id = t.column_id
+WHERE t.archived_at IS NULL
+  AND c.position = (SELECT MAX(c2.position) FROM column AS c2 WHERE c2.project_id = t.project_id)
+  AND (
+      (t.created_at <= ? AND NOT EXISTS (
+          SELECT 1 FROM activity AS a
+          WHERE a.resource_id = t.id
+            AND a.action = 'task.moved'
+            AND JSON_EXTRACT(a.data, '$.to') = t.column_id
+      ))
+      AND NOT EXISTS (
+          SELECT 1 FROM activity AS restored
+          WHERE restored.resource_id = t.id
+            AND restored.action = 'task.restored'
+      )
+      OR EXISTS (
+          SELECT 1 FROM activity AS a
+          WHERE a.resource_id = t.id
+            AND a.action = 'task.moved'
+            AND JSON_EXTRACT(a.data, '$.from') != JSON_EXTRACT(a.data, '$.to')
+            AND JSON_EXTRACT(a.data, '$.to') = t.column_id
+            AND a.created_at <= ?
+            AND NOT EXISTS (
+                SELECT 1 FROM activity AS newer
+                WHERE newer.resource_id = t.id
+                  AND newer.action = 'task.moved'
+                  AND JSON_EXTRACT(newer.data, '$.from') != JSON_EXTRACT(newer.data, '$.to')
+                  AND JSON_EXTRACT(newer.data, '$.to') = t.column_id
+                  AND newer.created_at > a.created_at
+            )
+            AND NOT EXISTS (
+                SELECT 1 FROM activity AS restored
+                WHERE restored.resource_id = t.id
+                  AND restored.action = 'task.restored'
+                  AND restored.created_at > a.created_at
+            )
+      )
+      OR EXISTS (
+          SELECT 1 FROM activity AS restored
+          WHERE restored.resource_id = t.id
+            AND restored.action = 'task.restored'
+            AND restored.created_at <= ?
+            AND NOT EXISTS (
+                SELECT 1 FROM activity AS newer_restored
+                WHERE newer_restored.resource_id = t.id
+                  AND newer_restored.action = 'task.restored'
+                  AND newer_restored.created_at > restored.created_at
+            )
+      )
+  )
+`
+
+type ListCompletedTasksDueForArchiveParams struct {
+	CreatedAt   string `json:"createdAt"`
+	CreatedAt_2 string `json:"createdAt2"`
+	CreatedAt_3 string `json:"createdAt3"`
+}
+
+func (q *Queries) ListCompletedTasksDueForArchive(ctx context.Context, arg ListCompletedTasksDueForArchiveParams) ([]Task, error) {
+	rows, err := q.db.QueryContext(ctx, listCompletedTasksDueForArchive, arg.CreatedAt, arg.CreatedAt_2, arg.CreatedAt_3)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Task
+	for rows.Next() {
+		var i Task
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.ColumnID,
+			&i.Title,
+			&i.Description,
+			&i.Position,
+			&i.Priority,
+			&i.DueDate,
+			&i.ArchivedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTasksByColumn = `-- name: ListTasksByColumn :many
 SELECT id, project_id, column_id, title, description, position, priority, due_date, archived_at, created_at, updated_at FROM task WHERE column_id = ? AND archived_at IS NULL ORDER BY position, created_at
 `

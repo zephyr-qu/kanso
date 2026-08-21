@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sync"
 
 	"kanso/internal/config"
 	"kanso/internal/db/gen"
@@ -92,15 +93,39 @@ func WithActor(ctx context.Context, actor string) context.Context {
 
 // Service 持有数据库句柄与运行模式，提供全部领域操作。
 type Service struct {
-	db          *sql.DB
-	broadcaster Broadcaster
-	mode        config.Mode
-	backupDir   string
+	db                 *sql.DB
+	broadcaster        Broadcaster
+	mode               config.Mode
+	backupDir          string
+	autoArchiveMu      sync.RWMutex
+	autoArchiveEnabled bool
+	autoArchiveDays    int
 }
 
 // New 构造 Service（mode 决定认证与归属语义，ADR-0013）。
 func New(database *sql.DB, mode config.Mode) *Service {
-	return &Service{db: database, mode: mode}
+	return &Service{
+		db:                 database,
+		mode:               mode,
+		autoArchiveEnabled: config.DefaultAutoArchiveEnabled,
+		autoArchiveDays:    config.DefaultAutoArchiveAfterDays,
+	}
+}
+
+// SetAutoArchiveSettings 更新自动归档运行时配置。设置页保存后立即调用，
+// 无需重启即可让后台归档循环使用新值。
+func (s *Service) SetAutoArchiveSettings(enabled bool, days int) {
+	s.autoArchiveMu.Lock()
+	defer s.autoArchiveMu.Unlock()
+	s.autoArchiveEnabled = enabled
+	s.autoArchiveDays = config.NormalizeAutoArchiveAfterDays(days)
+}
+
+// AutoArchiveSettings 返回自动归档运行时配置的快照。
+func (s *Service) AutoArchiveSettings() (enabled bool, days int) {
+	s.autoArchiveMu.RLock()
+	defer s.autoArchiveMu.RUnlock()
+	return s.autoArchiveEnabled, s.autoArchiveDays
 }
 
 // Ping 检查服务依赖的 SQLite 数据库是否可用，供就绪探针使用。
