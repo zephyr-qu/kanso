@@ -17,7 +17,7 @@ test("工作区删除：弹确认框，取消不删", async ({ page }) => {
 	await page.waitForSelector('a[href*="/p/"]');
 
 	await page.getByRole("button", { name: "删除工作区", exact: true }).click();
-	const dialog = page.getByRole("dialog");
+	const dialog = page.getByRole("dialog", { name: "删除工作区" });
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByText(/其下所有项目/)).toBeVisible();
 
@@ -36,7 +36,7 @@ test("项目删除：取消不删、确认后删除", async ({ page }) => {
 
 	// 取消路径。
 	await deleteBtn.click();
-	const dialog = page.getByRole("dialog");
+	const dialog = page.getByRole("dialog", { name: "删除项目" });
 	await expect(dialog).toBeVisible();
 	await dialog.getByRole("button", { name: "取消" }).click();
 	await expect(projectCard).toBeVisible();
@@ -59,7 +59,7 @@ test("列删除：取消不删、确认后删除（含其下任务）", async ({
 		.textContent();
 	// 取消路径。
 	await firstCol.getByRole("button", { name: `删除列 ${colName}`, exact: true }).click();
-	const dialog = page.getByRole("dialog");
+	const dialog = page.getByRole("dialog", { name: "删除列" });
 	await expect(dialog).toBeVisible();
 	await dialog.getByRole("button", { name: "取消" }).click();
 	await expect(firstCol).toBeVisible();
@@ -94,7 +94,7 @@ test("任务删除：确认后任务消失", async ({ page }) => {
 
 	// 永久删除经确认框。
 	await page.getByRole("button", { name: "永久删除任务" }).click();
-	const dialog = page.getByRole("dialog");
+	const dialog = page.getByRole("dialog", { name: "永久删除任务" });
 	await expect(dialog).toBeVisible();
 	await dialog.getByRole("button", { name: "删除", exact: true }).click();
 

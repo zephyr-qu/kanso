@@ -43,7 +43,7 @@ test("Quick Capture：FAB 创建任务停留原页 + toast 反馈", async ({ pag
 	await dialog.getByPlaceholder("任务标题…").fill(title);
 	await dialog.getByRole("button", { name: "创建任务" }).click();
 	// 创建后停留原页（不跳转项目看板，ADR-0015），toast 反馈创建成功；Dialog 自动关闭。
-	await expect(page.getByText("已创建任务")).toBeVisible({ timeout: 5000 });
+	await expect(page.getByText("任务已创建", { exact: true })).toBeVisible({ timeout: 5000 });
 	await expect(dialog).not.toBeVisible();
 	await expect(page).not.toHaveURL(/\/p\//);
 });

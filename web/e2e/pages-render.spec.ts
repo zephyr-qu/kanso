@@ -41,7 +41,9 @@ test("全部计划页面逐一渲染（无 console error）", async ({ page }) =
 
 	// 工作区（项目列表）。
 	await page.goto(`/w/${ws}`);
-	await expect(page.getByRole("button", { name: "新建项目" })).toBeVisible();
+	await expect(
+		page.getByTestId("page-header").getByRole("button", { name: "新建项目", exact: true }),
+	).toBeVisible();
 	await page.waitForTimeout(400);
 
 	// 看板。

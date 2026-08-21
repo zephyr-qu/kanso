@@ -116,7 +116,7 @@ test("里程碑长按连线：拖到任务卡后建立关联", async ({ page }) 
 	await openPrototypeBoard(page);
 
 	await page.getByRole("button", { name: "里程碑" }).click();
-	const dialog = page.getByRole("dialog");
+	const dialog = page.getByRole("dialog", { name: "里程碑", exact: true });
 	await dialog.getByPlaceholder("新里程碑名称").fill("长按关联测试");
 	await dialog.getByRole("button", { name: "创建", exact: true }).click();
 	await expect(dialog.getByText("长按关联测试")).toBeVisible({ timeout: 5000 });

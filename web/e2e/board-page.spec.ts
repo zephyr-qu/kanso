@@ -32,7 +32,10 @@ test("看板视图：列视图与泳道视图可以切换", async ({ page }) => 
 test("归档面板：打开后展示当前项目的归档状态", async ({ page }) => {
 	await openBoard(page);
 
-	await page.getByRole("button", { name: "归档" }).click();
+	await page
+		.getByTestId("page-header")
+		.getByRole("button", { name: "归档", exact: true })
+		.click();
 	const dialog = page.getByRole("dialog", { name: "归档任务" });
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByText("暂无归档任务")).toBeVisible();
