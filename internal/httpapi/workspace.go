@@ -13,7 +13,7 @@ import (
 func (a *API) listWorkspaces(w http.ResponseWriter, r *http.Request) {
 	workspaces, err := a.svc.ListWorkspaces(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "查询工作区失败")
+		writeServiceError(w, err, "查询工作区失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, workspaces)
@@ -27,7 +27,7 @@ func (a *API) createWorkspace(w http.ResponseWriter, r *http.Request) {
 	}
 	workspace, err := a.svc.CreateWorkspace(r.Context(), name)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "创建工作区失败")
+		writeServiceError(w, err, "创建工作区失败")
 		return
 	}
 	writeJSON(w, http.StatusCreated, workspace)
@@ -45,7 +45,7 @@ func (a *API) renameWorkspace(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "工作区不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "重命名工作区失败")
+		writeServiceError(w, err, "重命名工作区失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, workspace)
@@ -65,7 +65,7 @@ func (a *API) deleteWorkspace(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "至少保留一个工作区")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "删除工作区失败")
+		writeServiceError(w, err, "删除工作区失败")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

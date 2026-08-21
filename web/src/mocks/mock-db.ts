@@ -496,6 +496,33 @@ export function recordTaskActivity<A extends keyof ActivityDataByAction>(
 	return recordActivity(task, action, data);
 }
 
+/** 记录非任务资源活动；全局活动页使用项目名作为展示范围。 */
+export function recordScopedActivity<A extends keyof ActivityDataByAction>(
+	resourceType: string,
+	resourceId: string,
+	projectId: string,
+	action: A,
+	data: ActivityDataByAction[A],
+	scopeName?: string,
+): Activity {
+	const project = projectId ? findProject(projectId) : undefined;
+	const workspace = project
+		? db.workspaces.find((item) => item.id === project.workspaceId)
+		: db.workspaces[0];
+	const activity: Activity = {
+		id: newMockId("activity"),
+		resourceType,
+		resourceId,
+		action,
+		actor: "Admin",
+		projectName: project?.name ?? workspace?.name ?? scopeName ?? "",
+		data: JSON.stringify(data),
+		createdAt: now(),
+	};
+	db.activities.unshift({ ...activity, projectId });
+	return activity;
+}
+
 export function syncTask(task: Task): void {
 	const detail = db.details[task.id];
 	if (detail) {

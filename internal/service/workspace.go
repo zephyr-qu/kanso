@@ -58,11 +58,18 @@ func (s *Service) CreateWorkspace(ctx context.Context, name string) (gen.Workspa
 	if err != nil {
 		return gen.Workspace{}, err
 	}
-	return gen.New(s.db).CreateWorkspace(ctx, gen.CreateWorkspaceParams{
+	workspace, err := gen.New(s.db).CreateWorkspace(ctx, gen.CreateWorkspaceParams{
 		ID:        workspaceID,
 		Name:      name,
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	})
+	if err != nil {
+		return gen.Workspace{}, err
+	}
+	if err := s.dispatch(ctx, Event{Action: EventWorkspaceCreated, WorkspaceID: workspace.ID, EntityID: workspace.ID, Data: map[string]string{"name": workspace.Name}, RecordActivity: true}); err != nil {
+		return gen.Workspace{}, err
+	}
+	return workspace, nil
 }
 
 // RenameWorkspace 重命名工作区；不存在时返回 ErrNotFound。
@@ -73,6 +80,9 @@ func (s *Service) RenameWorkspace(ctx context.Context, workspaceID, name string)
 	})
 	if err != nil {
 		return gen.Workspace{}, mapNoRows(err)
+	}
+	if err := s.dispatch(ctx, Event{Action: EventWorkspaceUpdated, WorkspaceID: workspace.ID, EntityID: workspace.ID, Data: map[string]string{"name": workspace.Name}, RecordActivity: true}); err != nil {
+		return gen.Workspace{}, err
 	}
 	return workspace, nil
 }
@@ -90,7 +100,8 @@ func (s *Service) DeleteWorkspace(ctx context.Context, workspaceID string) error
 	}
 	defer func() { _ = tx.Rollback() }()
 	// 目标不存在 → ErrNotFound（先于「最后一个」守卫，避免对不存在的工作区误报）。
-	if _, err := q.GetWorkspace(ctx, workspaceID); err != nil {
+	workspace, err := q.GetWorkspace(ctx, workspaceID)
+	if err != nil {
 		return mapNoRows(err)
 	}
 	count, err := q.CountWorkspaces(ctx)
@@ -101,7 +112,7 @@ func (s *Service) DeleteWorkspace(ctx context.Context, workspaceID string) error
 		return ErrLastWorkspace
 	}
 	// 先清工作区下任务的活动（activity 无外键，需显式清理）。
-	if err := q.DeleteActivitiesByWorkspace(ctx, workspaceID); err != nil {
+	if err := q.DeleteActivitiesByWorkspace(ctx, &workspaceID); err != nil {
 		return fmt.Errorf("删除工作区活动失败: %w", err)
 	}
 	n, err := q.DeleteWorkspace(ctx, workspaceID)
@@ -114,5 +125,5 @@ func (s *Service) DeleteWorkspace(ctx context.Context, workspaceID string) error
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("提交删除工作区事务失败: %w", err)
 	}
-	return nil
+	return s.dispatch(ctx, Event{Action: EventWorkspaceDeleted, WorkspaceID: workspaceID, EntityID: workspaceID, Data: map[string]string{"name": workspace.Name}, RecordActivity: true})
 }

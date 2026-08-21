@@ -37,5 +37,5 @@ ENV KANSO_ADDR=:8080
 ENV KANSO_DATA_DIR=/data
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget -q -O - http://127.0.0.1:8080/api/health | grep -q '"ok":true' || exit 1
+  CMD wget -q -O - http://127.0.0.1:8080/api/ready | grep -q '"ok":true' || exit 1
 ENTRYPOINT ["/app/kanso"]

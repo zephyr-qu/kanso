@@ -16,6 +16,7 @@ export function useMilestoneMutations(projectId: string) {
 		queryClient.invalidateQueries({ queryKey: queryKeys.milestones(projectId) });
 
 	const create = useMutation({
+		meta: { feedback: { success: "里程碑已创建", errorTitle: "创建里程碑失败" } },
 		mutationFn: (name: string) =>
 			api<Milestone>(buildPath("projectMilestones", { id: projectId }), {
 				method: "POST",
@@ -25,6 +26,7 @@ export function useMilestoneMutations(projectId: string) {
 	});
 
 	const rename = useMutation({
+		meta: { feedback: { success: "里程碑已更新", errorTitle: "更新里程碑失败" } },
 		mutationFn: ({ id, name }: { id: string; name: string }) =>
 			api<Milestone>(buildPath("milestone", { id }), {
 				method: "PATCH",
@@ -34,6 +36,7 @@ export function useMilestoneMutations(projectId: string) {
 	});
 
 	const updateDueDate = useMutation({
+		meta: { feedback: { success: "里程碑截止日期已更新", errorTitle: "更新截止日期失败" } },
 		mutationFn: ({ id, dueDate }: { id: string; dueDate: string }) =>
 			api<Milestone>(buildPath("milestone", { id }), {
 				method: "PATCH",
@@ -43,12 +46,14 @@ export function useMilestoneMutations(projectId: string) {
 	});
 
 	const remove = useMutation({
+		meta: { feedback: { success: "里程碑已删除", errorTitle: "删除里程碑失败" } },
 		mutationFn: (id: string) =>
 			api<void>(buildPath("milestone", { id }), { method: "DELETE" }),
 		onSuccess: invalidateMilestones,
 	});
 
 	const attach = useMutation({
+		meta: { feedback: { success: "任务已关联里程碑", errorTitle: "关联里程碑失败" } },
 		mutationFn: ({
 			taskId,
 			milestoneId,

@@ -161,7 +161,7 @@ func (s *Service) GetTaskDetail(ctx context.Context, taskID string) (TaskDetail,
 		labels = []gen.Label{}
 	}
 
-// M5:该任务关联的里程碑摘要(task_milestone 多对多)。
+	// M5:该任务关联的里程碑摘要(task_milestone 多对多)。
 	milestoneRows, err := s.db.QueryContext(ctx, `SELECT m.id, m.name, m.due_date FROM milestone m
 JOIN task_milestone tm ON tm.milestone_id = m.id
 WHERE tm.task_id = ?
@@ -239,7 +239,7 @@ ORDER BY m.created_at`, taskID)
 	}, nil
 }
 
-func recordActivityWithQueries(ctx context.Context, q *gen.Queries, taskID, action string, data any, actor string) error {
+func recordActivityWithQueries(ctx context.Context, q *gen.Queries, resourceType, resourceID, projectID, workspaceID, action string, data any, actor string) error {
 	var dataStr *string
 	if data != nil {
 		encoded, err := json.Marshal(data)
@@ -255,8 +255,10 @@ func recordActivityWithQueries(ctx context.Context, q *gen.Queries, taskID, acti
 	}
 	_, err = q.CreateActivity(ctx, gen.CreateActivityParams{
 		ID:           activityID,
-		ResourceType: "task",
-		ResourceID:   taskID,
+		ResourceType: resourceType,
+		ResourceID:   resourceID,
+		ProjectID:    nullableString(projectID),
+		WorkspaceID:  nullableString(workspaceID),
 		Action:       action,
 		Data:         dataStr,
 		Actor:        actor,

@@ -57,6 +57,7 @@ export function useTaskMutations(projectId: string) {
 	const queryClient = useQueryClient();
 
 	const createTask = useMutation({
+		meta: { feedback: { success: "任务已创建", errorTitle: "创建任务失败" } },
 		mutationFn: ({ columnId, title, priority }: { columnId: string; title: string; priority: string }) =>
 			api<Task>(buildPath("columnTasks", { columnId }), {
 				method: "POST",
@@ -75,6 +76,7 @@ export function useTaskMutations(projectId: string) {
 	});
 
 	const updateTask = useMutation({
+		meta: { feedback: { success: "任务已更新", errorTitle: "更新任务失败" } },
 		mutationFn: ({ id, title }: { id: string; title: string }) =>
 			api<Task>(buildPath("task", { id }), {
 				method: "PATCH",
@@ -88,6 +90,7 @@ export function useTaskMutations(projectId: string) {
 	});
 
 	const deleteTask = useMutation({
+		meta: { feedback: { success: "任务已删除", errorTitle: "删除任务失败" } },
 		mutationFn: (id: string) =>
 			api<void>(buildPath("task", { id }), { method: "DELETE" }),
 		onSuccess: () => {
@@ -97,6 +100,7 @@ export function useTaskMutations(projectId: string) {
 	});
 
 	const setArchived = useMutation({
+		meta: { feedback: { success: "任务状态已更新", errorTitle: "更新任务状态失败" } },
 		mutationFn: ({ id, archived }: { id: string; archived: boolean }) =>
 			api<Task>(buildPath(archived ? "taskArchive" : "taskRestore", { id }), { method: "POST" }),
 		onSuccess: () => {
@@ -108,6 +112,7 @@ export function useTaskMutations(projectId: string) {
 
 	// 任务拖拽：乐观写入看板缓存，失败恢复快照，成功以 invalidate 收敛服务端 reindex。
 	const moveTask = useMutation({
+		meta: { feedback: { errorTitle: "移动任务失败" } },
 		mutationFn: ({
 			id,
 			columnId,

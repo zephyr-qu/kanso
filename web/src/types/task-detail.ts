@@ -21,7 +21,7 @@ export type Activity = {
 	createdAt: string;
 };
 
-/** 任务详情聚合中的任务：基础 Task（工时/Time Entry 已标记 backlog，未实现）。 */
+/** 任务详情聚合中的任务：基础 Task（工时/Time Entry 按 ADR-0018 暂不实现）。 */
 export type TaskDetailTask = Task;
 
 /** 任务关联的里程碑摘要(M5 多对多归属)。 */

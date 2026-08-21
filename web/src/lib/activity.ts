@@ -71,6 +71,30 @@ export function activityDetail(
 			const title = dataFor("task.archived", data).title;
 			return title ? `「${title}」` : "";
 		}
+		case "column.created":
+		case "column.updated":
+		case "column.moved":
+		case "column.deleted":
+		case "label.created":
+		case "label.updated":
+		case "label.deleted":
+		case "milestone.created":
+		case "milestone.updated":
+		case "milestone.deleted":
+		case "member.created":
+		case "member.updated":
+		case "member.deleted":
+		case "workspace.created":
+		case "workspace.updated":
+		case "workspace.deleted":
+		case "project.created":
+		case "project.updated":
+		case "project.deleted":
+		case "project.pinned":
+		case "project.unpinned": {
+			const value = parseActivityData(data).name;
+			return typeof value === "string" && value ? `「${value}」` : "";
+		}
 		case "label.attached":
 		case "label.detached": {
 			const label = dataFor("label.attached", data).label;

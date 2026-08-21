@@ -10,15 +10,17 @@ import (
 )
 
 const createActivity = `-- name: CreateActivity :one
-INSERT INTO activity (id, resource_type, resource_id, action, data, created_at, actor)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-RETURNING id, resource_type, resource_id, "action", data, created_at, actor
+INSERT INTO activity (id, resource_type, resource_id, project_id, workspace_id, action, data, created_at, actor)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, resource_type, resource_id, project_id, workspace_id, "action", data, created_at, actor
 `
 
 type CreateActivityParams struct {
 	ID           string  `json:"id"`
 	ResourceType string  `json:"resourceType"`
 	ResourceID   string  `json:"resourceId"`
+	ProjectID    *string `json:"projectId"`
+	WorkspaceID  *string `json:"workspaceId"`
 	Action       string  `json:"action"`
 	Data         *string `json:"data"`
 	CreatedAt    string  `json:"createdAt"`
@@ -30,6 +32,8 @@ func (q *Queries) CreateActivity(ctx context.Context, arg CreateActivityParams) 
 		arg.ID,
 		arg.ResourceType,
 		arg.ResourceID,
+		arg.ProjectID,
+		arg.WorkspaceID,
 		arg.Action,
 		arg.Data,
 		arg.CreatedAt,
@@ -40,6 +44,8 @@ func (q *Queries) CreateActivity(ctx context.Context, arg CreateActivityParams) 
 		&i.ID,
 		&i.ResourceType,
 		&i.ResourceID,
+		&i.ProjectID,
+		&i.WorkspaceID,
 		&i.Action,
 		&i.Data,
 		&i.CreatedAt,
@@ -49,7 +55,8 @@ func (q *Queries) CreateActivity(ctx context.Context, arg CreateActivityParams) 
 }
 
 const deleteActivitiesByColumn = `-- name: DeleteActivitiesByColumn :exec
-DELETE FROM activity WHERE resource_type = 'task' AND resource_id IN (SELECT id FROM task WHERE column_id = ?)
+DELETE FROM activity
+WHERE resource_type = 'task' AND resource_id IN (SELECT t.id FROM task AS t WHERE t.column_id = ?)
 `
 
 func (q *Queries) DeleteActivitiesByColumn(ctx context.Context, columnID string) error {
@@ -58,19 +65,21 @@ func (q *Queries) DeleteActivitiesByColumn(ctx context.Context, columnID string)
 }
 
 const deleteActivitiesByProject = `-- name: DeleteActivitiesByProject :exec
-DELETE FROM activity WHERE resource_type = 'task' AND resource_id IN (SELECT id FROM task WHERE project_id = ?)
+DELETE FROM activity WHERE project_id = ?
 `
 
-func (q *Queries) DeleteActivitiesByProject(ctx context.Context, projectID string) error {
+func (q *Queries) DeleteActivitiesByProject(ctx context.Context, projectID *string) error {
 	_, err := q.db.ExecContext(ctx, deleteActivitiesByProject, projectID)
 	return err
 }
 
 const deleteActivitiesByWorkspace = `-- name: DeleteActivitiesByWorkspace :exec
-DELETE FROM activity WHERE resource_type = 'task' AND resource_id IN (SELECT id FROM task WHERE project_id IN (SELECT id FROM project WHERE workspace_id = ?))
+DELETE FROM activity
+WHERE activity.workspace_id = ?1
+   OR project_id IN (SELECT p.id FROM project AS p WHERE p.workspace_id = ?1)
 `
 
-func (q *Queries) DeleteActivitiesByWorkspace(ctx context.Context, workspaceID string) error {
+func (q *Queries) DeleteActivitiesByWorkspace(ctx context.Context, workspaceID *string) error {
 	_, err := q.db.ExecContext(ctx, deleteActivitiesByWorkspace, workspaceID)
 	return err
 }
@@ -85,7 +94,7 @@ func (q *Queries) DeleteActivityByTask(ctx context.Context, resourceID string) e
 }
 
 const listActivitiesByResource = `-- name: ListActivitiesByResource :many
-SELECT id, resource_type, resource_id, "action", data, created_at, actor FROM activity WHERE resource_type = ? AND resource_id = ? ORDER BY created_at DESC
+SELECT id, resource_type, resource_id, project_id, workspace_id, "action", data, created_at, actor FROM activity WHERE resource_type = ? AND resource_id = ? ORDER BY created_at DESC
 `
 
 type ListActivitiesByResourceParams struct {
@@ -106,6 +115,8 @@ func (q *Queries) ListActivitiesByResource(ctx context.Context, arg ListActiviti
 			&i.ID,
 			&i.ResourceType,
 			&i.ResourceID,
+			&i.ProjectID,
+			&i.WorkspaceID,
 			&i.Action,
 			&i.Data,
 			&i.CreatedAt,

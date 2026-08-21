@@ -4,7 +4,7 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getAccessKey } from "@/lib/api";
-import { invalidateBoardScope } from "@/hooks/query-keys";
+import { invalidateRealtimeEvent } from "@/hooks/query-keys";
 
 // 真实后端模式订阅 WebSocket；Mock 模式由 MSW 提供 REST 数据，不建立连接。
 // project 参数后端仅作订阅桶（非空即可）：全局订阅用固定哨兵值，仍会收到 BroadcastAll。
@@ -27,18 +27,12 @@ export function useRealtime(
 		let closed = false;
 		let retry: ReturnType<typeof setTimeout> | null = null;
 
-		const invalidate = () => {
+		const invalidate = (eventType = "unknown") => {
 			if (deferRef.current) {
 				deferredRef.current = true;
 				return;
 			}
-			if (projectId) {
-				// 项目事件可能影响看板与任一任务详情，统一失效（失效映射见 query-keys.ts）。
-				invalidateBoardScope(queryClient, projectId);
-			} else {
-				// 全局事件（备份导入等）：全部查询失效，聚合页拉到最新数据。
-				queryClient.invalidateQueries();
-			}
+			invalidateRealtimeEvent(queryClient, projectId, eventType);
 		};
 
 		const connect = () => {
@@ -55,7 +49,7 @@ export function useRealtime(
 			ws.onmessage = (event) => {
 				try {
 					const msg = JSON.parse(String(event.data)) as { type?: string };
-					if (msg.type) invalidate();
+					if (msg.type) invalidate(msg.type);
 				} catch {
 					// 忽略无法解析的消息
 				}
@@ -77,7 +71,7 @@ export function useRealtime(
 	useEffect(() => {
 		if (!deferInvalidation && deferredRef.current && projectId) {
 			deferredRef.current = false;
-			invalidateBoardScope(queryClient, projectId);
+			invalidateRealtimeEvent(queryClient, projectId, "deferred");
 		}
 	}, [deferInvalidation, projectId, queryClient]);
 }

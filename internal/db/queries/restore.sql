@@ -22,7 +22,7 @@ INSERT INTO label (id, project_id, name, created_at) VALUES (?, ?, ?, ?);
 INSERT INTO comment (id, task_id, content, created_at, author) VALUES (?, ?, ?, ?, ?);
 
 -- name: ImportActivities :exec
-INSERT INTO activity (id, resource_type, resource_id, action, data, created_at, actor) VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT INTO activity (id, resource_type, resource_id, project_id, workspace_id, action, data, created_at, actor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: ImportTaskLabels :exec
 INSERT INTO task_label (task_id, label_id) VALUES (?, ?);

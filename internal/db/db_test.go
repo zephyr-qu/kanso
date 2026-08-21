@@ -83,6 +83,9 @@ func TestMigrate(t *testing.T) {
 	if n == 0 {
 		t.Fatal("迁移未被记录到 schema_migrations")
 	}
+	if count, err := AppliedMigrationCount(database); err != nil || count != n {
+		t.Fatalf("AppliedMigrationCount 应返回 %d，实际 %d，错误 %v", n, count, err)
+	}
 	// 关键表已建。
 	var tbl string
 	if err := database.QueryRow(

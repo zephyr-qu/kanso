@@ -2,8 +2,12 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
+	"net"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -80,7 +84,7 @@ func SaveFile(path string, fc FileConfig) error {
 type Config struct {
 	// Addr 是 HTTP 监听地址（Web + API 同一端口）。
 	Addr string
-	// AccessKey 是共享访问密钥；为空时由 main 随机生成并打印。
+	// AccessKey 是共享访问密钥；为空时由应用生命周期层随机生成并打印。
 	AccessKey string
 	// DataDir 是 SQLite 数据文件目录。
 	DataDir string
@@ -90,6 +94,61 @@ type Config struct {
 	// 空时仅放行同源（或缺失 Origin 的）连接；浏览器经 Vite 代理连接时 Origin 与请求
 	// Host 一致，天然命中同源分支，无需配置。
 	WSOrigins []string
+}
+
+// Validate 检查启动所需的运行配置，避免服务已初始化一半才因地址或数据目录失败。
+func Validate(cfg Config) error {
+	if strings.TrimSpace(cfg.Addr) == "" {
+		return fmt.Errorf("地址不能为空")
+	}
+	if _, port, err := net.SplitHostPort(cfg.Addr); err != nil {
+		return fmt.Errorf("监听地址 %q 无效，应为 host:port: %w", cfg.Addr, err)
+	} else if n, err := strconv.Atoi(port); err != nil || n < 0 || n > 65535 {
+		return fmt.Errorf("监听端口 %q 无效，应为 0-65535", port)
+	}
+	if cfg.DataDir == "" || strings.ContainsRune(cfg.DataDir, '\x00') {
+		return fmt.Errorf("数据目录不能为空且不能包含 NUL 字符")
+	}
+	if cfg.Mode != ModePersonal && cfg.Mode != ModeTeam {
+		return fmt.Errorf("运行模式 %q 无效，应为 personal 或 team", cfg.Mode)
+	}
+	return validateDataDir(cfg.DataDir)
+}
+
+func validateDataDir(path string) error {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("解析数据目录 %q 失败: %w", path, err)
+	}
+	info, err := os.Stat(abs)
+	if err == nil {
+		if !info.IsDir() {
+			return fmt.Errorf("数据目录 %q 已存在但不是目录", path)
+		}
+		return nil
+	}
+	if !os.IsNotExist(err) {
+		return fmt.Errorf("检查数据目录 %q 失败: %w", path, err)
+	}
+	// 目录尚不存在时，确认其最近的已存在父目录可作为创建起点；实际创建仍由 db.Open 完成。
+	parent := filepath.Dir(abs)
+	for {
+		info, statErr := os.Stat(parent)
+		if statErr == nil {
+			if !info.IsDir() {
+				return fmt.Errorf("数据目录父路径 %q 不是目录", parent)
+			}
+			return nil
+		}
+		if !os.IsNotExist(statErr) {
+			return fmt.Errorf("检查数据目录父路径 %q 失败: %w", parent, statErr)
+		}
+		next := filepath.Dir(parent)
+		if next == parent {
+			return fmt.Errorf("数据目录 %q 没有可用的父目录", path)
+		}
+		parent = next
+	}
 }
 
 func Load() Config {

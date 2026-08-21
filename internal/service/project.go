@@ -34,7 +34,7 @@ SELECT
   COUNT(DISTINCT CASE WHEN c.position > pc.min_pos AND c.position < pc.max_pos AND t.archived_at IS NULL THEN t.id END) AS in_progress_count
 FROM project p
 LEFT JOIN column c ON c.project_id = p.id
-LEFT JOIN task t ON t.project_id = p.id
+LEFT JOIN task t ON t.column_id = c.id AND t.project_id = p.id
 LEFT JOIN (
   SELECT project_id, MIN(position) AS min_pos, MAX(position) AS max_pos
   FROM column GROUP BY project_id
@@ -127,6 +127,10 @@ func (s *Service) ListPinnedProjects(ctx context.Context) ([]PinnedProject, erro
 
 // SetProjectPinned 设置/取消项目置顶；项目不存在时返回 ErrNotFound。
 func (s *Service) SetProjectPinned(ctx context.Context, projectID string, pinned bool) error {
+	project, err := gen.New(s.db).GetProject(ctx, projectID)
+	if err != nil {
+		return mapNoRows(err)
+	}
 	res, err := s.db.ExecContext(ctx, setProjectPinnedSQL, pinned, projectID)
 	if err != nil {
 		return fmt.Errorf("更新置顶失败: %w", err)
@@ -138,7 +142,11 @@ func (s *Service) SetProjectPinned(ctx context.Context, projectID string, pinned
 	if n == 0 {
 		return ErrNotFound
 	}
-	return nil
+	action := EventProjectUnpinned
+	if pinned {
+		action = EventProjectPinned
+	}
+	return s.dispatch(ctx, Event{Action: action, ProjectID: project.ID, WorkspaceID: project.WorkspaceID, EntityID: project.ID, Data: map[string]string{"name": project.Name}, RecordActivity: true})
 }
 
 // CreateProject 创建项目并在同一事务内种子固定看板默认列（0008：模板已移除）。
@@ -184,6 +192,9 @@ func (s *Service) CreateProject(ctx context.Context, workspaceID, name string) (
 	if err := tx.Commit(); err != nil {
 		return gen.Project{}, fmt.Errorf("提交事务失败: %w", err)
 	}
+	if err := s.dispatch(ctx, Event{Action: EventProjectCreated, ProjectID: project.ID, WorkspaceID: project.WorkspaceID, EntityID: project.ID, Data: map[string]string{"name": project.Name}, RecordActivity: true}); err != nil {
+		return gen.Project{}, err
+	}
 	return project, nil
 }
 
@@ -197,6 +208,9 @@ func (s *Service) RenameProject(ctx context.Context, projectID, name string) (ge
 	if err != nil {
 		return gen.Project{}, mapNoRows(err)
 	}
+	if err := s.dispatch(ctx, Event{Action: EventProjectUpdated, ProjectID: project.ID, WorkspaceID: project.WorkspaceID, EntityID: project.ID, Data: map[string]string{"name": project.Name}, RecordActivity: true}); err != nil {
+		return gen.Project{}, err
+	}
 	return project, nil
 }
 
@@ -207,8 +221,12 @@ func (s *Service) DeleteProject(ctx context.Context, projectID string) error {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	project, err := q.GetProject(ctx, projectID)
+	if err != nil {
+		return mapNoRows(err)
+	}
 	// 先清项目下任务的活动（activity 无外键，需显式清理）。
-	if err := q.DeleteActivitiesByProject(ctx, projectID); err != nil {
+	if err := q.DeleteActivitiesByProject(ctx, &projectID); err != nil {
 		return fmt.Errorf("删除项目活动失败: %w", err)
 	}
 	n, err := q.DeleteProject(ctx, projectID)
@@ -221,5 +239,5 @@ func (s *Service) DeleteProject(ctx context.Context, projectID string) error {
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("提交删除项目事务失败: %w", err)
 	}
-	return nil
+	return s.dispatch(ctx, Event{Action: EventProjectDeleted, ProjectID: projectID, WorkspaceID: project.WorkspaceID, EntityID: projectID, Data: map[string]string{"name": project.Name}, RecordActivity: true})
 }

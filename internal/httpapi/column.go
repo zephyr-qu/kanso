@@ -17,7 +17,7 @@ func (a *API) listArchivedTasks(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "项目不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "查询归档任务失败")
+		writeServiceError(w, err, "查询归档任务失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, tasks)
@@ -31,7 +31,7 @@ func (a *API) getBoard(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "项目不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "查询看板失败")
+		writeServiceError(w, err, "查询看板失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, board)
@@ -60,7 +60,7 @@ func (a *API) createColumn(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "项目不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "创建列失败")
+		writeServiceError(w, err, "创建列失败")
 		return
 	}
 	writeJSON(w, http.StatusCreated, column)
@@ -109,7 +109,7 @@ func (a *API) updateColumn(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusNotFound, "列不存在")
 				return
 			}
-			writeError(w, http.StatusInternalServerError, "移动列失败")
+			writeServiceError(w, err, "移动列失败")
 			return
 		}
 		// 0006 Phase 3 任务 3.2：移动返回 Column（契约要求，此前返回 {ok:true}）。
@@ -127,7 +127,7 @@ func (a *API) updateColumn(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "列不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "重命名列失败")
+		writeServiceError(w, err, "重命名列失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, column)
@@ -143,7 +143,7 @@ func (a *API) deleteColumn(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "列不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "删除列失败")
+		writeServiceError(w, err, "删除列失败")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -3,7 +3,7 @@
 // 拖拽激活后 dnd-kit 在捕获阶段拦截 click，不会误触打开详情。右上 hover 操作按钮不触发拖拽与跳转。
 
 // TaskCardView 是纯展示层：SortableTaskCard（useSortable）与看板页 DragOverlay 复用同一张卡。
-import { forwardRef, useState, type CSSProperties } from "react";
+import { forwardRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import type { DraggableAttributes } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -67,6 +67,14 @@ export const TaskCardView = forwardRef<HTMLDivElement, TaskCardViewProps>(
 		ref,
 	) {
 		const taskLabels = task.labels ?? [];
+		const listenerOnKeyDown = listeners?.onKeyDown as
+			| ((event: KeyboardEvent<HTMLDivElement>) => void)
+			| undefined;
+		const pointerListeners = listeners
+			? Object.fromEntries(
+					Object.entries(listeners).filter(([name]) => name !== "onKeyDown"),
+			  )
+			: undefined;
 
 		return (
 			<div
@@ -79,7 +87,7 @@ export const TaskCardView = forwardRef<HTMLDivElement, TaskCardViewProps>(
 				// 对齐原型 .task-card（方向 F）：6px 圆角、无默认阴影、内边距 11/12/10、子元素 gap 9px。
 				className={`kanso-task-card group cursor-grab active:cursor-grabbing ${className}`}
 				{...attributes}
-				{...listeners}
+				{...pointerListeners}
 
 				data-dragging={dragging || undefined}
 				data-task-id={task.id}
@@ -90,6 +98,9 @@ export const TaskCardView = forwardRef<HTMLDivElement, TaskCardViewProps>(
 				aria-label={onOpen ? `打开任务 ${task.title}` : undefined}
 				onClick={() => onOpen?.(task)}
 				onKeyDown={(event) => {
+					// dnd-kit 的键盘传感器也通过此监听器工作；显式合并而不是覆盖，
+					// 否则 Space 抓取/放下会失效，而 Enter 详情打开仍需保留。
+					listenerOnKeyDown?.(event);
 					if (!onOpen || event.target !== event.currentTarget) return;
 					// 拖拽进行中（含键盘拖拽收尾的 Space/Enter）交给 dnd-kit，不误触打开详情。
 					if (dragging) return;

@@ -12,28 +12,32 @@ import (
 const listActivitiesWithProject = `-- name: ListActivitiesWithProject :many
 SELECT
     a.id,
+    a.resource_type,
     a.resource_id,
+    a.project_id,
+    a.workspace_id,
     a.action,
     a.data,
     a.created_at,
     a.actor,
-    p.name AS project_name
+    COALESCE(p.name, w.name, JSON_EXTRACT(a.data, '$.name'), '') AS project_name
 FROM activity AS a
-INNER JOIN task AS t ON a.resource_id = t.id
-INNER JOIN column AS c ON t.column_id = c.id
-INNER JOIN project AS p ON c.project_id = p.id
-WHERE a.resource_type = 'task'
+LEFT JOIN project AS p ON a.project_id = p.id
+LEFT JOIN workspace AS w ON a.workspace_id = w.id
 ORDER BY a.created_at DESC
 `
 
 type ListActivitiesWithProjectRow struct {
-	ID          string  `json:"id"`
-	ResourceID  string  `json:"resourceId"`
-	Action      string  `json:"action"`
-	Data        *string `json:"data"`
-	CreatedAt   string  `json:"createdAt"`
-	Actor       string  `json:"actor"`
-	ProjectName string  `json:"projectName"`
+	ID           string  `json:"id"`
+	ResourceType string  `json:"resourceType"`
+	ResourceID   string  `json:"resourceId"`
+	ProjectID    *string `json:"projectId"`
+	WorkspaceID  *string `json:"workspaceId"`
+	Action       string  `json:"action"`
+	Data         *string `json:"data"`
+	CreatedAt    string  `json:"createdAt"`
+	Actor        string  `json:"actor"`
+	ProjectName  string  `json:"projectName"`
 }
 
 func (q *Queries) ListActivitiesWithProject(ctx context.Context) ([]ListActivitiesWithProjectRow, error) {
@@ -47,7 +51,10 @@ func (q *Queries) ListActivitiesWithProject(ctx context.Context) ([]ListActiviti
 		var i ListActivitiesWithProjectRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.ResourceType,
 			&i.ResourceID,
+			&i.ProjectID,
+			&i.WorkspaceID,
 			&i.Action,
 			&i.Data,
 			&i.CreatedAt,

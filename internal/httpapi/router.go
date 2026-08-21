@@ -1,12 +1,17 @@
 package httpapi
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"io/fs"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -38,12 +43,14 @@ func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.
 	a := &API{cfg: cfg, configFile: config.ConfigFilePath(), svc: svc}
 	svc.SetBroadcaster(hub)
 	r := chi.NewRouter()
+	r.Use(requestIDMiddleware)
 	r.Use(redactingLogger)
 	r.Use(middleware.Recoverer)
 
 	r.Get("/api/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "name": "kanso", "version": Version})
 	})
+	r.Get("/api/ready", a.ready)
 	r.Post("/api/auth/verify", a.verify)
 
 	// WebSocket：密钥经查询参数（浏览器无法自定义 WS 请求头），单独注册。
@@ -114,6 +121,23 @@ func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.
 	return r
 }
 
+// ready reports whether the process can serve requests that depend on SQLite.
+// Unlike health, this endpoint checks the live database connection and is used
+// by container health checks and orchestration readiness probes.
+func (a *API) ready(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+	if err := a.svc.Ping(ctx); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"ok":    false,
+			"name":  "kanso",
+			"error": "database unavailable",
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "name": "kanso", "version": Version})
+}
+
 // actorMiddleware 把执行者名注入 ctx（dispatch 记录活动/广播用）。
 // 两种模式均按认证成员反查成员名（personal = 单一 owner，ADR-0013 修订）。
 func (a *API) actorMiddleware(next http.Handler) http.Handler {
@@ -136,9 +160,52 @@ func redactingLogger(next http.Handler) http.Handler {
 			query.Set("key", "[REDACTED]")
 			u.RawQuery = query.Encode()
 		}
-		log.Printf("%s %s", r.Method, u.RequestURI())
+		log.Printf("request_id=%s %s %s", requestIDFromRequest(r), r.Method, u.RequestURI())
 		next.ServeHTTP(w, r)
 	})
+}
+
+type requestIDContextKey struct{}
+
+const maxRequestIDLength = 128
+
+func requestIDMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := strings.TrimSpace(r.Header.Get("X-Request-ID"))
+		if !validRequestID(id) {
+			id = newRequestID()
+		}
+		w.Header().Set("X-Request-ID", id)
+		ctx := context.WithValue(r.Context(), requestIDContextKey{}, id)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func requestIDFromRequest(r *http.Request) string {
+	if id, ok := r.Context().Value(requestIDContextKey{}).(string); ok {
+		return id
+	}
+	return r.Header.Get("X-Request-ID")
+}
+
+func validRequestID(id string) bool {
+	if id == "" || len(id) > maxRequestIDLength {
+		return false
+	}
+	for _, r := range id {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("-_.:", r)) {
+			return false
+		}
+	}
+	return true
+}
+
+func newRequestID() string {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err == nil {
+		return hex.EncodeToString(buf)
+	}
+	return "generated-request-id"
 }
 
 // verify 校验前端提交的访问密钥。
@@ -166,7 +233,31 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 
 // writeError 输出统一错误 JSON。
 func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
+	payload := map[string]string{"error": message}
+	if id := w.Header().Get("X-Request-ID"); id != "" {
+		payload["requestId"] = id
+		log.Printf("request_id=%s status=%d error=%s", id, status, message)
+	}
+	writeJSON(w, status, payload)
+}
+
+func statusForServiceError(err error) int {
+	switch service.ClassifyError(err) {
+	case service.ErrorNotFound:
+		return http.StatusNotFound
+	case service.ErrorForbidden:
+		return http.StatusForbidden
+	case service.ErrorInvalidInput:
+		return http.StatusBadRequest
+	case service.ErrorConflict:
+		return http.StatusConflict
+	default:
+		return http.StatusInternalServerError
+	}
+}
+
+func writeServiceError(w http.ResponseWriter, err error, fallback string) {
+	writeError(w, statusForServiceError(err), fallback)
 }
 
 // decodeBody 解析请求体；失败时已写入 400 响应并返回 false。

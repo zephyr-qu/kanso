@@ -65,7 +65,6 @@ test("任务详情：优先级展示 + 截止日期设置", async ({ page }) => 
 	await page.waitForURL((u) => u.pathname.includes("/t/"));
 	// 元数据条可见。
 	await expect(page.getByText("状态", { exact: false })).toBeVisible();
-	// 优先级展示（中文化标签；切换 UI 未实现，ADR-0015 只定口径不改 UI）。
 // 优先级展示（四档按钮可点，点击即保存）。
 	await expect(page.getByRole("button", { name: /紧急|高|中|低/ }).first()).toBeVisible();
 	// 设置截止日期（今天）：DatePicker 是 Popover 按钮 + 日历格子（非 input，不能 fill）。

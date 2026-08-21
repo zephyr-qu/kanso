@@ -134,7 +134,7 @@ func TestDeleteWorkspaceCleansActivities(t *testing.T) {
 	ctx := context.Background()
 	wsID := defaultWorkspaceID(t, env)
 
-	// 造第二个工作区 + 项目 + 任务（产生活动），删除后活动清空。
+	// 造第二个工作区 + 项目 + 任务（产生活动），删除后只保留删除审计事件。
 	second, err := env.svc.CreateWorkspace(ctx, "临时工作区")
 	requireNoErr(t, err)
 	project, err := env.svc.CreateProject(ctx, second.ID, "临时项目")
@@ -154,6 +154,14 @@ func TestDeleteWorkspaceCleansActivities(t *testing.T) {
 	// 删除工作区。
 	requireNoErr(t, env.svc.DeleteWorkspace(ctx, second.ID))
 
-	// 项目删除同样清活动。
+	var deletedCount int
+	if err := env.db.QueryRow(`SELECT COUNT(*) FROM activity WHERE workspace_id = ? AND action = ?`, second.ID, EventWorkspaceDeleted).Scan(&deletedCount); err != nil {
+		t.Fatalf("查询工作区删除活动失败: %v", err)
+	}
+	if deletedCount != 1 {
+		t.Fatalf("删除工作区应保留 1 条审计事件，实际 %d", deletedCount)
+	}
+
+	// 项目删除同样清理原活动，并保留项目删除事件。
 	_ = wsID
 }

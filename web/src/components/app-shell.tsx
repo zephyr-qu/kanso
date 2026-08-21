@@ -72,6 +72,7 @@ export default function AppShell() {
 	const member = meData?.member;
 
 	const createMutation = useMutation({
+		meta: { feedback: { success: "工作区已创建", errorTitle: "创建工作区失败" } },
 		mutationFn: (name: string) =>
 			api<Workspace>(buildPath("workspaces"), {
 				method: "POST",

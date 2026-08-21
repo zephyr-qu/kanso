@@ -11,6 +11,7 @@ export function useLabelMutations(projectId: string) {
 	// workspaceId 在调用时从看板缓存读取（保证缓存加载后再建标签也有正确的工作区）。
 	// 标签属于项目：创建直接打到项目端点。
 	const createLabel = useMutation({
+		meta: { feedback: { success: "标签已创建", errorTitle: "创建标签失败" } },
 		mutationFn: ({ name }: { name: string }) =>
 			api<Label>(buildPath("projectLabels", { projectId }), {
 				method: "POST",
@@ -20,6 +21,7 @@ export function useLabelMutations(projectId: string) {
 	});
 
 	const renameLabel = useMutation({
+		meta: { feedback: { success: "标签已更新", errorTitle: "更新标签失败" } },
 		mutationFn: ({ id, name }: { id: string; name: string }) =>
 			api<Label>(buildPath("label", { id }), {
 				method: "PATCH",
@@ -29,6 +31,7 @@ export function useLabelMutations(projectId: string) {
 	});
 
 	const deleteLabel = useMutation({
+		meta: { feedback: { success: "标签已删除", errorTitle: "删除标签失败" } },
 		mutationFn: (id: string) =>
 			api<void>(buildPath("label", { id }), { method: "DELETE" }),
 		onSuccess: () => invalidateBoard(queryClient, projectId),
@@ -37,6 +40,7 @@ export function useLabelMutations(projectId: string) {
 	// 贴/摘标签：方向由调用方显式给出（attach=true 贴 / false 摘），成功后失效看板（徽章刷新）。
 	// 拖拽状态机的 toggleLabel 命令与任务卡弹层共用此签名——不再从 task.labels 反推方向（避免隐式状态）。
 	const toggleLabel = useMutation({
+		meta: { feedback: { errorTitle: "更新任务标签失败" } },
 		mutationFn: ({ taskId, labelId, attach }: { taskId: string; labelId: string; attach: boolean }) =>
 			api<void>(buildPath("taskLabels", { taskId, labelId }), {
 				method: attach ? "POST" : "DELETE",

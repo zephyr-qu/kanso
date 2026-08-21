@@ -262,7 +262,7 @@ func jsonKeys(m map[string]any) []string {
 	return ks
 }
 
-// TestWorkspaceDeleteCascadesProjects 验证删除工作区级联删除项目（读回无残留）。
+// TestWorkspaceDeleteCascadesProjects 验证删除工作区级联删除项目，并保留删除审计事件。
 func TestWorkspaceDeleteCascadesProjects(t *testing.T) {
 	e := newTestEnv(t)
 
@@ -287,11 +287,11 @@ func TestWorkspaceDeleteCascadesProjects(t *testing.T) {
 		t.Fatalf("删除工作区应 204，实际 %d", res.StatusCode)
 	}
 
-	// spec 必测：删工作区后项目/任务/评论/活动全部消失（无孤儿记录）。
+	// spec 必测：删工作区后项目/任务/评论等全部消失（无孤儿记录）。
 	for _, tc := range []struct {
 		table string
 	}{
-		{"project"}, {"column"}, {"task"}, {"comment"}, {"label"}, {"task_label"}, {"activity"},
+		{"project"}, {"column"}, {"task"}, {"comment"}, {"label"}, {"task_label"},
 	} {
 		var n int
 		if err := e.db.QueryRow(`SELECT COUNT(*) FROM "` + tc.table + `"`).Scan(&n); err != nil {
@@ -300,6 +300,13 @@ func TestWorkspaceDeleteCascadesProjects(t *testing.T) {
 		if n != 0 {
 			t.Fatalf("级联后 %s 应无残留，实际 %d", tc.table, n)
 		}
+	}
+	var deletedActivities int
+	if err := e.db.QueryRow(`SELECT COUNT(*) FROM activity WHERE workspace_id = ? AND action = ?`, workspaceID, "workspace.deleted").Scan(&deletedActivities); err != nil {
+		t.Fatalf("统计工作区删除活动失败: %v", err)
+	}
+	if deletedActivities != 1 {
+		t.Fatalf("删除工作区应保留 1 条审计活动，实际 %d", deletedActivities)
 	}
 }
 
@@ -1043,6 +1050,15 @@ func TestHealthAndVerify(t *testing.T) {
 	}
 	if ok := decode[map[string]any](t, body)["ok"]; ok != true {
 		t.Fatalf("health 应返回 ok:true，实际 %v", ok)
+	}
+
+	// /api/ready 无需鉴权，并检查数据库连接可用。
+	res, body = e.doAuth(t, "", http.MethodGet, "/api/ready", "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("ready 应 200，实际 %d", res.StatusCode)
+	}
+	if ok := decode[map[string]any](t, body)["ok"]; ok != true {
+		t.Fatalf("ready 应返回 ok:true，实际 %v", ok)
 	}
 
 	// verify 正确密钥 → 200 ok:true。

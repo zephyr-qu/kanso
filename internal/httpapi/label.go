@@ -21,7 +21,7 @@ func (a *API) createLabel(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "项目不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "创建标签失败")
+		writeServiceError(w, err, "创建标签失败")
 		return
 	}
 	writeJSON(w, http.StatusCreated, label)
@@ -45,7 +45,7 @@ func (a *API) updateLabel(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "标签不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "更新标签失败")
+		writeServiceError(w, err, "更新标签失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, label)
@@ -58,7 +58,7 @@ func (a *API) deleteLabel(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "标签不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "删除标签失败")
+		writeServiceError(w, err, "删除标签失败")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -75,7 +75,7 @@ func (a *API) attachLabel(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "任务与标签必须属于同一项目")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "贴标签失败")
+		writeServiceError(w, err, "贴标签失败")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -92,7 +92,7 @@ func (a *API) detachLabel(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "任务与标签必须属于同一项目")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "移除标签失败")
+		writeServiceError(w, err, "移除标签失败")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -8,6 +8,8 @@ type Activity struct {
 	ID           string  `json:"id"`
 	ResourceType string  `json:"resourceType"`
 	ResourceID   string  `json:"resourceId"`
+	ProjectID    *string `json:"projectId"`
+	WorkspaceID  *string `json:"workspaceId"`
 	Action       string  `json:"action"`
 	Data         *string `json:"data"`
 	CreatedAt    string  `json:"createdAt"`
@@ -62,6 +64,7 @@ type Project struct {
 	WorkspaceID string `json:"workspaceId"`
 	Name        string `json:"name"`
 	Position    int64  `json:"position"`
+	Pinned      int64  `json:"pinned"`
 	CreatedAt   string `json:"createdAt"`
 	UpdatedAt   string `json:"updatedAt"`
 }

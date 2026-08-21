@@ -1,6 +1,6 @@
 // Milestone 领域服务（0006 Phase 3 任务 3.8/3.9）：CRUD、任务关联、进度聚合。
 // 事务纪律与 task/comment 一致：变更在同事务内提交（BeginTx + recordEvent）；
-// recordEvent 仅当 Event.RecordActivity 为 true 时写活动，里程碑事件默认只广播。
+// 里程碑 CRUD 与任务关联都进入全局活动流；关联动作同时归属任务详情时间线。
 package service
 
 import (
@@ -78,7 +78,7 @@ func (s *Service) CreateMilestone(ctx context.Context, projectID, name string, d
 	if err != nil {
 		return gen.Milestone{}, fmt.Errorf("创建里程碑失败: %w", err)
 	}
-	event := Event{Action: EventMilestoneCreated, ProjectID: projectID, EntityID: milestone.ID}
+	event := Event{Action: EventMilestoneCreated, ProjectID: projectID, EntityID: milestone.ID, Data: map[string]string{"name": milestone.Name}, RecordActivity: true}
 	if err := s.recordEvent(ctx, q, event); err != nil {
 		return gen.Milestone{}, err
 	}
@@ -119,7 +119,7 @@ func (s *Service) UpdateMilestone(ctx context.Context, id string, name *string, 
 	if err != nil {
 		return gen.Milestone{}, mapNoRows(err)
 	}
-	event := Event{Action: EventMilestoneUpdated, ProjectID: milestone.ProjectID, EntityID: milestone.ID}
+	event := Event{Action: EventMilestoneUpdated, ProjectID: milestone.ProjectID, EntityID: milestone.ID, Data: map[string]string{"name": milestone.Name}, RecordActivity: true}
 	if err := s.recordEvent(ctx, q, event); err != nil {
 		return gen.Milestone{}, err
 	}
@@ -147,7 +147,7 @@ func (s *Service) DeleteMilestone(ctx context.Context, id string) error {
 	} else if n == 0 {
 		return ErrNotFound
 	}
-	event := Event{Action: EventMilestoneDeleted, ProjectID: milestone.ProjectID, EntityID: id}
+	event := Event{Action: EventMilestoneDeleted, ProjectID: milestone.ProjectID, EntityID: id, Data: map[string]string{"name": milestone.Name}, RecordActivity: true}
 	if err := s.recordEvent(ctx, q, event); err != nil {
 		return err
 	}
@@ -194,7 +194,13 @@ func (s *Service) SetTaskMilestone(ctx context.Context, taskID, milestoneID stri
 	if attached {
 		action = EventMilestoneAttached
 	}
-	event := Event{Action: action, ProjectID: task.ProjectID, EntityID: taskID, Data: map[string]string{"milestoneId": milestoneID}}
+	event := Event{
+		Action:         action,
+		ProjectID:      task.ProjectID,
+		EntityID:       taskID,
+		Data:           map[string]string{"milestoneId": milestoneID, "milestoneName": milestone.Name},
+		RecordActivity: true,
+	}
 	if err := s.recordEvent(ctx, q, event); err != nil {
 		return err
 	}
@@ -242,4 +248,3 @@ func (s *Service) ListMilestoneTasks(ctx context.Context, milestoneID string) ([
 	}
 	return out, nil
 }
-

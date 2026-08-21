@@ -5,13 +5,23 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"kanso/internal/db/gen"
 )
 
+const (
+	BackupSchema  = "kanso.backup"
+	BackupVersion = 1
+)
+
 type BackupData struct {
+	Schema         string              `json:"schema"`
+	Version        int                 `json:"version"`
 	ExportedAt     string              `json:"exportedAt"`
 	Workspaces     []gen.Workspace     `json:"workspaces"`
 	Projects       []gen.Project       `json:"projects"`
@@ -35,7 +45,11 @@ func (s *Service) GetBackup(ctx context.Context) (BackupData, error) {
 	defer func() { _ = tx.Rollback() }()
 	q := gen.New(tx)
 
-	b := BackupData{ExportedAt: time.Now().UTC().Format(time.RFC3339)}
+	b := BackupData{
+		Schema:     BackupSchema,
+		Version:    BackupVersion,
+		ExportedAt: time.Now().UTC().Format(time.RFC3339),
+	}
 	if b.Workspaces, err = q.ListWorkspaces(ctx); err != nil {
 		return BackupData{}, fmt.Errorf("导出工作区失败: %w", err)
 	}
@@ -90,10 +104,13 @@ func (s *Service) GetBackup(ctx context.Context) (BackupData, error) {
 // 语义为「恢复还原」——保留快照原始 ID，覆盖（丢弃）当前全部数据。
 // 成员（member）不随快照迁移：清空前快照、恢复后原样写回，认证态不因导入而丢失。
 func (s *Service) ImportBackup(ctx context.Context, b BackupData) error {
-	// 空 workspace 快照会清空当前数据库并同时丢失成员归属，导致服务无法再认证。
-	// 备份导出始终至少包含默认工作区，因此将其视为非法输入。
-	if len(b.Workspaces) == 0 {
-		return ErrInvalidBackup
+	if err := validateBackup(b); err != nil {
+		return err
+	}
+	// 先把当前数据库导出为独立快照，再执行破坏性全量替换。
+	// 生产环境由 app.New 注入 DataDir/backups；写入失败时中止导入，避免无法回滚的人为误操作。
+	if err := s.writePreImportSnapshot(ctx); err != nil {
+		return err
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -178,7 +195,7 @@ func (s *Service) ImportBackup(ctx context.Context, b BackupData) error {
 		}
 	}
 	for _, ac := range b.Activities {
-		if err := q.ImportActivities(ctx, gen.ImportActivitiesParams{ID: ac.ID, ResourceType: ac.ResourceType, ResourceID: ac.ResourceID, Action: ac.Action, Data: ac.Data, CreatedAt: ac.CreatedAt, Actor: ac.Actor}); err != nil {
+		if err := q.ImportActivities(ctx, gen.ImportActivitiesParams{ID: ac.ID, ResourceType: ac.ResourceType, ResourceID: ac.ResourceID, ProjectID: ac.ProjectID, WorkspaceID: ac.WorkspaceID, Action: ac.Action, Data: ac.Data, CreatedAt: ac.CreatedAt, Actor: ac.Actor}); err != nil {
 			return fmt.Errorf("导入活动失败: %w", err)
 		}
 	}
@@ -193,11 +210,16 @@ func (s *Service) ImportBackup(ctx context.Context, b BackupData) error {
 		}
 	}
 
+	workspaceID := b.Workspaces[0].ID
+	event := Event{Action: EventBackupImported, WorkspaceID: workspaceID, EntityID: workspaceID, RecordActivity: true}
+	if err := s.recordEvent(ctx, q, event); err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("提交导入事务失败: %w", err)
 	}
 	// 导入是全局性变更：广播工作区级事件，通知各端重新拉取数据。
-	s.broadcastEvent(Event{Action: EventBackupImported})
+	s.broadcastEvent(event)
 	return nil
 }
 
@@ -207,4 +229,62 @@ func orEmpty[T any](s []T) []T {
 		return []T{}
 	}
 	return s
+}
+
+// SetBackupDir 配置导入前安全快照目录。空目录用于不需要落盘快照的嵌入式场景。
+func (s *Service) SetBackupDir(dir string) {
+	s.backupDir = dir
+}
+
+func validateBackup(b BackupData) error {
+	// schema/version 为新增字段；缺省值兼容历史备份，非零值必须严格匹配当前格式。
+	if b.Schema != "" && b.Schema != BackupSchema {
+		return fmt.Errorf("%w: 不支持的 schema %q", ErrInvalidBackup, b.Schema)
+	}
+	if b.Version != 0 && b.Version != BackupVersion {
+		return fmt.Errorf("%w: 不支持的 version %d", ErrInvalidBackup, b.Version)
+	}
+	if len(b.Workspaces) == 0 {
+		return ErrInvalidBackup
+	}
+	return nil
+}
+
+func (s *Service) writePreImportSnapshot(ctx context.Context) error {
+	if s.backupDir == "" {
+		return nil
+	}
+	snapshot, err := s.GetBackup(ctx)
+	if err != nil {
+		return fmt.Errorf("生成导入前快照失败: %w", err)
+	}
+	body, err := json.MarshalIndent(snapshot, "", "  ")
+	if err != nil {
+		return fmt.Errorf("编码导入前快照失败: %w", err)
+	}
+	if err := os.MkdirAll(s.backupDir, 0o700); err != nil {
+		return fmt.Errorf("创建导入前快照目录 %q 失败: %w", s.backupDir, err)
+	}
+	tmp, err := os.CreateTemp(s.backupDir, ".pre-import-*.json")
+	if err != nil {
+		return fmt.Errorf("创建导入前快照临时文件失败: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }()
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("设置导入前快照权限失败: %w", err)
+	}
+	if _, err := tmp.Write(body); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("写入导入前快照失败: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("关闭导入前快照失败: %w", err)
+	}
+	name := filepath.Join(s.backupDir, "pre-import-"+time.Now().UTC().Format("20060102T150405.000000000Z")+".json")
+	if err := os.Rename(tmpName, name); err != nil {
+		return fmt.Errorf("保存导入前快照失败: %w", err)
+	}
+	return nil
 }

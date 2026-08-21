@@ -178,6 +178,7 @@ export default function ProfilePage() {
 	});
 
 	const updateMember = useMutation({
+		meta: { feedback: { success: "个人资料已更新", errorTitle: "更新个人资料失败" } },
 		mutationFn: (patch: {
 			name?: string;
 			avatarColor?: string;
@@ -201,6 +202,7 @@ export default function ProfilePage() {
 	const memberLimit = 5;
 	const atMemberLimit = memberCount >= memberLimit;
 	const createMember = useMutation({
+		meta: { feedback: { success: "成员已添加", errorTitle: "添加成员失败" } },
 		mutationFn: (name: string) =>
 			api<Member>(buildPath("members"), {
 				method: "POST",
@@ -213,6 +215,7 @@ export default function ProfilePage() {
 		},
 	});
 	const deleteMemberMutation = useMutation({
+		meta: { feedback: { success: "成员已移除", errorTitle: "移除成员失败" } },
 		mutationFn: (memberId: string) =>
 			api<void>(buildPath("member", { id: memberId }), { method: "DELETE" }),
 		onSuccess: () => {

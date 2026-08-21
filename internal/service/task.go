@@ -200,9 +200,11 @@ func (s *Service) DeleteTask(ctx context.Context, taskID string) error {
 		return fmt.Errorf("提交删除任务事务失败: %w", err)
 	}
 	return s.dispatch(ctx, Event{
-		Action:    EventTaskDeleted,
-		ProjectID: task.ProjectID,
-		EntityID:  taskID,
+		Action:         EventTaskDeleted,
+		ProjectID:      task.ProjectID,
+		EntityID:       taskID,
+		Data:           map[string]string{"title": task.Title},
+		RecordActivity: true,
 	})
 }
 

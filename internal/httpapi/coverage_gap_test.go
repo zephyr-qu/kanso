@@ -388,6 +388,8 @@ func TestDeleteProjectDatabaseError(t *testing.T) {
 	mock.ExpectQuery("FROM member WHERE id").WillReturnRows(sqlmock.NewRows(memberRowCols).
 		AddRow(memberRow("m1")...))
 	mock.ExpectBegin()
+	mock.ExpectQuery("FROM project WHERE id").WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at"}).
+		AddRow("p1", "w1", "Project", 0, "2026-01-01", "2026-01-01"))
 	mock.ExpectExec("DeleteActivitiesByProject").WillReturnError(errors.New("db down"))
 	mock.ExpectRollback()
 
@@ -525,6 +527,8 @@ func TestDeleteProjectOperationDatabaseError(t *testing.T) {
 	expectAuth(mock, "m1")
 	mock.ExpectQuery("FROM member WHERE id").WillReturnRows(sqlmock.NewRows(memberRowCols).AddRow(memberRow("m1")...))
 	mock.ExpectBegin()
+	mock.ExpectQuery("FROM project WHERE id").WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at"}).
+		AddRow("p1", "w1", "Project", 0, "2026-01-01", "2026-01-01"))
 	mock.ExpectExec("DeleteActivitiesByProject").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("DeleteProject").WillReturnError(errors.New("db down"))
 	mock.ExpectRollback()

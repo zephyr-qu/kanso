@@ -127,15 +127,16 @@ ORDER BY day;
 -- name: ListActivitiesWithProject :many
 SELECT
     a.id,
+    a.resource_type,
     a.resource_id,
+    a.project_id,
+    a.workspace_id,
     a.action,
     a.data,
     a.created_at,
     a.actor,
-    p.name AS project_name
+    COALESCE(p.name, w.name, JSON_EXTRACT(a.data, '$.name'), '') AS project_name
 FROM activity AS a
-INNER JOIN task AS t ON a.resource_id = t.id
-INNER JOIN column AS c ON t.column_id = c.id
-INNER JOIN project AS p ON c.project_id = p.id
-WHERE a.resource_type = 'task'
+LEFT JOIN project AS p ON a.project_id = p.id
+LEFT JOIN workspace AS w ON a.workspace_id = w.id
 ORDER BY a.created_at DESC;

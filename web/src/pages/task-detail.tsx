@@ -102,12 +102,14 @@ export default function TaskDetailPage() {
 		enabled: projectId !== "",
 	});
 	const toggleMilestone = useMutation({
+		meta: { feedback: { success: "里程碑关联已更新", errorTitle: "更新里程碑关联失败" } },
 		mutationFn: ({ milestoneId, attach }: { milestoneId: string; attach: boolean }) =>
 			api<void>(buildPath("taskMilestones", { taskId, milestoneId }), { method: attach ? "POST" : "DELETE" }),
 		onSuccess: () => invalidateTask(queryClient, taskId),
 	});
 
 	const updateTaskMutation = useMutation({
+		meta: { feedback: { success: "任务已更新", errorTitle: "更新任务失败" } },
 		mutationFn: (
 			patch: Partial<Pick<Task, "title" | "description" | "priority" | "dueDate">>,
 		) =>
@@ -119,6 +121,7 @@ export default function TaskDetailPage() {
 	});
 
 	const createCommentMutation = useMutation({
+		meta: { feedback: { success: "评论已发布", errorTitle: "发表评论失败" } },
 		mutationFn: (content: string) =>
 			api<Comment>(buildPath("taskComments", { id: taskId }), {
 				method: "POST",
@@ -131,11 +134,13 @@ export default function TaskDetailPage() {
 	});
 
 	const deleteCommentMutation = useMutation({
+		meta: { feedback: { success: "评论已删除", errorTitle: "删除评论失败" } },
 		mutationFn: (id: string) =>
 			api<void>(buildPath("comment", { id }), { method: "DELETE" }),
 		onSuccess: () => invalidateTask(queryClient, taskId),
 	});
 	const archiveMutation = useMutation({
+		meta: { feedback: { success: "任务状态已更新", errorTitle: "更新任务状态失败" } },
 		mutationFn: (archived: boolean) =>
 			api<Task>(
 				buildPath(archived ? "taskArchive" : "taskRestore", { id: taskId }),
@@ -148,6 +153,7 @@ export default function TaskDetailPage() {
 		},
 	});
 	const deleteMutation = useMutation({
+		meta: { feedback: { success: "任务已删除", errorTitle: "删除任务失败" } },
 		mutationFn: () =>
 			api<void>(buildPath("task", { id: taskId }), { method: "DELETE" }),
 		onSuccess: () => {

@@ -156,6 +156,37 @@ func TestLoadFileWSOriginsOnly(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsInvalidRuntimeConfig(t *testing.T) {
+	base := Config{Addr: ":8080", DataDir: t.TempDir(), Mode: ModePersonal}
+	dataFile := filepath.Join(t.TempDir(), "data.db")
+	if err := os.WriteFile(dataFile, []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name string
+		cfg  Config
+	}{
+		{name: "address", cfg: Config{Addr: "not-an-address", DataDir: base.DataDir, Mode: ModePersonal}},
+		{name: "port", cfg: Config{Addr: ":70000", DataDir: base.DataDir, Mode: ModePersonal}},
+		{name: "data file", cfg: Config{Addr: base.Addr, DataDir: dataFile, Mode: ModePersonal}},
+		{name: "mode", cfg: Config{Addr: base.Addr, DataDir: base.DataDir, Mode: Mode("broken")}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := Validate(tc.cfg); err == nil {
+				t.Fatal("非法配置应被拒绝")
+			}
+		})
+	}
+}
+
+func TestValidateAcceptsRuntimeConfig(t *testing.T) {
+	cfg := Config{Addr: "127.0.0.1:0", DataDir: filepath.Join(t.TempDir(), "nested", "data"), Mode: ModeTeam}
+	if err := Validate(cfg); err != nil {
+		t.Fatalf("合法配置不应失败: %v", err)
+	}
+}
+
 func TestLoadEnvModeOnly(t *testing.T) {
 	// mode 只认环境变量：文件即使含旧版 mode 字段也被忽略。
 	t.Setenv("KANSO_MODE", "team")

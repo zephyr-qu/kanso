@@ -36,6 +36,14 @@ const (
 	EventMemberCreated     = "member.created"
 	EventMemberUpdated     = "member.updated"
 	EventMemberDeleted     = "member.deleted"
+	EventWorkspaceCreated  = "workspace.created"
+	EventWorkspaceUpdated  = "workspace.updated"
+	EventWorkspaceDeleted  = "workspace.deleted"
+	EventProjectCreated    = "project.created"
+	EventProjectUpdated    = "project.updated"
+	EventProjectDeleted    = "project.deleted"
+	EventProjectPinned     = "project.pinned"
+	EventProjectUnpinned   = "project.unpinned"
 )
 
 // Event 描述一次写操作发生了什么，是活动记录与实时广播的唯一输入。
@@ -48,7 +56,8 @@ type Event struct {
 	// 为空时回退到 EntityID（任务类事件两者相同，评论类事件不同）。
 	ActivityTaskID string
 	Data           any // 活动 data（JSON）；仅 RecordActivity 时使用
-	// RecordActivity 表示是否写入所属任务的 activity 流（任务生命周期类事件）。
+	// RecordActivity 表示是否写入全局活动流。任务事件同时会出现在任务详情时间线；
+	// 其他资源事件只出现在全局活动页。
 	RecordActivity bool
 	// Actor 是执行者名（ADR-0013 决策 5）：为空时 dispatch 从 ctx 解析
 	// （personal 恒 "Admin"，team 为成员名）。写操作调用处无需显式传。
@@ -56,8 +65,7 @@ type Event struct {
 }
 
 // dispatch 是写操作副作用的唯一出口：先记活动，再广播。纪律只写一次。
-// 项目级事件：recordActivity（可选）→ 按项目广播。
-// 工作区级事件（标签 CRUD）：仅 BroadcastAll。
+// 项目级事件按项目归属写入并广播；工作区级事件写入工作区归属并全局广播。
 // Actor 为空时从 ctx 解析（ADR-0013 决策 5）——写操作调用处无需显式传。
 func (s *Service) dispatch(ctx context.Context, e Event) error {
 	if e.Actor == "" {
@@ -86,7 +94,42 @@ func (s *Service) recordEvent(ctx context.Context, q *gen.Queries, e Event) erro
 	if resourceID == "" {
 		resourceID = e.EntityID
 	}
-	return recordActivityWithQueries(ctx, q, resourceID, e.Action, e.Data, e.Actor)
+	resourceType := "task"
+	if e.ActivityTaskID == "" && !isTaskEvent(e.Action) {
+		resourceType = resourceTypeForAction(e.Action)
+	}
+	return recordActivityWithQueries(ctx, q, resourceType, resourceID, e.ProjectID, e.WorkspaceID, e.Action, e.Data, e.Actor)
+}
+
+func isTaskEvent(action string) bool {
+	switch action {
+	case EventTaskCreated, EventTaskUpdated, EventTaskMoved, EventTaskDeleted,
+		EventTaskArchived, EventTaskRestored, EventLabelAttached, EventLabelDetached,
+		EventCommentCreated, EventCommentDeleted, EventMilestoneAttached, EventMilestoneDetached:
+		return true
+	default:
+		return false
+	}
+}
+
+func resourceTypeForAction(action string) string {
+	switch action {
+	case EventColumnCreated, EventColumnUpdated, EventColumnMoved, EventColumnDeleted:
+		return "column"
+	case EventLabelCreated, EventLabelUpdated, EventLabelDeleted:
+		return "label"
+	case EventMilestoneCreated, EventMilestoneUpdated, EventMilestoneDeleted:
+		return "milestone"
+	case EventMemberCreated, EventMemberUpdated, EventMemberDeleted:
+		return "member"
+	case EventProjectCreated, EventProjectUpdated, EventProjectDeleted,
+		EventProjectPinned, EventProjectUnpinned:
+		return "project"
+	case EventWorkspaceCreated, EventWorkspaceUpdated, EventWorkspaceDeleted:
+		return "workspace"
+	default:
+		return "workspace"
+	}
 }
 
 // broadcastEvent must run after the transaction commits. Broadcast failures

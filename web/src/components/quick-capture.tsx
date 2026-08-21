@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDownIcon, PlusIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { toastManager } from "@/components/ui/toast";
 import {
 	Dialog,
 	DialogBackdrop,
@@ -100,6 +99,7 @@ export function QuickCapture({
 	const targetColumn = board?.columns[0];
 
 	const createTask = useMutation({
+		meta: { feedback: { success: "任务已创建", errorTitle: "创建任务失败" } },
 		mutationFn: (capturedTitle: string) =>
 			api<Task>(buildPath("columnTasks", { columnId: targetColumn!.id }), {
 				method: "POST",
@@ -110,16 +110,11 @@ export function QuickCapture({
 					labels: labelIds,
 				}),
 			}),
-		onSuccess: (_data, capturedTitle) => {
+		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: queryKeys.dashboard() });
 			queryClient.invalidateQueries({ queryKey: queryKeys.board(projectId) });
 			// 任务带截止日期，日历视图需同步失效（否则日历页停留时数据陈旧）。
 			queryClient.invalidateQueries({ queryKey: queryKeys.calendar() });
-			toastManager.add({
-				title: "已创建任务",
-				description: capturedTitle,
-				type: "success",
-			});
 			onClose();
 		},
 	});

@@ -1,4 +1,4 @@
-// 全局活动流（活动页 /api/activity 数据源）：拍平全部任务活动 + 项目名。
+// 全局活动流（活动页 /api/activity 数据源）：拍平所有已埋点资源活动 + 作用域名称。
 package service
 
 import (
@@ -29,7 +29,7 @@ func (s *Service) GetActivities(ctx context.Context) ([]ActivityItem, error) {
 	for _, r := range rows {
 		items = append(items, ActivityItem{
 			ID:           r.ID,
-			ResourceType: "task",
+			ResourceType: r.ResourceType,
 			ResourceID:   r.ResourceID,
 			ProjectName:  r.ProjectName,
 			Action:       r.Action,

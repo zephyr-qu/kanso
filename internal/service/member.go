@@ -197,14 +197,14 @@ func (s *Service) UpdateMemberProfile(ctx context.Context, memberID string, name
 	if err != nil {
 		return Member{}, fmt.Errorf("更新成员失败: %w", err)
 	}
-	// 工作区级事件：仅广播（ADR-0013 决策 4 修正——成员变更的活动记录本期不落库）。
-	// 仅改名触发广播；纯头像/配色变更不扰流。
+	// 仅改名触发活动与广播；纯头像/配色变更不扰流。
 	if newName != current.Name {
 		if err := s.dispatch(ctx, Event{
-			Action:      EventMemberUpdated,
-			WorkspaceID: current.WorkspaceID,
-			EntityID:    memberID,
-			Data:        map[string]string{"name": newName},
+			Action:         EventMemberUpdated,
+			WorkspaceID:    current.WorkspaceID,
+			EntityID:       memberID,
+			Data:           map[string]string{"name": newName},
+			RecordActivity: true,
 		}); err != nil {
 			return Member{}, err
 		}
@@ -243,12 +243,13 @@ func (s *Service) CreateMember(ctx context.Context, workspaceID, name string) (M
 	if err != nil {
 		return Member{}, fmt.Errorf("创建成员失败: %w", err)
 	}
-	// 工作区级事件：仅广播（成员变更的活动记录本期不落库，ADR-0013 决策 4 修正）。
+	// 工作区级事件同时写入全局活动流。
 	if err := s.dispatch(ctx, Event{
-		Action:      EventMemberCreated,
-		WorkspaceID: workspaceID,
-		EntityID:    member.ID,
-		Data:        map[string]string{"name": name},
+		Action:         EventMemberCreated,
+		WorkspaceID:    workspaceID,
+		EntityID:       member.ID,
+		Data:           map[string]string{"name": name},
+		RecordActivity: true,
 	}); err != nil {
 		return Member{}, err
 	}
@@ -268,12 +269,13 @@ func (s *Service) DeleteMember(ctx context.Context, memberID string) error {
 	if _, err := q.DeleteMember(ctx, memberID); err != nil {
 		return fmt.Errorf("删除成员失败: %w", err)
 	}
-	// 工作区级事件：仅广播（同 CreateMember）。
+	// 工作区级事件同时写入全局活动流。
 	return s.dispatch(ctx, Event{
-		Action:      EventMemberDeleted,
-		WorkspaceID: member.WorkspaceID,
-		EntityID:    memberID,
-		Data:        map[string]string{"name": member.Name},
+		Action:         EventMemberDeleted,
+		WorkspaceID:    member.WorkspaceID,
+		EntityID:       memberID,
+		Data:           map[string]string{"name": member.Name},
+		RecordActivity: true,
 	})
 }
 

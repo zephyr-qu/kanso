@@ -17,6 +17,7 @@ export function usePinnedProjects() {
 	});
 
 	const setPinned = useMutation({
+		meta: { feedback: { success: "置顶状态已更新", errorTitle: "更新置顶状态失败" } },
 		mutationFn: ({ projectId, pinned }: { projectId: string; pinned: boolean }) =>
 			api<void>(buildPath("setProjectPinned", { id: projectId }), {
 				method: "POST",

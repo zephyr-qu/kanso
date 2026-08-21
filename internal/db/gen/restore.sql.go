@@ -10,13 +10,15 @@ import (
 )
 
 const importActivities = `-- name: ImportActivities :exec
-INSERT INTO activity (id, resource_type, resource_id, action, data, created_at, actor) VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO activity (id, resource_type, resource_id, project_id, workspace_id, action, data, created_at, actor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type ImportActivitiesParams struct {
 	ID           string  `json:"id"`
 	ResourceType string  `json:"resourceType"`
 	ResourceID   string  `json:"resourceId"`
+	ProjectID    *string `json:"projectId"`
+	WorkspaceID  *string `json:"workspaceId"`
 	Action       string  `json:"action"`
 	Data         *string `json:"data"`
 	CreatedAt    string  `json:"createdAt"`
@@ -28,6 +30,8 @@ func (q *Queries) ImportActivities(ctx context.Context, arg ImportActivitiesPara
 		arg.ID,
 		arg.ResourceType,
 		arg.ResourceID,
+		arg.ProjectID,
+		arg.WorkspaceID,
 		arg.Action,
 		arg.Data,
 		arg.CreatedAt,

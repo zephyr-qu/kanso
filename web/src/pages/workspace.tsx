@@ -53,6 +53,7 @@ export default function WorkspacePage() {
 		});
 
 	const wsRenameMutation = useMutation({
+		meta: { feedback: { success: "工作区已更新", errorTitle: "重命名工作区失败" } },
 		mutationFn: (name: string) =>
 			api<Workspace>(buildPath("workspace", { id: workspaceId }), {
 				method: "PATCH",
@@ -61,6 +62,7 @@ export default function WorkspacePage() {
 		onSuccess: invalidateWorkspaces,
 	});
 	const wsDeleteMutation = useMutation({
+		meta: { feedback: { success: "工作区已删除", errorTitle: "删除工作区失败" } },
 		mutationFn: () =>
 			api<void>(buildPath("workspace", { id: workspaceId }), { method: "DELETE" }),
 		onSuccess: () => {
@@ -86,6 +88,7 @@ export default function WorkspacePage() {
 		enabled: shareProject !== null,
 	});
 	const createMutation = useMutation({
+		meta: { feedback: { success: "项目已创建", errorTitle: "创建项目失败" } },
 		mutationFn: (name: string) =>
 			api<Project>(buildPath("workspaceProjects", { workspaceId }), {
 				method: "POST",
@@ -95,6 +98,7 @@ export default function WorkspacePage() {
 	});
 
 	const renameMutation = useMutation({
+		meta: { feedback: { success: "项目已更新", errorTitle: "重命名项目失败" } },
 		mutationFn: ({ id, name }: { id: string; name: string }) =>
 			api<Project>(buildPath("project", { id }), {
 				method: "PATCH",
@@ -107,6 +111,7 @@ export default function WorkspacePage() {
 	});
 
 	const deleteMutation = useMutation({
+		meta: { feedback: { success: "项目已删除", errorTitle: "删除项目失败" } },
 		mutationFn: (id: string) =>
 			api<void>(buildPath("project", { id }), { method: "DELETE" }),
 		onSuccess: () => {

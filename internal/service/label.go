@@ -35,7 +35,7 @@ func (s *Service) CreateLabel(ctx context.Context, projectID, name string) (gen.
 	if err != nil {
 		return gen.Label{}, fmt.Errorf("创建标签失败: %w", err)
 	}
-	event := Event{Action: EventLabelCreated, ProjectID: projectID, EntityID: label.ID}
+	event := Event{Action: EventLabelCreated, ProjectID: projectID, EntityID: label.ID, Data: map[string]string{"name": label.Name}, RecordActivity: true}
 	if err := s.recordEvent(ctx, q, event); err != nil {
 		return gen.Label{}, err
 	}
@@ -66,7 +66,7 @@ func (s *Service) UpdateLabel(ctx context.Context, labelID string, name *string)
 	if err != nil {
 		return gen.Label{}, fmt.Errorf("更新标签失败: %w", err)
 	}
-	event := Event{Action: EventLabelUpdated, ProjectID: label.ProjectID, EntityID: label.ID}
+	event := Event{Action: EventLabelUpdated, ProjectID: label.ProjectID, EntityID: label.ID, Data: map[string]string{"name": label.Name}, RecordActivity: true}
 	if err := s.recordEvent(ctx, q, event); err != nil {
 		return gen.Label{}, err
 	}
@@ -96,7 +96,7 @@ func (s *Service) DeleteLabel(ctx context.Context, labelID string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
-	event := Event{Action: EventLabelDeleted, ProjectID: label.ProjectID, EntityID: labelID}
+	event := Event{Action: EventLabelDeleted, ProjectID: label.ProjectID, EntityID: labelID, Data: map[string]string{"name": label.Name}, RecordActivity: true}
 	if err := s.recordEvent(ctx, q, event); err != nil {
 		return err
 	}

@@ -24,7 +24,7 @@ func (a *API) getMe(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "成员不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "查询当前成员失败")
+		writeServiceError(w, err, "查询当前成员失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"member": member, "workspaceId": workspaceID, "mode": a.cfg.Mode})
@@ -34,7 +34,7 @@ func (a *API) getMe(w http.ResponseWriter, r *http.Request) {
 func (a *API) listMembers(w http.ResponseWriter, r *http.Request) {
 	members, err := a.svc.ListMembers(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "查询成员失败")
+		writeServiceError(w, err, "查询成员失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, members)
@@ -53,7 +53,7 @@ func (a *API) requireOwner(w http.ResponseWriter, r *http.Request) bool {
 		writeError(w, http.StatusUnauthorized, "成员不存在")
 		return false
 	}
-	writeError(w, http.StatusInternalServerError, "检查成员权限失败")
+	writeServiceError(w, err, "检查成员权限失败")
 	return false
 }
 
@@ -104,7 +104,7 @@ func (a *API) updateMember(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "成员名称不能为 Admin（保留名）")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "更新成员失败")
+		writeServiceError(w, err, "更新成员失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, member)
@@ -144,7 +144,7 @@ func (a *API) createMember(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "成员名称不能为 Admin（保留名）")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "创建成员失败")
+		writeServiceError(w, err, "创建成员失败")
 		return
 	}
 	writeJSON(w, http.StatusCreated, member)
@@ -164,7 +164,7 @@ func (a *API) deleteMember(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "不能删除所有者")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "删除成员失败")
+		writeServiceError(w, err, "删除成员失败")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -181,7 +181,7 @@ func (a *API) createMemberKey(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "成员不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "生成成员密钥失败")
+		writeServiceError(w, err, "生成成员密钥失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"key": key})

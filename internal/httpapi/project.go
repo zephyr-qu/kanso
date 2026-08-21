@@ -13,7 +13,7 @@ import (
 func (a *API) listProjects(w http.ResponseWriter, r *http.Request) {
 	projects, err := a.svc.ListProjects(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "查询项目列表失败")
+		writeServiceError(w, err, "查询项目列表失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, projects)
@@ -33,7 +33,7 @@ func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
 	}
 	project, err := a.svc.CreateProject(r.Context(), chi.URLParam(r, "id"), body.Name)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "创建项目失败")
+		writeServiceError(w, err, "创建项目失败")
 		return
 	}
 	writeJSON(w, http.StatusCreated, project)
@@ -51,7 +51,7 @@ func (a *API) renameProject(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "项目不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "重命名项目失败")
+		writeServiceError(w, err, "重命名项目失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, project)
@@ -67,7 +67,7 @@ func (a *API) deleteProject(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "项目不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "删除项目失败")
+		writeServiceError(w, err, "删除项目失败")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -77,7 +77,7 @@ func (a *API) deleteProject(w http.ResponseWriter, r *http.Request) {
 func (a *API) listPinnedProjects(w http.ResponseWriter, r *http.Request) {
 	projects, err := a.svc.ListPinnedProjects(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "查询置顶项目失败")
+		writeServiceError(w, err, "查询置顶项目失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, projects)
@@ -96,7 +96,7 @@ func (a *API) setProjectPinned(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "项目不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "更新置顶失败")
+		writeServiceError(w, err, "更新置顶失败")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

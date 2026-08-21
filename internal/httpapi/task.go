@@ -43,7 +43,7 @@ func (a *API) createTask(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "标签不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "创建任务失败")
+		writeServiceError(w, err, "创建任务失败")
 		return
 	}
 	writeJSON(w, http.StatusCreated, task)
@@ -80,7 +80,7 @@ func (a *API) updateTask(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadRequest, "不能跨项目移动任务")
 				return
 			}
-			writeError(w, http.StatusInternalServerError, "移动任务失败")
+			writeServiceError(w, err, "移动任务失败")
 			return
 		}
 		// 0006 Phase 3 任务 3.1：移动返回 Task（契约要求，此前返回 {ok:true}）。
@@ -98,7 +98,7 @@ func (a *API) updateTask(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "任务不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "更新任务失败")
+		writeServiceError(w, err, "更新任务失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, task)
@@ -111,7 +111,7 @@ func (a *API) deleteTask(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "任务不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "删除任务失败")
+		writeServiceError(w, err, "删除任务失败")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -124,7 +124,7 @@ func (a *API) archiveTask(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "任务不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "归档任务失败")
+		writeServiceError(w, err, "归档任务失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, task)
@@ -137,7 +137,7 @@ func (a *API) restoreTask(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "任务不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "恢复任务失败")
+		writeServiceError(w, err, "恢复任务失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, task)

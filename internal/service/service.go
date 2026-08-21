@@ -28,6 +28,40 @@ var ErrForbidden = errors.New("forbidden")
 // ErrInvalidBackup 表示备份快照缺少恢复所需的基础数据。
 var ErrInvalidBackup = errors.New("invalid backup")
 
+// ErrInvalidInput 表示请求参数或业务输入不符合领域约束。
+var ErrInvalidInput = errors.New("invalid input")
+
+// ErrConflict 表示请求与当前资源状态冲突。
+var ErrConflict = errors.New("conflict")
+
+type ErrorKind string
+
+const (
+	ErrorNotFound     ErrorKind = "not_found"
+	ErrorForbidden    ErrorKind = "forbidden"
+	ErrorInvalidInput ErrorKind = "invalid_input"
+	ErrorConflict     ErrorKind = "conflict"
+	ErrorInternal     ErrorKind = "internal"
+)
+
+// ClassifyError 将领域错误统一归类，HTTP/日志等适配层只依赖类别而不重复维护 sentinel 列表。
+func ClassifyError(err error) ErrorKind {
+	switch {
+	case errors.Is(err, ErrNotFound):
+		return ErrorNotFound
+	case errors.Is(err, ErrForbidden), errors.Is(err, ErrOwnerProtected):
+		return ErrorForbidden
+	case errors.Is(err, ErrInvalidInput), errors.Is(err, ErrInvalidBackup),
+		errors.Is(err, ErrCrossProjectMove), errors.Is(err, ErrLabelNotFound),
+		errors.Is(err, ErrReservedName):
+		return ErrorInvalidInput
+	case errors.Is(err, ErrConflict), errors.Is(err, ErrMemberLimit):
+		return ErrorConflict
+	default:
+		return ErrorInternal
+	}
+}
+
 // Broadcaster 是实时事件广播抽象（由 httpapi 注入 Hub）。
 type Broadcaster interface {
 	Broadcast(projectID string, event realtime.Event)
@@ -61,11 +95,20 @@ type Service struct {
 	db          *sql.DB
 	broadcaster Broadcaster
 	mode        config.Mode
+	backupDir   string
 }
 
 // New 构造 Service（mode 决定认证与归属语义，ADR-0013）。
 func New(database *sql.DB, mode config.Mode) *Service {
 	return &Service{db: database, mode: mode}
+}
+
+// Ping 检查服务依赖的 SQLite 数据库是否可用，供就绪探针使用。
+func (s *Service) Ping(ctx context.Context) error {
+	if err := s.db.PingContext(ctx); err != nil {
+		return fmt.Errorf("数据库不可用: %w", err)
+	}
+	return nil
 }
 
 // Mode 由字段持有（构造时注入），暂无外部读取方；如需暴露可在此添加。

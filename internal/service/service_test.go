@@ -194,6 +194,34 @@ func TestProjectLifecycle(t *testing.T) {
 	}
 }
 
+func TestListProjectsInProgressUsesTaskColumn(t *testing.T) {
+	env := newTestService(t)
+	ctx := context.Background()
+	wsID := defaultWorkspaceID(t, env)
+	project, err := env.svc.CreateProject(ctx, wsID, "进行中统计项目")
+	requireNoErr(t, err)
+	board, err := env.svc.GetBoard(ctx, project.ID)
+	requireNoErr(t, err)
+
+	// 已完成任务位于末列；项目虽然有中间列，但它不应被统计为进行中。
+	_, _, err = env.svc.CreateTask(ctx, board.Columns[len(board.Columns)-1].ID, "已完成任务", "", "", nil, nil)
+	requireNoErr(t, err)
+	summaries, err := env.svc.ListProjects(ctx, wsID)
+	requireNoErr(t, err)
+	if len(summaries) != 1 || summaries[0].InProgressCount != 0 {
+		t.Fatalf("已完成任务不应计入进行中: %+v", summaries)
+	}
+
+	// 放入中间列后，只有这一个任务应计入进行中。
+	_, _, err = env.svc.CreateTask(ctx, board.Columns[1].ID, "进行中任务", "", "", nil, nil)
+	requireNoErr(t, err)
+	summaries, err = env.svc.ListProjects(ctx, wsID)
+	requireNoErr(t, err)
+	if len(summaries) != 1 || summaries[0].InProgressCount != 1 {
+		t.Fatalf("中间列任务应计入进行中一次: %+v", summaries)
+	}
+}
+
 func TestSearchTasks(t *testing.T) {
 	env := newTestService(t)
 	ctx := context.Background()

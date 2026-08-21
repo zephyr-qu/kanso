@@ -88,12 +88,17 @@ CREATE TABLE activity (
     id TEXT PRIMARY KEY,
     resource_type TEXT NOT NULL,
     resource_id TEXT NOT NULL,
+    -- 审计记录必须能保留已删除资源的作用域 ID，因此这里不建立外键。
+    project_id TEXT,
+    workspace_id TEXT,
     action TEXT NOT NULL,
     data TEXT, -- JSON 字符串
     created_at TEXT NOT NULL,
     actor TEXT NOT NULL DEFAULT 'Admin' -- 归属身份（ADR-0013：personal 'Admin'，team 成员名）
 );
 CREATE INDEX idx_activity_resource ON activity (resource_type, resource_id);
+CREATE INDEX idx_activity_project ON activity (project_id, created_at);
+CREATE INDEX idx_activity_workspace ON activity (workspace_id, created_at);
 
 -- 0007: 成员（轻量 1-3 人小团队；owner/member 两级角色，多密钥认证）
 CREATE TABLE member (

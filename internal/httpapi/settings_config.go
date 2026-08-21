@@ -3,7 +3,6 @@
 package httpapi
 
 import (
-	"net"
 	"net/http"
 	"strings"
 
@@ -48,12 +47,12 @@ func (a *API) updateSettingsConfig(w http.ResponseWriter, r *http.Request) {
 	if !decodeBody(w, r, &req) {
 		return
 	}
-	if _, _, err := net.SplitHostPort(req.Addr); err != nil {
-		writeError(w, http.StatusBadRequest, "监听地址需形如 :8080 或 127.0.0.1:8080")
-		return
-	}
-	if req.DataDir == "" {
-		writeError(w, http.StatusBadRequest, "数据目录不能为空")
+	if err := config.Validate(config.Config{
+		Addr:    req.Addr,
+		DataDir: req.DataDir,
+		Mode:    a.cfg.Mode,
+	}); err != nil {
+		writeError(w, http.StatusBadRequest, "运行配置无效: "+err.Error())
 		return
 	}
 	// accessKey 可留空：表示未设置（下次启动随机生成，沿用既有行为）。
@@ -64,7 +63,7 @@ func (a *API) updateSettingsConfig(w http.ResponseWriter, r *http.Request) {
 		AccessKey: req.AccessKey,
 		WSOrigins: req.WSOrigins,
 	}); err != nil {
-		writeError(w, http.StatusInternalServerError, "写入配置文件失败: "+err.Error())
+		writeServiceError(w, err, "写入配置文件失败")
 		return
 	}
 
@@ -72,7 +71,7 @@ func (a *API) updateSettingsConfig(w http.ResponseWriter, r *http.Request) {
 	accessKeyApplied := false
 	if req.AccessKey != "" && req.AccessKey != a.cfg.AccessKey {
 		if err := a.svc.SeedOwnerMember(r.Context(), req.AccessKey); err != nil {
-			writeError(w, http.StatusInternalServerError, "密钥已写入文件但同步成员表失败: "+err.Error())
+			writeServiceError(w, err, "密钥已写入文件但同步成员表失败")
 			return
 		}
 		a.cfg.AccessKey = req.AccessKey

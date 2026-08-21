@@ -3,7 +3,10 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"kanso/internal/db/gen"
@@ -99,6 +102,9 @@ func TestGetBackup(t *testing.T) {
 	backup, err := env.svc.GetBackup(ctx)
 	requireNoErr(t, err)
 
+	if backup.Schema != BackupSchema || backup.Version != BackupVersion {
+		t.Fatalf("备份元数据不符: schema=%q version=%d", backup.Schema, backup.Version)
+	}
 	if backup.ExportedAt == "" {
 		t.Fatal("导出时间不应为空")
 	}
@@ -130,6 +136,46 @@ func TestGetBackup(t *testing.T) {
 		t.Fatal("备份活动不应为空")
 	}
 	_ = wsID
+}
+
+func TestImportBackupCreatesPreImportSnapshot(t *testing.T) {
+	env := newTestService(t)
+	ctx := context.Background()
+	_, _, cols := setupBoard(t, env)
+	_, _, err := env.svc.CreateTask(ctx, cols[0], "导入前快照任务", "", "med", nil, nil)
+	requireNoErr(t, err)
+
+	snapshotDir := filepath.Join(t.TempDir(), "backups")
+	env.svc.SetBackupDir(snapshotDir)
+	replacement := BackupData{
+		Schema:     BackupSchema,
+		Version:    BackupVersion,
+		ExportedAt: "2026-08-21T00:00:00Z",
+		Workspaces: []gen.Workspace{{ID: "replacement-ws", Name: "替换工作区", CreatedAt: "2026-08-21T00:00:00Z"}},
+	}
+	requireNoErr(t, env.svc.ImportBackup(ctx, replacement))
+
+	entries, err := os.ReadDir(snapshotDir)
+	if err != nil {
+		t.Fatalf("导入前快照目录应存在: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("导入前应生成 1 个快照，实际 %d", len(entries))
+	}
+	raw, err := os.ReadFile(filepath.Join(snapshotDir, entries[0].Name()))
+	if err != nil {
+		t.Fatalf("读取导入前快照失败: %v", err)
+	}
+	var snapshot BackupData
+	if err := json.Unmarshal(raw, &snapshot); err != nil {
+		t.Fatalf("导入前快照应为合法 JSON: %v", err)
+	}
+	if snapshot.Schema != BackupSchema || snapshot.Version != BackupVersion {
+		t.Fatalf("快照元数据不符: schema=%q version=%d", snapshot.Schema, snapshot.Version)
+	}
+	if len(snapshot.Tasks) != 1 || snapshot.Tasks[0].Title != "导入前快照任务" {
+		t.Fatalf("快照应包含导入前任务，实际 %+v", snapshot.Tasks)
+	}
 }
 
 // TestImportBackupRoundtrip 全量替换恢复：导出快照 → 制造新数据 → 导入 → 校验覆盖 + 还原 fidelity。

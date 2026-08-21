@@ -1,6 +1,6 @@
 // 路由（react-router v7，library 模式）：/login 公开，其余路由经 RequireAuth 守卫。
 // 守卫依据 zustand 登录态；401 事件（api.ts 广播）使登录态失效并重定向回登录页。
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import {
 	createBrowserRouter,
 	Navigate,
@@ -8,19 +8,20 @@ import {
 	RouterProvider,
 	useLocation,
 } from "react-router";
-import AppShell from "@/components/app-shell";
 import { UNAUTHORIZED_EVENT } from "@/lib/api";
-import ActivityPage from "@/pages/activity";
-import BoardPage from "@/pages/board";
-import CalendarPage from "@/pages/calendar";
-import DashboardPage from "@/pages/dashboard";
-import LoginPage from "@/pages/login";
-import ProfilePage from "@/pages/profile";
-import RedirectHome from "@/pages/redirect-home";
-import SettingsPage from "@/pages/settings";
-import TaskDetailPage from "@/pages/task-detail";
-import WorkspacePage from "@/pages/workspace";
 import { useAuthStore } from "@/store/auth";
+
+const AppShell = lazy(() => import("@/components/app-shell"));
+const ActivityPage = lazy(() => import("@/pages/activity"));
+const BoardPage = lazy(() => import("@/pages/board"));
+const CalendarPage = lazy(() => import("@/pages/calendar"));
+const DashboardPage = lazy(() => import("@/pages/dashboard"));
+const LoginPage = lazy(() => import("@/pages/login"));
+const ProfilePage = lazy(() => import("@/pages/profile"));
+const RedirectHome = lazy(() => import("@/pages/redirect-home"));
+const SettingsPage = lazy(() => import("@/pages/settings"));
+const TaskDetailPage = lazy(() => import("@/pages/task-detail"));
+const WorkspacePage = lazy(() => import("@/pages/workspace"));
 
 function RequireAuth() {
 	const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -66,5 +67,9 @@ const router = createBrowserRouter([
 ]);
 
 export default function App() {
-	return <RouterProvider router={router} />;
+	return (
+		<Suspense fallback={<div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">加载中…</div>}>
+			<RouterProvider router={router} />
+		</Suspense>
+	);
 }

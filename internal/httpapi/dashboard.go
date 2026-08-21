@@ -12,7 +12,7 @@ import (
 func (a *API) getDashboard(w http.ResponseWriter, r *http.Request) {
 	data, err := a.svc.GetDashboard(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "查询仪表盘失败")
+		writeServiceError(w, err, "查询仪表盘失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, data)
@@ -25,7 +25,7 @@ func (a *API) getBackup(w http.ResponseWriter, r *http.Request) {
 	}
 	data, err := a.svc.GetBackup(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "导出备份失败")
+		writeServiceError(w, err, "导出备份失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, data)
@@ -50,7 +50,7 @@ func (a *API) importBackup(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "备份文件格式无效")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "导入备份失败")
+		writeServiceError(w, err, "导入备份失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
@@ -60,7 +60,7 @@ func (a *API) importBackup(w http.ResponseWriter, r *http.Request) {
 func (a *API) getActivity(w http.ResponseWriter, r *http.Request) {
 	data, err := a.svc.GetActivities(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "查询活动失败")
+		writeServiceError(w, err, "查询活动失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, data)

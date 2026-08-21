@@ -10,7 +10,7 @@ func (a *API) searchTasks(w http.ResponseWriter, r *http.Request) {
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	results, err := a.svc.SearchTasks(r.Context(), query)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "搜索失败")
+		writeServiceError(w, err, "搜索失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, results)

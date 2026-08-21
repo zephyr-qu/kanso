@@ -1,5 +1,5 @@
 // 看板页：编排与渲染。数据/缓存/乐观更新逻辑都在领域 hooks 里（架构候选 1）。
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -7,13 +7,8 @@ import {
 	DragOverlay,
 	KeyboardSensor,
 	PointerSensor,
-	closestCenter,
-	pointerWithin,
-	rectIntersection,
 	useSensor,
 	useSensors,
-	type CollisionDetection,
-	type DragOverEvent,
 	type DragEndEvent,
 	type Announcements,
 } from "@dnd-kit/core";
@@ -22,10 +17,10 @@ import {
 	horizontalListSortingStrategy,
 	sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
-import { ArchiveIcon, ArrowDownIcon, ArrowUpIcon, MilestoneIcon, PencilIcon, PlusIcon, Share2Icon, TagIcon, TrashIcon } from "lucide-react";
+import { ArchiveIcon, MilestoneIcon, PencilIcon, Share2Icon, TrashIcon } from "lucide-react";
 import DatePicker from "@/components/date-picker";
 import { CSS } from "@dnd-kit/utilities";
-import { Link, useNavigate, useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import ConfirmDialog from "@/components/confirm-dialog";
 import LabelManagerDialog from "@/components/label-manager";
 import NameDialog from "@/components/name-dialog";
@@ -34,21 +29,13 @@ import MilestoneDetailDialog from "@/components/milestone-detail-dialog";
 import SortableColumn from "@/components/board/sortable-column";
 import { TaskCardView } from "@/components/board/sortable-task-card";
 import { Button } from "@/components/ui/button";
-import {
-	Select,
-	SelectItem,
-	SelectPopup,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import { Dialog, DialogBackdrop, DialogDescription, DialogHeader, DialogPanel, DialogPopup, DialogPortal, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverPopup, PopoverTrigger } from "@/components/ui/popover";
 import { recordProjectOpen } from "@/lib/recent-projects";
-import { PinToggleButton } from "@/components/pin-toggle-button";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
 import { queryKeys } from "@/hooks/query-keys";
-import { sortTasks, type SortConfig, type SortField } from "@/lib/sort-tasks";
+import { sortTasks } from "@/lib/sort-tasks";
 import { progressPct } from "@/lib/milestone-progress";
 import {
 	Empty,
@@ -58,60 +45,20 @@ import {
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
 import { useBoardData } from "@/hooks/use-board-data";
-import { useBoardSort, SORT_FIELDS } from "@/hooks/use-board-sort";
+import { useBoardSort } from "@/hooks/use-board-sort";
 import { useLabelMutations } from "@/hooks/use-label-mutations";
 import { useMilestoneMutations } from "@/hooks/use-milestone-mutations";
+import { useMilestoneLink } from "@/hooks/use-milestone-link";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useTaskMutations } from "@/hooks/use-task-mutations";
-import { useBoardDrag, swimlaneGroups, type OverType } from "@/hooks/use-board-drag";
+import { useBoardDrag, swimlaneGroups } from "@/hooks/use-board-drag";
+import { boardCollisionDetection, overSignal } from "@/lib/board-dnd";
 import { SwimlaneRow } from "@/components/board/swimlane-row";
 import type { Board, BoardColumn, Milestone } from "@/types/board";
 import type { Task } from "@/types/task";
 import type { Workspace } from "@/types/workspace";
-import { PageContent, PageHeader, PrimaryButton, QuietButton } from "@/components/kanso-ui";
-
-const boardCollisionDetection: CollisionDetection = (args) => {
-	const activeType = args.active.data.current?.type;
-	const columns = args.droppableContainers.filter(
-		(container) => container.data.current?.type === "column",
-	);
-
-	if (activeType === "column") {
-		return closestCenter({ ...args, droppableContainers: columns });
-	}
-
-	const columnHits = pointerWithin({ ...args, droppableContainers: columns });
-	const fallbackColumnHits = columnHits.length
-		? columnHits
-		: rectIntersection({ ...args, droppableContainers: columns });
-	const targetColumnId = fallbackColumnHits[0]?.id;
-	if (targetColumnId) {
-		const tasks = args.droppableContainers.filter(
-			(container) =>
-				container.data.current?.type === "task" &&
-				container.data.current?.columnId === targetColumnId,
-		);
-		const taskHits = closestCenter({ ...args, droppableContainers: tasks });
-		if (taskHits.length > 0) return taskHits;
-		return fallbackColumnHits.slice(0, 1);
-	}
-
-	return closestCenter({ ...args, droppableContainers: columns });
-};
-
-// 从 dnd-kit 事件提取 reducer 所需的语义载荷（overType + 半程布尔），其余索引数学全在 reducer 内。
-function overSignal(event: DragOverEvent | DragEndEvent): {
-	overId: string;
-	overType: OverType;
-	halfPassed: boolean;
-} {
-	const overId = event.over ? String(event.over.id) : "";
-	const overType: OverType = event.over?.data.current?.type === "column" ? "column" : "task";
-	const ar = event.active.rect.current.translated ?? event.active.rect.current.initial;
-	// 半程规则：拖拽卡中心到达/越过目标卡中心，则插入其后。
-	const halfPassed = ar && event.over ? ar.top + ar.height / 2 >= event.over.rect.top + event.over.rect.height / 2 : false;
-	return { overId, overType, halfPassed };
-}
+import { PageContent } from "@/components/kanso-ui";
+import { BoardToolbar } from "@/components/board/board-toolbar";
 
 export default function BoardPage() {
 	const { projectId = "", workspaceId = "" } = useParams();
@@ -138,46 +85,6 @@ export default function BoardPage() {
 	const [milestoneOpen, setMilestoneOpen] = useState(false);
 	const [shareOpen, setShareOpen] = useState(false);
 	const [detailMilestone, setDetailMilestone] = useState<Milestone | null>(null);
-	// 长按里程碑卡 → 拖线关联任务(松手时 attach 到目标任务)。
-	const [milestoneLink, setMilestoneLink] = useState<{
-		fromX: number; fromY: number; curX: number; curY: number;
-		milestoneId: string; targetTaskId: string | null;
-	} | null>(null);
-	const linkPressRef = useRef<{ x: number; y: number; timer: number } | null>(null);
-	const suppressClickRef = useRef(false);
-	const clearLinkPress = () => { if (linkPressRef.current) { window.clearTimeout(linkPressRef.current.timer); linkPressRef.current = null; } };
-	const startMilestoneLink = (e: React.PointerEvent, milestoneId: string) => {
-		clearLinkPress();
-		const x = e.clientX, y = e.clientY;
-		const t = window.setTimeout(() => {
-			suppressClickRef.current = true;
-			document.body.classList.add("no-select");
-			setMilestoneLink({ fromX: x, fromY: y, curX: x, curY: y, milestoneId, targetTaskId: null });
-		}, 300);
-		linkPressRef.current = { x, y, timer: t };
-	};
-	useEffect(() => {
-		const detectTask = (target: EventTarget | null): string | null => {
-			const card = (target as Element | null)?.closest?.("[data-task-id]");
-			return card ? card.getAttribute("data-task-id") : null;
-		};
-		const onSelectStart = (e: Event) => { if (linkPressRef.current) e.preventDefault(); };
-		const move = (ev: PointerEvent) => {
-			setMilestoneLink((l) => (l ? { ...l, curX: ev.clientX, curY: ev.clientY, targetTaskId: detectTask(ev.target) } : l));
-		};
-		const up = (ev: PointerEvent) => {
-			setMilestoneLink((l) => {
-				if (l) { const tid = detectTask(ev.target); if (tid) milestoneOps.attach.mutate({ taskId: tid, milestoneId: l.milestoneId }); }
-				return null;
-			});
-			clearLinkPress();
-		};
-		window.addEventListener("selectstart", onSelectStart);
-		window.addEventListener("pointermove", move);
-		window.addEventListener("pointerup", up);
-		return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
-		window.removeEventListener("selectstart", onSelectStart);
-	}, []);
 	const [newMilestone, setNewMilestone] = useState("");
 	// 里程碑行内编辑/删除状态。
 	const [editingMilestone, setEditingMilestone] = useState<{ id: string; name: string } | null>(null);
@@ -209,6 +116,9 @@ export default function BoardPage() {
 	});
 	// 里程碑所有操作收敛到领域 hook（建/改名/设截止/删除/关联，成功统一失效列表）。
 	const milestoneOps = useMilestoneMutations(projectId);
+	const { milestoneLink, startMilestoneLink, clearLinkPress, suppressClickRef } = useMilestoneLink(
+		(taskId, milestoneId) => milestoneOps.attach.mutate({ taskId, milestoneId }),
+	);
 
 	// 实时：其他窗口的写操作经 WS 推送后 invalidate 本页查询。
 	useRealtime(projectId, { deferInvalidation: dragState.activeId !== null });
@@ -219,7 +129,7 @@ export default function BoardPage() {
 			// Space 开始键盘拖拽；Enter 留给任务卡根节点打开详情（卡片同时是拖拽激活面）。
 			keyboardCodes: {
 				start: ["Space"],
-				cancel: ["Esc"],
+			cancel: ["Escape"],
 				end: ["Space", "Enter", "Tab"],
 			},
 			coordinateGetter: sortableKeyboardCoordinates,
@@ -266,99 +176,19 @@ export default function BoardPage() {
 	};
 	return (
 		<div className="flex h-full flex-col">
-			<PageHeader>
-				<div className="flex min-w-0 items-baseline gap-3">
-					<Link
-						to={`/w/${board?.project.workspaceId ?? ""}`}
-						className="kanso-board-breadcrumb__workspace"
-					>
-						{workspaceName}
-					</Link>
-					<span className="kanso-board-breadcrumb__separator">/</span>
-					<h1 className="truncate text-[17px] font-[650] tracking-tight">
-						{board?.project.name ?? "看板"}
-					</h1>
-					{board && <PinToggleButton projectId={projectId} name={board.project.name} />}
-				</div>
-				<div className="kanso-board-toolbar flex gap-2">
-					{/* 显示层排序切换器：字段（原顺序/标题/创建时间/优先级）+ 方向；不改写 position。 */}
-					<Select
-						value={sortConfig.field}
-						onValueChange={(value) => {
-							// S-17：与 use-board-sort 的 SORT_FIELD_MAP 单一来源比对（消除重复 switch）。
-							if (SORT_FIELDS.includes(value as SortField)) {
-								setSortConfig((current) => ({ ...current, field: value as SortField }));
-							}
-						}}
-					>
-						<SelectTrigger className="kanso-board-sort-trigger" aria-label="任务排序">
-							<SelectValue>
-								{sortConfig.field === "title"
-									? "标题"
-									: sortConfig.field === "createdAt"
-										? "创建时间"
-										: sortConfig.field === "priority"
-											? "优先级"
-											: "原顺序"}
-							</SelectValue>
-						</SelectTrigger>
-						<SelectPopup className="kanso-board-sort-popup">
-							<SelectItem value="position" className="kanso-board-sort-item">原顺序</SelectItem>
-							<SelectItem value="title" className="kanso-board-sort-item">标题</SelectItem>
-							<SelectItem value="createdAt" className="kanso-board-sort-item">创建时间</SelectItem>
-							<SelectItem value="priority" className="kanso-board-sort-item">优先级</SelectItem>
-						</SelectPopup>
-					</Select>
-						<Button
-							variant="ghost"
-							size="icon"
-							className="kanso-board-sort-direction"
-							aria-label={
-								sortConfig.direction === "asc" ? "切换为降序" : "切换为升序"
-							}
-							onClick={() =>
-								setSortConfig((c) => ({
-									...c,
-									direction: c.direction === "asc" ? "desc" : "asc",
-								}))
-							}
-						>
-							{sortConfig.direction === "asc" ? (
-								<ArrowUpIcon />
-							) : (
-								<ArrowDownIcon />
-							)}
-						</Button>
-					<QuietButton
-						size="icon"
-						aria-label="标签"
-						onClick={() => setLabelManagerOpen(true)}
-					>
-						<TagIcon />
-					</QuietButton>
-					<QuietButton
-						size="icon"
-						aria-label="归档"
-						onClick={() => setArchiveOpen(true)}
-					>
-						<ArchiveIcon />
-					</QuietButton>
-					<QuietButton
-						size="icon"
-						aria-label="里程碑"
-						onClick={() => setMilestoneOpen(true)}
-					>
-						<MilestoneIcon />
-					</QuietButton>
-					<div className="kanso-view-toggle" role="group" aria-label="看板视图">
-						<button type="button" aria-pressed={viewMode === "columns"} onClick={() => setViewMode("columns")}>列</button>
-						<button type="button" aria-pressed={viewMode === "swimlane"} onClick={() => setViewMode("swimlane")}>泳</button>
-					</div>
-					<PrimaryButton onClick={() => setCreateOpen(true)}>
-						<PlusIcon /> 新建列
-					</PrimaryButton>
-				</div>
-			</PageHeader>
+			<BoardToolbar
+				board={board}
+				workspaceName={workspaceName}
+				projectId={projectId}
+				sortConfig={sortConfig}
+				setSortConfig={setSortConfig}
+				viewMode={viewMode}
+				setViewMode={setViewMode}
+				setCreateOpen={setCreateOpen}
+				setLabelManagerOpen={setLabelManagerOpen}
+				setArchiveOpen={setArchiveOpen}
+				setMilestoneOpen={setMilestoneOpen}
+			/>
 
 			{isLoading ? (
 				<div className="flex flex-1 items-center justify-center">

@@ -161,7 +161,7 @@ func (s *Service) CreateColumn(ctx context.Context, projectID, name string, wipL
 	if err != nil {
 		return gen.Column{}, fmt.Errorf("创建列失败: %w", err)
 	}
-	if err := s.dispatch(ctx, Event{Action: EventColumnCreated, ProjectID: projectID, EntityID: column.ID}); err != nil {
+	if err := s.dispatch(ctx, Event{Action: EventColumnCreated, ProjectID: projectID, EntityID: column.ID, Data: map[string]string{"name": column.Name}, RecordActivity: true}); err != nil {
 		return gen.Column{}, err
 	}
 	return column, nil
@@ -176,7 +176,7 @@ func (s *Service) UpdateColumnWIP(ctx context.Context, columnID string, limit *i
 	if err != nil {
 		return gen.Column{}, mapNoRows(err)
 	}
-	if err := s.dispatch(ctx, Event{Action: EventColumnUpdated, ProjectID: column.ProjectID, EntityID: column.ID, Data: map[string]any{"wipLimit": limit}}); err != nil {
+	if err := s.dispatch(ctx, Event{Action: EventColumnUpdated, ProjectID: column.ProjectID, EntityID: column.ID, Data: map[string]any{"name": column.Name, "wipLimit": limit}, RecordActivity: true}); err != nil {
 		return gen.Column{}, err
 	}
 	return column, nil
@@ -191,7 +191,7 @@ func (s *Service) RenameColumn(ctx context.Context, columnID, name string) (gen.
 	if err != nil {
 		return gen.Column{}, mapNoRows(err)
 	}
-	if err := s.dispatch(ctx, Event{Action: EventColumnUpdated, ProjectID: column.ProjectID, EntityID: column.ID}); err != nil {
+	if err := s.dispatch(ctx, Event{Action: EventColumnUpdated, ProjectID: column.ProjectID, EntityID: column.ID, Data: map[string]string{"name": column.Name}, RecordActivity: true}); err != nil {
 		return gen.Column{}, err
 	}
 	return column, nil
@@ -222,7 +222,7 @@ func (s *Service) DeleteColumn(ctx context.Context, columnID string) error {
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("提交删除列事务失败: %w", err)
 	}
-	return s.dispatch(ctx, Event{Action: EventColumnDeleted, ProjectID: column.ProjectID, EntityID: columnID})
+	return s.dispatch(ctx, Event{Action: EventColumnDeleted, ProjectID: column.ProjectID, EntityID: columnID, Data: map[string]string{"name": column.Name}, RecordActivity: true})
 }
 
 // MoveColumn 把列移动到目标位置（0 起），整列列表重排（reindex）。
@@ -271,7 +271,7 @@ func (s *Service) MoveColumn(ctx context.Context, columnID string, targetPositio
 	if err := tx.Commit(); err != nil {
 		return gen.Column{}, fmt.Errorf("提交事务失败: %w", err)
 	}
-	if err := s.dispatch(ctx, Event{Action: EventColumnMoved, ProjectID: column.ProjectID, EntityID: columnID}); err != nil {
+	if err := s.dispatch(ctx, Event{Action: EventColumnMoved, ProjectID: column.ProjectID, EntityID: columnID, Data: map[string]string{"name": column.Name}, RecordActivity: true}); err != nil {
 		return gen.Column{}, err
 	}
 	// 返回移动后的最新列（position 已更新）。

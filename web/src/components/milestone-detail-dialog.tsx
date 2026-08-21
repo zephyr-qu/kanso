@@ -45,6 +45,7 @@ export default function MilestoneDetailDialog(props: {
 
 	const queryClient = useQueryClient();
 	const unlinkMutation = useMutation({
+		meta: { feedback: { success: "任务已解除里程碑", errorTitle: "解除里程碑失败" } },
 		mutationFn: (taskId: string) =>
 			api<void>(
 				buildPath("taskMilestones", { taskId, milestoneId: milestone!.id }),

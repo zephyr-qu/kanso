@@ -25,6 +25,7 @@ import {
 	persistMockDb,
 	projectSummaries,
 	recordTaskActivity,
+	recordScopedActivity,
 	search,
 	syncTask,
 	taskDetail,
@@ -84,6 +85,9 @@ export const handlers = [
 		pinnedProjectIds = pinned
 			? [...new Set([...pinnedProjectIds, id])]
 			: pinnedProjectIds.filter((x) => x !== id);
+		const project = findProject(id);
+		if (project) recordScopedActivity("project", project.id, project.id, pinned ? "project.pinned" : "project.unpinned", { name: project.name });
+		persistMockDb();
 		return new HttpResponse(null, { status: 204 });
 	}),
 	http.post(mswPattern("authVerify"), async ({ request }) => {
@@ -114,10 +118,12 @@ export const handlers = [
 		for (const list of Object.values(getMockDb().members)) {
 			const member = list.find((m) => m.id === id);
 			if (member) {
+				const previousName = member.name;
 				if (body.name?.trim()) member.name = body.name.trim();
 				if (body.avatarColor) member.avatarColor = body.avatarColor;
 				if (typeof body.avatar === "string") member.avatar = body.avatar;
 				else if (body.avatar === null) delete member.avatar;
+				if (body.name?.trim() && member.name !== previousName) recordScopedActivity("member", member.id, "", "member.updated", { name: member.name });
 				return HttpResponse.json(persistAnd(member));
 			}
 		}
@@ -139,12 +145,19 @@ export const handlers = [
 		if (!name) return error("成员名称不能为空", 400);
 		const result = createMember(workspaceId, name);
 		if (!result.ok) return error(result.error, 400);
+		recordScopedActivity("member", result.member.id, "", "member.created", { name: result.member.name });
 		return HttpResponse.json(result.member, { status: 201 });
 	}),
 	// 删除成员：所有者受保护，同时清除其访问密钥。
 	http.delete(mswPattern("member"), async ({ params }) => {
-		const result = deleteMember(textParam(params.id));
+		const memberId = textParam(params.id);
+		const member = Object.values(getMockDb().members).flat().find((item) => item.id === memberId);
+		const result = deleteMember(memberId);
 		if (!result.ok) return error(result.error, 400);
+		if (member) {
+			recordScopedActivity("member", member.id, "", "member.deleted", { name: member.name });
+			persistMockDb();
+		}
 		return new HttpResponse(null, { status: 204 });
 	}),
 
@@ -160,6 +173,7 @@ export const handlers = [
 		db.workspaces.push(workspace);
 		db.projects[workspace.id] = [];
 		db.labels[workspace.id] = [];
+		recordScopedActivity("workspace", workspace.id, "", "workspace.created", { name: workspace.name }, workspace.name);
 		return HttpResponse.json(persistAnd(workspace), { status: 201 });
 	}),
 	http.patch(mswPattern("workspace"), async ({ params, request }) => {
@@ -167,12 +181,14 @@ export const handlers = [
 		if (!workspace) return error("工作区不存在", 404);
 		const body = await request.json() as { name?: string };
 		if (body.name?.trim()) workspace.name = body.name.trim();
+		if (body.name?.trim()) recordScopedActivity("workspace", workspace.id, "", "workspace.updated", { name: workspace.name }, workspace.name);
 		return HttpResponse.json(persistAnd(workspace));
 	}),
 	http.delete(mswPattern("workspace"), async ({ params }) => {
 		const workspaceId = textParam(params.id);
 		const db = getMockDb();
-		if (!db.workspaces.some((item) => item.id === workspaceId)) return error("工作区不存在", 404);
+		const workspace = db.workspaces.find((item) => item.id === workspaceId);
+		if (!workspace) return error("工作区不存在", 404);
 		for (const project of db.projects[workspaceId] ?? []) {
 			for (const task of db.boards[project.id]?.columns.flatMap((column) => column.tasks) ?? []) delete db.details[task.id];
 			delete db.boards[project.id];
@@ -182,6 +198,7 @@ export const handlers = [
 		}
 		db.workspaces = db.workspaces.filter((item) => item.id !== workspaceId);
 		delete db.projects[workspaceId];
+		recordScopedActivity("workspace", workspaceId, "", "workspace.deleted", { name: workspace.name }, workspace.name);
 		persistMockDb();
 		return new HttpResponse(null, { status: 204 });
 	}),
@@ -202,6 +219,7 @@ export const handlers = [
 		const columns: BoardColumn[] = columnNames.map((name, position) => ({ id: newMockId("column"), projectId: project.id, name, position, createdAt: now(), wipLimit: null, tasks: [] }));
 		getMockDb().boards[project.id] = { project, columns, labels: getMockDb().labels[project.id] ?? [] };
 		getMockDb().milestones[project.id] = [];
+		recordScopedActivity("project", project.id, project.id, "project.created", { name: project.name });
 		return HttpResponse.json(persistAnd(project), { status: 201 });
 	}),
 	http.patch(mswPattern("project"), async ({ params, request }) => {
@@ -213,6 +231,7 @@ export const handlers = [
 		const currentBoard = getMockDb().boards[project.id];
 		if (currentBoard) currentBoard.project = project;
 		for (const detail of Object.values(getMockDb().details)) if (detail.task.projectId === project.id) detail.projectName = project.name;
+		if (body.name?.trim()) recordScopedActivity("project", project.id, project.id, "project.updated", { name: project.name });
 		return HttpResponse.json(persistAnd(project));
 	}),
 	http.delete(mswPattern("project"), async ({ params }) => {
@@ -226,6 +245,7 @@ export const handlers = [
 		for (const taskId of Object.keys(db.details)) if (db.details[taskId].task.projectId === projectId) delete db.details[taskId];
 		db.activities = db.activities.filter((activity) => activity.projectId !== projectId);
 		delete db.labels[projectId];
+		recordScopedActivity("project", projectId, projectId, "project.deleted", { name: project.name }, project.name);
 		persistMockDb();
 		return new HttpResponse(null, { status: 204 });
 	}),
@@ -276,6 +296,7 @@ export const handlers = [
 		const body = await request.json() as { name?: string; wipLimit?: number | null };
 		const column: BoardColumn = { id: newMockId("column"), projectId, name: body.name?.trim() || "新列", position: currentBoard.columns.length, createdAt: now(), wipLimit: body.wipLimit ?? null, tasks: [] };
 		currentBoard.columns.push(column);
+		recordScopedActivity("column", column.id, projectId, "column.created", { name: column.name });
 		return HttpResponse.json(persistAnd({ ...column, tasks: undefined }), { status: 201 });
 	}),
 	http.patch(mswPattern("column"), async ({ params, request }) => {
@@ -290,6 +311,7 @@ export const handlers = [
 			hit.board.columns.splice(Math.min(Math.max(body.position, 0), hit.board.columns.length), 0, hit.column);
 			hit.board.columns.forEach((column, index) => { column.position = index; });
 		}
+		recordScopedActivity("column", hit.column.id, hit.board.project.id, typeof body.position === "number" ? "column.moved" : "column.updated", { name: hit.column.name, ...(typeof body.position !== "number" ? { wipLimit: hit.column.wipLimit } : {}) });
 		persistMockDb();
 		return HttpResponse.json({ ...hit.column, tasks: undefined });
 	}),
@@ -298,6 +320,7 @@ export const handlers = [
 		if (!hit) return error("列不存在", 404);
 		const db = getMockDb();
 		for (const task of hit.column.tasks) delete db.details[task.id];
+		recordScopedActivity("column", hit.column.id, hit.board.project.id, "column.deleted", { name: hit.column.name });
 		hit.board.columns = hit.board.columns.filter((column) => column.id !== hit.column.id);
 		hit.board.columns.forEach((column, index) => { column.position = index; });
 		persistMockDb();
@@ -423,6 +446,7 @@ export const handlers = [
 		const projectLabels = (getMockDb().labels[projectId] ??= []);
 		projectLabels.push(label);
 		if (getMockDb().boards[projectId]) getMockDb().boards[projectId].labels = projectLabels;
+		recordScopedActivity("label", label.id, projectId, "label.created", { name: label.name });
 		return HttpResponse.json(persistAnd(label), { status: 201 });
 	}),
 	http.patch(mswPattern("label"), async ({ params, request }) => {
@@ -431,11 +455,13 @@ export const handlers = [
 		const body = await request.json() as { name?: string };
 		if (body.name?.trim()) found.label.name = body.name.trim();
 		for (const task of Object.values(getMockDb().boards).flatMap((item) => item.columns.flatMap((column) => column.tasks))) task.labels = task.labels?.map((label) => label.id === found.label.id ? found.label : label);
+		recordScopedActivity("label", found.label.id, found.label.projectId, "label.updated", { name: found.label.name });
 		return HttpResponse.json(persistAnd(found.label));
 	}),
 	http.delete(mswPattern("label"), async ({ params }) => {
 		const found = findLabel(textParam(params.id));
 		if (!found) return error("标签不存在", 404);
+		recordScopedActivity("label", found.label.id, found.label.projectId, "label.deleted", { name: found.label.name });
 		found.list.splice(found.list.indexOf(found.label), 1);
 		for (const board of Object.values(getMockDb().boards)) { board.labels = board.labels.filter((label) => label.id !== found.label.id); for (const task of board.columns.flatMap((column) => column.tasks)) { task.labels = task.labels?.filter((label) => label.id !== found.label.id); syncTask(task); } }
 		persistMockDb();
@@ -462,6 +488,7 @@ export const handlers = [
 		const body = await request.json() as { name?: string; dueDate?: string | null };
 		const milestone = { id: newMockId("milestone"), projectId, name: body.name?.trim() || "新里程碑", dueDate: body.dueDate ?? null, createdAt: now() };
 		(getMockDb().milestones[projectId] ??= []).push(milestone);
+		recordScopedActivity("milestone", milestone.id, projectId, "milestone.created", { name: milestone.name });
 		return HttpResponse.json(persistAnd(milestone), { status: 201 });
 	}),
 	http.patch(mswPattern("milestone"), async ({ params, request }) => {
@@ -471,11 +498,14 @@ export const handlers = [
 		const body = await request.json() as { name?: string; dueDate?: string | null };
 		if (body.name?.trim()) milestone.name = body.name.trim();
 		if ("dueDate" in body) milestone.dueDate = body.dueDate ?? null;
+		recordScopedActivity("milestone", milestone.id, milestone.projectId, "milestone.updated", { name: milestone.name });
 		return HttpResponse.json(persistAnd(milestone));
 	}),
 	http.delete(mswPattern("milestone"), async ({ params }) => {
 		const hit = findMilestone(textParam(params.id));
 		if (!hit) return error("里程碑不存在", 404);
+		const milestone = getMockDb().milestones[hit.projectId][hit.index];
+		recordScopedActivity("milestone", milestone.id, milestone.projectId, "milestone.deleted", { name: milestone.name });
 		getMockDb().milestones[hit.projectId].splice(hit.index, 1);
 		persistMockDb();
 		return new HttpResponse(null, { status: 204 });

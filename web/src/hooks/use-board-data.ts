@@ -34,6 +34,7 @@ export function useBoardData(projectId: string) {
 	});
 
 	const createColumn = useMutation({
+		meta: { feedback: { success: "列已创建", errorTitle: "创建列失败" } },
 		mutationFn: (name: string) =>
 			api<Column>(buildPath("projectColumns", { projectId }), {
 				method: "POST",
@@ -43,6 +44,7 @@ export function useBoardData(projectId: string) {
 	});
 
 	const renameColumn = useMutation({
+		meta: { feedback: { success: "列已更新", errorTitle: "更新列失败" } },
 		mutationFn: ({ id, name }: { id: string; name: string }) =>
 			api<Column>(buildPath("column", { id }), {
 				method: "PATCH",
@@ -52,6 +54,7 @@ export function useBoardData(projectId: string) {
 	});
 
 	const deleteColumn = useMutation({
+		meta: { feedback: { success: "列已删除", errorTitle: "删除列失败" } },
 		mutationFn: (id: string) =>
 			api<void>(buildPath("column", { id }), { method: "DELETE" }),
 		onSuccess: () => invalidateBoard(queryClient, projectId),
@@ -59,6 +62,7 @@ export function useBoardData(projectId: string) {
 
 	// 列拖拽：乐观更新 + 失败回滚。
 	const moveColumn = useMutation({
+		meta: { feedback: { success: "列顺序已更新", errorTitle: "移动列失败" } },
 		mutationFn: ({ id, position }: { id: string; position: number }) =>
 			api<void>(buildPath("column", { id }), {
 				method: "PATCH",

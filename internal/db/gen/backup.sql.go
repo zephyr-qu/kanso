@@ -10,7 +10,7 @@ import (
 )
 
 const listAllActivities = `-- name: ListAllActivities :many
-SELECT id, resource_type, resource_id, "action", data, created_at, actor FROM activity
+SELECT id, resource_type, resource_id, project_id, workspace_id, "action", data, created_at, actor FROM activity
 ORDER BY created_at
 `
 
@@ -27,6 +27,8 @@ func (q *Queries) ListAllActivities(ctx context.Context) ([]Activity, error) {
 			&i.ID,
 			&i.ResourceType,
 			&i.ResourceID,
+			&i.ProjectID,
+			&i.WorkspaceID,
 			&i.Action,
 			&i.Data,
 			&i.CreatedAt,

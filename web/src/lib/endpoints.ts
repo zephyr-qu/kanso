@@ -1,7 +1,7 @@
 // 端点面单一来源（架构候选 4）：路径模板表。
 // 前端用 buildPath 填充 :param 得请求路径；Mock 用 mswPattern 派生路由（* + 模板）。
 // 改路由只需改这里一处；「前端已消费 vs mock 已注册」的漂移在编译/对账层面暴露。
-// 注：/api/settings/backup（settingsBackup）暂为「契约已定义、UI 未做」，保留待用。
+// settingsBackup 已由设置页消费；导入/导出均要求 owner 权限。
 export const ENDPOINT_TEMPLATES = {
 	// 认证与身份
 	authVerify: "/api/auth/verify",

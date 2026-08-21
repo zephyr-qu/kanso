@@ -15,7 +15,7 @@ func (a *API) listMilestones(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "项目不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "查询里程碑失败")
+		writeServiceError(w, err, "查询里程碑失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -39,7 +39,7 @@ func (a *API) createMilestone(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "项目不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "创建里程碑失败")
+		writeServiceError(w, err, "创建里程碑失败")
 		return
 	}
 	writeJSON(w, http.StatusCreated, item)
@@ -63,7 +63,7 @@ func (a *API) updateMilestone(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "里程碑不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "更新里程碑失败")
+		writeServiceError(w, err, "更新里程碑失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, item)
@@ -75,7 +75,7 @@ func (a *API) deleteMilestone(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "里程碑不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "删除里程碑失败")
+		writeServiceError(w, err, "删除里程碑失败")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -92,7 +92,7 @@ func (a *API) attachMilestone(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "任务和里程碑不属于同一项目")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "关联里程碑失败")
+		writeServiceError(w, err, "关联里程碑失败")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -109,7 +109,7 @@ func (a *API) detachMilestone(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "任务和里程碑不属于同一项目")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "解除里程碑失败")
+		writeServiceError(w, err, "解除里程碑失败")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -123,7 +123,7 @@ func (a *API) listMilestoneTasks(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "里程碑不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "查询里程碑任务失败")
+		writeServiceError(w, err, "查询里程碑任务失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, tasks)

@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"io/fs"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -85,6 +86,8 @@ func TestMigrateBeginError(t *testing.T) {
 
 	if err := Migrate(db); err == nil {
 		t.Fatal("Begin 失败时应返回错误")
+	} else if !strings.Contains(err.Error(), "0001-test.sql") {
+		t.Fatalf("迁移 Begin 错误应包含文件上下文，实际 %v", err)
 	}
 }
 
@@ -154,6 +157,8 @@ func TestMigrateReadFileError(t *testing.T) {
 	defer db.Close()
 	if err := Migrate(db); err == nil {
 		t.Fatal("读取迁移文件失败时应返回错误")
+	} else if !strings.Contains(err.Error(), "0001.sql") {
+		t.Fatalf("读取迁移文件错误应包含文件名，实际 %v", err)
 	}
 }
 

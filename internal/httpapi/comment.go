@@ -17,7 +17,7 @@ func (a *API) getTaskDetail(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "任务不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "查询任务详情失败")
+		writeServiceError(w, err, "查询任务详情失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, detail)
@@ -41,7 +41,7 @@ func (a *API) createComment(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "任务不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "发表评论失败")
+		writeServiceError(w, err, "发表评论失败")
 		return
 	}
 	writeJSON(w, http.StatusCreated, comment)
@@ -54,7 +54,7 @@ func (a *API) deleteComment(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "评论不存在")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "删除评论失败")
+		writeServiceError(w, err, "删除评论失败")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
