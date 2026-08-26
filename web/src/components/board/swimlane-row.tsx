@@ -1,6 +1,7 @@
 // 泳道视图的行 / 格子 / 任务卡（从 board.tsx 迁出，与 components/board 其余零件同源）。
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import { memo, useMemo } from "react";
 import { CalendarIcon } from "lucide-react";
 import type { SwimlaneGroup } from "@/hooks/use-board-drag";
 import type { BoardColumn } from "@/types/board";
@@ -12,13 +13,23 @@ type SwimlaneActions = {
 	onArchive: (task: Task) => void;
 };
 
-export function SwimlaneRow({
+export const SwimlaneRow = memo(function SwimlaneRow({
 	group,
 	columns,
 	onOpen,
 	onEdit,
 	onArchive,
 }: { group: SwimlaneGroup; columns: BoardColumn[] } & SwimlaneActions) {
+	const tasksByColumn = useMemo(() => {
+		const result = new Map<string, Task[]>();
+		for (const task of group.tasks) {
+			const tasks = result.get(task.columnId);
+			if (tasks) tasks.push(task);
+			else result.set(task.columnId, [task]);
+		}
+		return result;
+	}, [group.tasks]);
+
 	return (
 		<section className="kanso-swimlane">
 			<header className="kanso-swimlane__header">
@@ -29,7 +40,7 @@ export function SwimlaneRow({
 			</header>
 			<div className="kanso-swimlane__grid">
 				{columns.map((column) => {
-					const tasks = group.tasks.filter((task) => task.columnId === column.id);
+					const tasks = tasksByColumn.get(column.id) ?? EMPTY_TASKS;
 					return (
 						<SwimlaneCell
 							key={column.id}
@@ -45,7 +56,11 @@ export function SwimlaneRow({
 			</div>
 		</section>
 	);
-}
+});
+
+SwimlaneRow.displayName = "SwimlaneRow";
+
+const EMPTY_TASKS: Task[] = [];
 
 function SwimlaneCell(
 	props: { id: string; columnName: string; tasks: Task[] } & SwimlaneActions,

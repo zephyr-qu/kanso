@@ -6,8 +6,8 @@ import {
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVerticalIcon, PencilIcon, TrashIcon } from "lucide-react";
-import { Fragment } from "react";
+import { GripVerticalIcon, TrashIcon } from "lucide-react";
+import { Fragment, memo, useRef, useState } from "react";
 import AddTaskForm from "@/components/board/add-task-form";
 import SortableTaskCard, { TaskCardView } from "@/components/board/sortable-task-card";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import type { BoardColumn } from "@/types/board";
 import type { Label } from "@/types/label";
 import type { Task } from "@/types/task";
 
-export default function SortableColumn(props: {
+const SortableColumn = memo(function SortableColumn(props: {
 	column: BoardColumn;
 	dragOver: boolean;
 	/** 正在拖拽的任务 id（跨列动画用；非拖拽/列拖拽时为 null）。 */
@@ -29,7 +29,7 @@ export default function SortableColumn(props: {
 	draggedTask: Task | null;
 	labels: Label[];
 	sortConfig: SortConfig;
-	onRename: (column: BoardColumn) => void;
+	onRename: (column: BoardColumn, name: string) => void;
 	onDelete: (column: BoardColumn) => void;
 	onAddTask: (columnId: string, title: string, priority: string) => void;
 	onOpenTask: (task: Task) => void;
@@ -52,6 +52,29 @@ export default function SortableColumn(props: {
 		onArchiveTask,
 		onToggleLabel,
 	} = props;
+	const [editingName, setEditingName] = useState(false);
+	const [draftName, setDraftName] = useState(column.name);
+	const renameHandled = useRef(false);
+
+	function beginRename() {
+		renameHandled.current = false;
+		setDraftName(column.name);
+		setEditingName(true);
+	}
+
+	function cancelRename() {
+		renameHandled.current = true;
+		setDraftName(column.name);
+		setEditingName(false);
+	}
+
+	function commitRename() {
+		if (renameHandled.current) return;
+		renameHandled.current = true;
+		const nextName = draftName.trim();
+		setEditingName(false);
+		if (nextName && nextName !== column.name) onRename(column, nextName);
+	}
 	const {
 		attributes,
 		listeners,
@@ -143,7 +166,35 @@ export default function SortableColumn(props: {
 					>
 						<GripVerticalIcon className="kanso-board-column__grip" />
 					</button>
-					<span className="min-w-0 truncate">{column.name}</span>
+					{editingName ? (
+						<input
+							className="kanso-board-column__name-input"
+							value={draftName}
+							autoFocus
+							aria-label={`编辑列名：${column.name}`}
+							onChange={(event) => setDraftName(event.target.value)}
+							onPointerDown={(event) => event.stopPropagation()}
+							onKeyDown={(event) => {
+								if (event.key === "Enter") {
+									event.preventDefault();
+									commitRename();
+								}
+								if (event.key === "Escape") cancelRename();
+							}}
+							onBlur={commitRename}
+						/>
+					) : (
+						<button
+							type="button"
+							className="kanso-board-column__name-trigger"
+							title="点击修改列名"
+							aria-label={`修改列名：${column.name}`}
+							onClick={beginRename}
+							onPointerDown={(event) => event.stopPropagation()}
+						>
+							{column.name}
+						</button>
+					)}
 					<span className={`kanso-board-column__count ${column.wipLimit !== null && column.wipLimit !== undefined && column.tasks.length > column.wipLimit ? "kanso-wip-warning" : ""}`}>
 						{column.tasks.length}{column.wipLimit !== null && column.wipLimit !== undefined ? ` / ${column.wipLimit}` : ""}
 					</span>
@@ -152,7 +203,6 @@ export default function SortableColumn(props: {
 					className="kanso-board-column__actions"
 					onPointerDown={(e) => e.stopPropagation()}
 				>
-					<Button variant="ghost" size="icon" className="size-6" aria-label={`重命名列 ${column.name}`} onClick={() => onRename(column)}><PencilIcon /></Button>
 					<Button variant="ghost" size="icon" className="size-6 text-destructive" aria-label={`删除列 ${column.name}`} onClick={() => onDelete(column)}><TrashIcon /></Button>
 				</div>
 			</div>
@@ -174,4 +224,6 @@ export default function SortableColumn(props: {
 			</div>
 		</div>
 	);
-}
+});
+
+export default SortableColumn;

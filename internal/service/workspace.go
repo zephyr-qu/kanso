@@ -54,11 +54,17 @@ func (s *Service) ListWorkspaces(ctx context.Context) ([]gen.Workspace, error) {
 
 // CreateWorkspace 创建新工作区。
 func (s *Service) CreateWorkspace(ctx context.Context, name string) (gen.Workspace, error) {
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return gen.Workspace{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
 	workspaceID, err := id.New()
 	if err != nil {
 		return gen.Workspace{}, err
 	}
-	workspace, err := gen.New(s.db).CreateWorkspace(ctx, gen.CreateWorkspaceParams{
+	workspace, err := q.CreateWorkspace(ctx, gen.CreateWorkspaceParams{
 		ID:        workspaceID,
 		Name:      name,
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
@@ -66,7 +72,7 @@ func (s *Service) CreateWorkspace(ctx context.Context, name string) (gen.Workspa
 	if err != nil {
 		return gen.Workspace{}, err
 	}
-	if err := s.dispatch(ctx, Event{Action: EventWorkspaceCreated, WorkspaceID: workspace.ID, EntityID: workspace.ID, Data: map[string]string{"name": workspace.Name}, RecordActivity: true}); err != nil {
+	if err := s.commitEvent(ctx, tx, q, Event{Action: EventWorkspaceCreated, WorkspaceID: workspace.ID, EntityID: workspace.ID, Data: map[string]string{"name": workspace.Name}, RecordActivity: true}); err != nil {
 		return gen.Workspace{}, err
 	}
 	return workspace, nil
@@ -74,14 +80,20 @@ func (s *Service) CreateWorkspace(ctx context.Context, name string) (gen.Workspa
 
 // RenameWorkspace 重命名工作区；不存在时返回 ErrNotFound。
 func (s *Service) RenameWorkspace(ctx context.Context, workspaceID, name string) (gen.Workspace, error) {
-	workspace, err := gen.New(s.db).UpdateWorkspaceName(ctx, gen.UpdateWorkspaceNameParams{
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return gen.Workspace{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	workspace, err := q.UpdateWorkspaceName(ctx, gen.UpdateWorkspaceNameParams{
 		ID:   workspaceID,
 		Name: name,
 	})
 	if err != nil {
 		return gen.Workspace{}, mapNoRows(err)
 	}
-	if err := s.dispatch(ctx, Event{Action: EventWorkspaceUpdated, WorkspaceID: workspace.ID, EntityID: workspace.ID, Data: map[string]string{"name": workspace.Name}, RecordActivity: true}); err != nil {
+	if err := s.commitEvent(ctx, tx, q, Event{Action: EventWorkspaceUpdated, WorkspaceID: workspace.ID, EntityID: workspace.ID, Data: map[string]string{"name": workspace.Name}, RecordActivity: true}); err != nil {
 		return gen.Workspace{}, err
 	}
 	return workspace, nil
@@ -122,8 +134,5 @@ func (s *Service) DeleteWorkspace(ctx context.Context, workspaceID string) error
 	if n == 0 {
 		return ErrNotFound
 	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("提交删除工作区事务失败: %w", err)
-	}
-	return s.dispatch(ctx, Event{Action: EventWorkspaceDeleted, WorkspaceID: workspaceID, EntityID: workspaceID, Data: map[string]string{"name": workspace.Name}, RecordActivity: true})
+	return s.commitEvent(ctx, tx, q, Event{Action: EventWorkspaceDeleted, WorkspaceID: workspaceID, EntityID: workspaceID, Data: map[string]string{"name": workspace.Name}, RecordActivity: true})
 }

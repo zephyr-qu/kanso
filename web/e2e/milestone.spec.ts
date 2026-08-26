@@ -44,7 +44,10 @@ test("里程碑:看板头弹层 新建→重命名→设截止→删除", async 
 	// 设截止:常显 DatePicker,点触发按钮直接弹日历选今天。
 	await page.getByLabel("里程碑截止日期").click();
 	await page.getByRole("button", { name: String(new Date().getDate()) }).click();
-	await expect(dialog.getByLabel("里程碑截止日期")).toContainText(String(new Date().getDate()), { timeout: 5000 });
+	await expect(dialog.getByLabel("里程碑截止日期")).toContainText(
+		String(new Date().getDate()),
+		{ timeout: 5000 },
+	);
 
 	// 删除(ConfirmDialog 确认)。
 	await dialog.getByRole("button", { name: "删除里程碑 M1-改名" }).click();
@@ -69,7 +72,9 @@ test("任务详情:勾选归属里程碑,计数与进度随关联更新", async 
 	await page.waitForURL(/\/t\//);
 	await expect(page.getByRole("heading", { name: /评论/ })).toBeVisible();
 
-	const trigger = page.locator("main").getByRole("button", { name: /里程碑/ });
+	const trigger = page
+		.locator('[data-testid="task-detail-drawer"]')
+		.getByRole("button", { name: /里程碑/ });
 	await expect(trigger).toContainText("0");
 
 	// 勾选 MS → 计数 1。

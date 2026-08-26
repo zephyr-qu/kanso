@@ -197,10 +197,7 @@ func (s *Service) DeleteTask(ctx context.Context, taskID string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("提交删除任务事务失败: %w", err)
-	}
-	return s.dispatch(ctx, Event{
+	return s.commitEvent(ctx, tx, q, Event{
 		Action:         EventTaskDeleted,
 		ProjectID:      task.ProjectID,
 		EntityID:       taskID,

@@ -213,8 +213,7 @@ func (a *API) verify(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Key string `json:"key"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid body"})
+	if !decodeBody(w, r, &body) {
 		return
 	}
 	// 按成员表校验密钥（personal = 单一 owner，owner.access_key = KANSO_ACCESS_KEY）。

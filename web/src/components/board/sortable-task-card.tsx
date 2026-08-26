@@ -3,7 +3,14 @@
 // 拖拽激活后 dnd-kit 在捕获阶段拦截 click，不会误触打开详情。右上 hover 操作按钮不触发拖拽与跳转。
 
 // TaskCardView 是纯展示层：SortableTaskCard（useSortable）与看板页 DragOverlay 复用同一张卡。
-import { forwardRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import {
+	forwardRef,
+	memo,
+	useMemo,
+	useState,
+	type CSSProperties,
+	type KeyboardEvent,
+} from "react";
 import type { DraggableAttributes } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -49,7 +56,7 @@ export type TaskCardViewProps = {
 };
 
 /** 任务卡片纯展示层：无拖拽 hooks，供 SortableTaskCard 与 DragOverlay 复用。 */
-export const TaskCardView = forwardRef<HTMLDivElement, TaskCardViewProps>(
+const TaskCardViewBase = forwardRef<HTMLDivElement, TaskCardViewProps>(
 	function TaskCardView(
 		{
 			task,
@@ -226,7 +233,10 @@ export const TaskCardView = forwardRef<HTMLDivElement, TaskCardViewProps>(
 	},
 );
 
-export default function SortableTaskCard(props: {
+TaskCardViewBase.displayName = "TaskCardView";
+export const TaskCardView = memo(TaskCardViewBase);
+
+const SortableTaskCard = memo(function SortableTaskCard(props: {
 	task: Task;
 	labels: Label[];
 	onOpen: (task: Task) => void;
@@ -245,14 +255,17 @@ export default function SortableTaskCard(props: {
 		id: task.id,
 		data: { type: "task", taskId: task.id, columnId: task.columnId },
 	});
-	const style = {
-		transform: CSS.Transform.toString(transform),
-		transition,
-		// DragOverlay is the visible copy. Keep the sortable source as a layout
-		// placeholder; rendering its transformed copy makes it cover neighbors
-		// while the pointer moves up/down through the list.
-		opacity: isDragging ? 0 : undefined,
-	};
+	const style = useMemo(
+		() => ({
+			transform: CSS.Transform.toString(transform),
+			transition,
+			// DragOverlay is the visible copy. Keep the sortable source as a layout
+			// placeholder; rendering its transformed copy makes it cover neighbors
+			// while the pointer moves up/down through the list.
+			opacity: isDragging ? 0 : undefined,
+		}),
+		[isDragging, transform, transition],
+	);
 
 	return (
 		<TaskCardView
@@ -271,7 +284,9 @@ export default function SortableTaskCard(props: {
 			dragging={isDragging}
 		/>
 	);
-}
+});
+
+export default SortableTaskCard;
 
 /** 截止日期徽章：过期/临期标红，正常弱灰（原型 due-badge）。 */
 function DueBadge({ due }: { due: string }) {

@@ -9,19 +9,20 @@ import {
 	useLocation,
 } from "react-router";
 import { UNAUTHORIZED_EVENT } from "@/lib/api";
+import { routeLoaders } from "@/lib/route-preload";
 import { useAuthStore } from "@/store/auth";
 
-const AppShell = lazy(() => import("@/components/app-shell"));
-const ActivityPage = lazy(() => import("@/pages/activity"));
-const BoardPage = lazy(() => import("@/pages/board"));
-const CalendarPage = lazy(() => import("@/pages/calendar"));
-const DashboardPage = lazy(() => import("@/pages/dashboard"));
-const LoginPage = lazy(() => import("@/pages/login"));
-const ProfilePage = lazy(() => import("@/pages/profile"));
-const RedirectHome = lazy(() => import("@/pages/redirect-home"));
-const SettingsPage = lazy(() => import("@/pages/settings"));
-const TaskDetailPage = lazy(() => import("@/pages/task-detail"));
-const WorkspacePage = lazy(() => import("@/pages/workspace"));
+const AppShell = lazy(routeLoaders.appShell);
+const ActivityPage = lazy(routeLoaders.activity);
+const BoardPage = lazy(routeLoaders.board);
+const CalendarPage = lazy(routeLoaders.calendar);
+const DashboardPage = lazy(routeLoaders.dashboard);
+const LoginPage = lazy(routeLoaders.login);
+const ProfilePage = lazy(routeLoaders.profile);
+const RedirectHome = lazy(routeLoaders.redirectHome);
+const SettingsPage = lazy(routeLoaders.settings);
+const TaskDetailPage = lazy(routeLoaders.taskDetail);
+const WorkspacePage = lazy(routeLoaders.workspace);
 
 function RequireAuth() {
 	const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -54,10 +55,13 @@ const router = createBrowserRouter([
 					{ path: "settings", element: <SettingsPage /> },
 					{ path: "profile", element: <ProfilePage /> },
 					{ path: "w/:workspaceId", element: <WorkspacePage /> },
-					{ path: "w/:workspaceId/p/:projectId", element: <BoardPage /> },
 					{
-						path: "w/:workspaceId/p/:projectId/t/:taskId",
-						element: <TaskDetailPage />,
+						path: "w/:workspaceId/p/:projectId",
+						element: <BoardPage />,
+						children: [
+							// 任务详情作为看板子路由：看板保留在背后，详情以右侧抽屉浮层呈现。
+							{ path: "t/:taskId", element: <TaskDetailPage /> },
+						],
 					},
 				],
 			},
@@ -68,7 +72,13 @@ const router = createBrowserRouter([
 
 export default function App() {
 	return (
-		<Suspense fallback={<div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">加载中…</div>}>
+		<Suspense
+			fallback={
+				<div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+					加载中…
+				</div>
+			}
+		>
 			<RouterProvider router={router} />
 		</Suspense>
 	);

@@ -79,13 +79,24 @@ export default function CalendarPage() {
 
 	const monthLabel = `${cursor.getFullYear()} 年 ${cursor.getMonth() + 1} 月`;
 	const todayKey = formatDate(today);
+	const tasksByDate = useMemo(() => {
+		const index = new Map<string, CalendarTask[]>();
+		for (const task of data?.tasks ?? []) {
+			const date = task.dueDate?.slice(0, 10);
+			if (!date) continue;
+			const tasks = index.get(date);
+			if (tasks) tasks.push(task);
+			else index.set(date, [task]);
+		}
+		return index;
+	}, [data?.tasks]);
 
 	function moveMonth(offset: number) {
 		setCursor((value) => new Date(value.getFullYear(), value.getMonth() + offset, 1));
 	}
 
 	function tasksOn(date: string) {
-		return (data?.tasks ?? []).filter((task) => task.dueDate?.slice(0, 10) === date);
+		return tasksByDate.get(date) ?? [];
 	}
 
 	async function reschedule(task: CalendarTask, date: string) {

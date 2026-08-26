@@ -47,17 +47,21 @@ test("任务详情：优先级单标记，可弹层修改并持久化", async ({
 	await expect(page.getByRole("heading", { name: /评论/ })).toBeVisible();
 
 	// 优先级为单标记（当前档位文字+色点），点击弹出四档选择器。
-	const detail = page.locator("main");
-const prioTrigger = detail.getByRole("button", { name: /紧急|高|中|低/ }).first();
-await expect(prioTrigger).toBeVisible();
-await prioTrigger.click();
+	const detail = page.locator('[data-testid="task-detail-drawer"]');
+	const prioTrigger = detail
+		.getByRole("button", { name: /紧急|高|中|低/ })
+		.first();
+	await expect(prioTrigger).toBeVisible();
+	await prioTrigger.click();
 
-const prioOptions = page.getByRole("button", { name: /紧急|高|中|低/ });
+	const prioOptions = page
+		.locator('[data-testid="task-detail-drawer"], [data-slot="popover-popup"]')
+		.getByRole("button", { name: /紧急|高|中|低/ });
 	await expect(prioOptions).toHaveCount(5); // trigger(当前档位) + 弹层四档
 
 	// 弹层里换选「紧急」，标记区更新为「紧急」。
 	await page.getByRole("button", { name: "紧急", exact: true }).last().click();
 	await expect(
-		page.locator("main").getByRole("button", { name: "紧急", exact: true }),
+		detail.getByRole("button", { name: "紧急", exact: true }),
 	).toBeVisible({ timeout: 5000 });
 });

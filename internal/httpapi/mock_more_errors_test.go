@@ -126,6 +126,7 @@ func TestColumnServiceErrors(t *testing.T) {
 			name: "创建列最大位置失败500", method: http.MethodPost, path: "/api/projects/p1/columns",
 			body: `{"name":"列"}`, want: http.StatusInternalServerError,
 			failSQL: func(m sqlmock.Sqlmock) {
+				m.ExpectBegin()
 				m.ExpectQuery("FROM project WHERE id").
 					WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at"}).
 						AddRow("p1", "w1", "项目", 0, "2026-01-01", "2026-01-01"))
@@ -136,6 +137,7 @@ func TestColumnServiceErrors(t *testing.T) {
 			name: "创建列插入失败500", method: http.MethodPost, path: "/api/projects/p1/columns",
 			body: `{"name":"列"}`, want: http.StatusInternalServerError,
 			failSQL: func(m sqlmock.Sqlmock) {
+				m.ExpectBegin()
 				m.ExpectQuery("FROM project WHERE id").
 					WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at"}).
 						AddRow("p1", "w1", "项目", 0, "2026-01-01", "2026-01-01"))

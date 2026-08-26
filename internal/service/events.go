@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
 
 	"kanso/internal/db/gen"
 )
@@ -64,15 +66,14 @@ type Event struct {
 	Actor string
 }
 
-// dispatch 是写操作副作用的唯一出口：先记活动，再广播。纪律只写一次。
-// 项目级事件按项目归属写入并广播；工作区级事件写入工作区归属并全局广播。
-// Actor 为空时从 ctx 解析（ADR-0013 决策 5）——写操作调用处无需显式传。
-func (s *Service) dispatch(ctx context.Context, e Event) error {
-	if e.Actor == "" {
-		e.Actor = ActorFromContext(ctx)
-	}
-	if err := s.recordEvent(ctx, gen.New(s.db), e); err != nil {
+// commitEvent records the audit event in the supplied transaction, commits
+// the business mutation and only then broadcasts it to connected clients.
+func (s *Service) commitEvent(ctx context.Context, tx *sql.Tx, q *gen.Queries, e Event) error {
+	if err := s.recordEvent(ctx, q, e); err != nil {
 		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交事务失败: %w", err)
 	}
 	s.broadcastEvent(e)
 	return nil

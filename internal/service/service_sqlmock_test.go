@@ -120,8 +120,10 @@ func TestCreateTaskBeginError(t *testing.T) {
 
 func TestCreateColumnGetProjectError(t *testing.T) {
 	mock, svc := newMockService(t)
+	mock.ExpectBegin()
 	mock.ExpectQuery("FROM project WHERE id").
 		WillReturnError(sql.ErrNoRows)
+	mock.ExpectRollback()
 	if _, err := svc.CreateColumn(context.Background(), "nope", "列", nil); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("项目不存在应 ErrNotFound，实际 %v", err)
 	}

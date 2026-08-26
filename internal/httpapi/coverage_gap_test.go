@@ -439,8 +439,12 @@ func TestMemberManagementDatabaseErrors(t *testing.T) {
 			expectAuth(mock, "m1")
 			mock.ExpectQuery("FROM member WHERE id").WillReturnRows(sqlmock.NewRows(memberRowCols).AddRow(memberRow("m1")...))
 			if tc.name == "create" {
+				mock.ExpectBegin()
 				mock.ExpectQuery("FROM workspace WHERE id").WillReturnError(errors.New("db down"))
 			} else {
+				if tc.name == "delete" {
+					mock.ExpectBegin()
+				}
 				mock.ExpectQuery("FROM member WHERE id").WillReturnError(errors.New("db down"))
 			}
 			req, err := http.NewRequest(tc.method, srv.URL+tc.path, strings.NewReader(tc.body))
@@ -504,6 +508,7 @@ func TestMilestoneAssociationDatabaseErrors(t *testing.T) {
 func TestWorkspaceRenameDatabaseError(t *testing.T) {
 	srv, mock := newMockRouter(t)
 	expectAuth(mock, "m1")
+	mock.ExpectBegin()
 	mock.ExpectQuery("UpdateWorkspaceName").WillReturnError(errors.New("db down"))
 
 	req, err := http.NewRequest(http.MethodPatch, srv.URL+"/api/workspaces/w1", strings.NewReader(`{"name":"Renamed"}`))

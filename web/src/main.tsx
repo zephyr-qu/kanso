@@ -19,6 +19,13 @@ import {
 // mutation 失败全局 toast：api() 已把服务端 `{error}` 正文附加到消息（" — " 之后），直接透出。
 // 401 例外——本地密钥已清除并由路由守卫引导回登录页，无需额外打扰。
 const queryClient = new QueryClient({
+	defaultOptions: {
+		queries: {
+			// 路由切换不应因为短暂失焦或重新挂载重复打满 API；实时事件仍会主动失效缓存。
+			staleTime: 30_000,
+			gcTime: 5 * 60_000,
+		},
+	},
 	mutationCache: new MutationCache({
 		onError: (error, _variables, _context, mutation) => {
 			const raw = error instanceof Error ? error.message : "";

@@ -1,6 +1,6 @@
 // 仪表盘页（全局汇总）：统计卡 / 完成进度 / 需要关注 / 列分布 / 任务趋势 / 项目速览 / 最近活动。
 // 数据来自 /api/dashboard（跨全部工作区聚合；完成口径按列位置=末列；任务分布仅「按状态 / 按优先级」两种模板）。
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { CalendarDaysIcon, CheckIcon, LayoutTemplateIcon } from "lucide-react";
@@ -19,7 +19,7 @@ import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
 import { queryKeys } from "@/hooks/query-keys";
 import { useRealtime } from "@/hooks/use-realtime";
-import { getRecentProjectsAll } from "@/lib/recent-projects";
+import { getRecentProjectsAll, type RecentProjectEntry } from "@/lib/recent-projects";
 import type { DashboardData } from "@/lib/dashboard";
 import type { TaskDetail } from "@/types/task-detail";
 import { PageContent, PageHeader, SurfaceCard } from "@/components/kanso-ui";
@@ -56,6 +56,39 @@ export default function DashboardPage() {
 		focus?: number;
 		project?: number;
 	}>({});
+
+	// 项目速览：全部工作区最近打开的 5 个（打开记录在进入看板时写入 localStorage）。
+	// Hook 必须在加载态 return 之前调用，否则 data 从 undefined 变为对象时会改变 Hook 数量。
+	const { recentProjects, recentProjectEntryById } = useMemo(() => {
+		if (!data) {
+			return {
+				recentProjectEntries: [] as RecentProjectEntry[],
+				recentProjects: [],
+				recentProjectEntryById: new Map<string, RecentProjectEntry>(),
+			};
+		}
+		const seen = new Set<string>();
+		const entries: RecentProjectEntry[] = [];
+		for (const entry of getRecentProjectsAll(20)) {
+			if (seen.has(entry.projectId)) continue;
+			seen.add(entry.projectId);
+			entries.push(entry);
+		}
+		const projectById = new Map(data.projects.map((project) => [project.id, project]));
+		const recentProjects =
+			entries.length > 0
+				? entries
+						.map((entry) => projectById.get(entry.projectId))
+						.filter((project) => project !== undefined)
+				: data.projects.slice(0, 20);
+		return {
+			recentProjectEntries: entries,
+			recentProjects,
+			recentProjectEntryById: new Map(
+				entries.map((entry) => [entry.projectId, entry]),
+			),
+		};
+	}, [data]);
 	useLayoutEffect(() => {
 		if (!data) return;
 		const measure = () => {
@@ -96,19 +129,6 @@ export default function DashboardPage() {
 		);
 	}
 
-	// 项目速览：全部工作区最近打开的 5 个（打开记录在进入看板时写入 localStorage）。
-	// 一次求值，map 内复用（此前 map 内二次调用 getRecentProjectsAll）。
-	const recentProjectEntries = getRecentProjectsAll(20).filter(
-		(entry, index, entries) =>
-			entries.findIndex((candidate) => candidate.projectId === entry.projectId) ===
-			index,
-	);
-	const recentProjects =
-		recentProjectEntries.length > 0
-			? recentProjectEntries
-					.map((r) => data.projects.find((p) => p.id === r.projectId))
-					.filter((p) => p !== undefined)
-			: data.projects.slice(0, 20);
 	const distributionColumns = data.byColumn;
 	const statusColumns = distributionColumns;
 	// 固定展示四档优先级（紧急/高/中/低），缺失档位补 0——与「按状态」模板显示全部列的 0 值行一致。
@@ -321,7 +341,7 @@ export default function DashboardPage() {
 						) : (
 							recentProjects.slice(0, rowBudget.project ?? 5).map((p, index) => {
 								const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
-								const entry = recentProjectEntries.find((r) => r.projectId === p.id);
+								const entry = recentProjectEntryById.get(p.id);
 								const wsId = entry?.workspaceId ?? p.workspaceId;
 								return (
 									<Link

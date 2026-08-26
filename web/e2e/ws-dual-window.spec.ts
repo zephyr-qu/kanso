@@ -122,10 +122,18 @@ test("双窗口：A 改名任务 → B 标题同步", async ({ browser }) => {
 		await task.click();
 		await a.waitForURL(/\/t\//);
 		// 详情页标题点击进入编辑态 → 输入新标题 → Enter 保存。
-		await a.locator("main h2").first().click();
-		await a.locator("main input").first().fill(newTitle);
-		await a.locator("main input").first().press("Enter");
-		await expect(a.locator("main h2").first()).toHaveText(newTitle, { timeout: 5000 });
+		await a.locator('[data-testid="task-detail-drawer"] h2').first().click();
+		await a
+			.locator('[data-testid="task-detail-drawer"] input')
+			.first()
+			.fill(newTitle);
+		await a
+			.locator('[data-testid="task-detail-drawer"] input')
+			.first()
+			.press("Enter");
+		await expect(
+			a.locator('[data-testid="task-detail-drawer"] h2').first(),
+		).toHaveText(newTitle, { timeout: 5000 });
 
 		// 回看板核对两窗口同步。
 		await a.goBack();

@@ -168,7 +168,12 @@ func (s *Service) ListMembers(ctx context.Context, workspaceID string) ([]Member
 // UpdateMemberProfile 更新成员名称/头像底色/头像。
 // name 为空串忽略（保持现状）；avatar 传 null（*body.Avatar == nil）清空头像。
 func (s *Service) UpdateMemberProfile(ctx context.Context, memberID string, name, avatarColor *string, avatar **string) (Member, error) {
-	q := gen.New(s.db)
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return Member{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
 	current, err := q.GetMember(ctx, memberID)
 	if err != nil {
 		return Member{}, mapNoRows(err)
@@ -199,7 +204,7 @@ func (s *Service) UpdateMemberProfile(ctx context.Context, memberID string, name
 	}
 	// 仅改名触发活动与广播；纯头像/配色变更不扰流。
 	if newName != current.Name {
-		if err := s.dispatch(ctx, Event{
+		if err := s.commitEvent(ctx, tx, q, Event{
 			Action:         EventMemberUpdated,
 			WorkspaceID:    current.WorkspaceID,
 			EntityID:       memberID,
@@ -208,13 +213,20 @@ func (s *Service) UpdateMemberProfile(ctx context.Context, memberID string, name
 		}); err != nil {
 			return Member{}, err
 		}
+	} else if err := tx.Commit(); err != nil {
+		return Member{}, fmt.Errorf("提交事务失败: %w", err)
 	}
 	return toMemberDTO(updated), nil
 }
 
 // CreateMember 创建工作区普通成员；成员数量达上限时返回 ErrMemberLimit。
 func (s *Service) CreateMember(ctx context.Context, workspaceID, name string) (Member, error) {
-	q := gen.New(s.db)
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return Member{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
 	if _, err := q.GetWorkspace(ctx, workspaceID); err != nil {
 		return Member{}, mapNoRows(err)
 	}
@@ -244,7 +256,7 @@ func (s *Service) CreateMember(ctx context.Context, workspaceID, name string) (M
 		return Member{}, fmt.Errorf("创建成员失败: %w", err)
 	}
 	// 工作区级事件同时写入全局活动流。
-	if err := s.dispatch(ctx, Event{
+	if err := s.commitEvent(ctx, tx, q, Event{
 		Action:         EventMemberCreated,
 		WorkspaceID:    workspaceID,
 		EntityID:       member.ID,
@@ -258,7 +270,12 @@ func (s *Service) CreateMember(ctx context.Context, workspaceID, name string) (M
 
 // DeleteMember 删除成员（同时清除其访问密钥）；owner 受保护。
 func (s *Service) DeleteMember(ctx context.Context, memberID string) error {
-	q := gen.New(s.db)
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
 	member, err := q.GetMember(ctx, memberID)
 	if err != nil {
 		return mapNoRows(err)
@@ -269,8 +286,8 @@ func (s *Service) DeleteMember(ctx context.Context, memberID string) error {
 	if _, err := q.DeleteMember(ctx, memberID); err != nil {
 		return fmt.Errorf("删除成员失败: %w", err)
 	}
-	// 工作区级事件同时写入全局活动流。
-	return s.dispatch(ctx, Event{
+	// 工作区级事件与成员删除在同一事务内提交。
+	return s.commitEvent(ctx, tx, q, Event{
 		Action:         EventMemberDeleted,
 		WorkspaceID:    member.WorkspaceID,
 		EntityID:       memberID,

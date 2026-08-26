@@ -127,11 +127,17 @@ func (s *Service) ListPinnedProjects(ctx context.Context) ([]PinnedProject, erro
 
 // SetProjectPinned 设置/取消项目置顶；项目不存在时返回 ErrNotFound。
 func (s *Service) SetProjectPinned(ctx context.Context, projectID string, pinned bool) error {
-	project, err := gen.New(s.db).GetProject(ctx, projectID)
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	project, err := q.GetProject(ctx, projectID)
 	if err != nil {
 		return mapNoRows(err)
 	}
-	res, err := s.db.ExecContext(ctx, setProjectPinnedSQL, pinned, projectID)
+	res, err := tx.ExecContext(ctx, setProjectPinnedSQL, pinned, projectID)
 	if err != nil {
 		return fmt.Errorf("更新置顶失败: %w", err)
 	}
@@ -146,7 +152,7 @@ func (s *Service) SetProjectPinned(ctx context.Context, projectID string, pinned
 	if pinned {
 		action = EventProjectPinned
 	}
-	return s.dispatch(ctx, Event{Action: action, ProjectID: project.ID, WorkspaceID: project.WorkspaceID, EntityID: project.ID, Data: map[string]string{"name": project.Name}, RecordActivity: true})
+	return s.commitEvent(ctx, tx, q, Event{Action: action, ProjectID: project.ID, WorkspaceID: project.WorkspaceID, EntityID: project.ID, Data: map[string]string{"name": project.Name}, RecordActivity: true})
 }
 
 // CreateProject 创建项目并在同一事务内种子固定看板默认列（0008：模板已移除）。
@@ -189,10 +195,7 @@ func (s *Service) CreateProject(ctx context.Context, workspaceID, name string) (
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
-		return gen.Project{}, fmt.Errorf("提交事务失败: %w", err)
-	}
-	if err := s.dispatch(ctx, Event{Action: EventProjectCreated, ProjectID: project.ID, WorkspaceID: project.WorkspaceID, EntityID: project.ID, Data: map[string]string{"name": project.Name}, RecordActivity: true}); err != nil {
+	if err := s.commitEvent(ctx, tx, q, Event{Action: EventProjectCreated, ProjectID: project.ID, WorkspaceID: project.WorkspaceID, EntityID: project.ID, Data: map[string]string{"name": project.Name}, RecordActivity: true}); err != nil {
 		return gen.Project{}, err
 	}
 	return project, nil
@@ -200,7 +203,13 @@ func (s *Service) CreateProject(ctx context.Context, workspaceID, name string) (
 
 // RenameProject 重命名项目；不存在时返回 ErrNotFound。
 func (s *Service) RenameProject(ctx context.Context, projectID, name string) (gen.Project, error) {
-	project, err := gen.New(s.db).UpdateProjectName(ctx, gen.UpdateProjectNameParams{
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return gen.Project{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	project, err := q.UpdateProjectName(ctx, gen.UpdateProjectNameParams{
 		ID:        projectID,
 		Name:      name,
 		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
@@ -208,7 +217,7 @@ func (s *Service) RenameProject(ctx context.Context, projectID, name string) (ge
 	if err != nil {
 		return gen.Project{}, mapNoRows(err)
 	}
-	if err := s.dispatch(ctx, Event{Action: EventProjectUpdated, ProjectID: project.ID, WorkspaceID: project.WorkspaceID, EntityID: project.ID, Data: map[string]string{"name": project.Name}, RecordActivity: true}); err != nil {
+	if err := s.commitEvent(ctx, tx, q, Event{Action: EventProjectUpdated, ProjectID: project.ID, WorkspaceID: project.WorkspaceID, EntityID: project.ID, Data: map[string]string{"name": project.Name}, RecordActivity: true}); err != nil {
 		return gen.Project{}, err
 	}
 	return project, nil
@@ -236,8 +245,5 @@ func (s *Service) DeleteProject(ctx context.Context, projectID string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("提交删除项目事务失败: %w", err)
-	}
-	return s.dispatch(ctx, Event{Action: EventProjectDeleted, ProjectID: projectID, WorkspaceID: project.WorkspaceID, EntityID: projectID, Data: map[string]string{"name": project.Name}, RecordActivity: true})
+	return s.commitEvent(ctx, tx, q, Event{Action: EventProjectDeleted, ProjectID: projectID, WorkspaceID: project.WorkspaceID, EntityID: projectID, Data: map[string]string{"name": project.Name}, RecordActivity: true})
 }

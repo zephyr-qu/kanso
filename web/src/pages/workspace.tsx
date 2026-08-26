@@ -20,6 +20,8 @@ import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
 import { formatUpdated } from "@/lib/format-relative";
 import { queryKeys } from "@/hooks/query-keys";
+import { preloadRoute } from "@/lib/route-preload";
+import { prefetchBoard } from "@/lib/query-prefetch";
 import type { Project } from "@/types/project";
 import type { Milestone } from "@/types/board";
 import type { Workspace } from "@/types/workspace";
@@ -169,6 +171,14 @@ export default function WorkspacePage() {
 						<Link
 							key={project.id}
 							to={`/w/${workspaceId}/p/${project.id}`}
+							onMouseEnter={() => {
+								preloadRoute("board");
+								prefetchBoard(queryClient, project.id);
+							}}
+							onFocus={() => {
+								preloadRoute("board");
+								prefetchBoard(queryClient, project.id);
+							}}
 					// 对齐原型 .project-card（方向 F）：8px 圆角、1px 边框、内边距 18/18/14、子元素 gap 10px、hover 上浮 3px。
 												className="kanso-project-card group"
 						>

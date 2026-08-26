@@ -132,7 +132,11 @@ func (s *Service) ListArchivedTasks(ctx context.Context, projectID string) ([]ge
 
 // CreateColumn 在项目末尾追加新列。
 func (s *Service) CreateColumn(ctx context.Context, projectID, name string, wipLimit *int64) (gen.Column, error) {
-	q := gen.New(s.db)
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return gen.Column{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
 
 	// 校验项目存在（外键会兜底，但这里给出清晰的 404）。
 	if _, err := q.GetProject(ctx, projectID); err != nil {
@@ -161,7 +165,7 @@ func (s *Service) CreateColumn(ctx context.Context, projectID, name string, wipL
 	if err != nil {
 		return gen.Column{}, fmt.Errorf("创建列失败: %w", err)
 	}
-	if err := s.dispatch(ctx, Event{Action: EventColumnCreated, ProjectID: projectID, EntityID: column.ID, Data: map[string]string{"name": column.Name}, RecordActivity: true}); err != nil {
+	if err := s.commitEvent(ctx, tx, q, Event{Action: EventColumnCreated, ProjectID: projectID, EntityID: column.ID, Data: map[string]string{"name": column.Name}, RecordActivity: true}); err != nil {
 		return gen.Column{}, err
 	}
 	return column, nil
@@ -172,11 +176,17 @@ func (s *Service) UpdateColumnWIP(ctx context.Context, columnID string, limit *i
 	if limit != nil && *limit < 0 {
 		return gen.Column{}, fmt.Errorf("wip limit must be non-negative")
 	}
-	column, err := gen.New(s.db).UpdateColumnWIP(ctx, gen.UpdateColumnWIPParams{ID: columnID, WipLimit: limit})
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return gen.Column{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	column, err := q.UpdateColumnWIP(ctx, gen.UpdateColumnWIPParams{ID: columnID, WipLimit: limit})
 	if err != nil {
 		return gen.Column{}, mapNoRows(err)
 	}
-	if err := s.dispatch(ctx, Event{Action: EventColumnUpdated, ProjectID: column.ProjectID, EntityID: column.ID, Data: map[string]any{"name": column.Name, "wipLimit": limit}, RecordActivity: true}); err != nil {
+	if err := s.commitEvent(ctx, tx, q, Event{Action: EventColumnUpdated, ProjectID: column.ProjectID, EntityID: column.ID, Data: map[string]any{"name": column.Name, "wipLimit": limit}, RecordActivity: true}); err != nil {
 		return gen.Column{}, err
 	}
 	return column, nil
@@ -184,14 +194,20 @@ func (s *Service) UpdateColumnWIP(ctx context.Context, columnID string, limit *i
 
 // RenameColumn 重命名列；不存在时返回 ErrNotFound。
 func (s *Service) RenameColumn(ctx context.Context, columnID, name string) (gen.Column, error) {
-	column, err := gen.New(s.db).UpdateColumnName(ctx, gen.UpdateColumnNameParams{
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return gen.Column{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	column, err := q.UpdateColumnName(ctx, gen.UpdateColumnNameParams{
 		ID:   columnID,
 		Name: name,
 	})
 	if err != nil {
 		return gen.Column{}, mapNoRows(err)
 	}
-	if err := s.dispatch(ctx, Event{Action: EventColumnUpdated, ProjectID: column.ProjectID, EntityID: column.ID, Data: map[string]string{"name": column.Name}, RecordActivity: true}); err != nil {
+	if err := s.commitEvent(ctx, tx, q, Event{Action: EventColumnUpdated, ProjectID: column.ProjectID, EntityID: column.ID, Data: map[string]string{"name": column.Name}, RecordActivity: true}); err != nil {
 		return gen.Column{}, err
 	}
 	return column, nil
@@ -219,10 +235,7 @@ func (s *Service) DeleteColumn(ctx context.Context, columnID string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("提交删除列事务失败: %w", err)
-	}
-	return s.dispatch(ctx, Event{Action: EventColumnDeleted, ProjectID: column.ProjectID, EntityID: columnID, Data: map[string]string{"name": column.Name}, RecordActivity: true})
+	return s.commitEvent(ctx, tx, q, Event{Action: EventColumnDeleted, ProjectID: column.ProjectID, EntityID: columnID, Data: map[string]string{"name": column.Name}, RecordActivity: true})
 }
 
 // MoveColumn 把列移动到目标位置（0 起），整列列表重排（reindex）。
@@ -268,10 +281,7 @@ func (s *Service) MoveColumn(ctx context.Context, columnID string, targetPositio
 			return gen.Column{}, fmt.Errorf("更新列位置失败: %w", err)
 		}
 	}
-	if err := tx.Commit(); err != nil {
-		return gen.Column{}, fmt.Errorf("提交事务失败: %w", err)
-	}
-	if err := s.dispatch(ctx, Event{Action: EventColumnMoved, ProjectID: column.ProjectID, EntityID: columnID, Data: map[string]string{"name": column.Name}, RecordActivity: true}); err != nil {
+	if err := s.commitEvent(ctx, tx, q, Event{Action: EventColumnMoved, ProjectID: column.ProjectID, EntityID: columnID, Data: map[string]string{"name": column.Name}, RecordActivity: true}); err != nil {
 		return gen.Column{}, err
 	}
 	// 返回移动后的最新列（position 已更新）。

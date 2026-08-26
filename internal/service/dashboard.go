@@ -181,7 +181,7 @@ func (s *Service) GetDashboard(ctx context.Context) (DashboardData, error) {
 		}
 		recent = append(recent, ActivityItem{
 			ID:           a.ID,
-			ResourceType: "task",
+			ResourceType: a.ResourceType,
 			ResourceID:   a.ResourceID,
 			ProjectName:  a.ProjectName,
 			Action:       a.Action,

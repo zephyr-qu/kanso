@@ -1,4 +1,5 @@
 // 全局活动记录：对齐原型的单卡片操作轨迹布局。
+import { memo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { HistoryIcon } from "lucide-react";
 import ActivityItem from "@/components/activity-item";
@@ -57,7 +58,7 @@ export default function ActivityPage() {
 	);
 }
 
-function ActivityRow({ activity }: { activity: FlatActivity }) {
+const ActivityRow = memo(function ActivityRow({ activity }: { activity: FlatActivity }) {
 	const Icon = activityIconForAction(activity.action);
 	return (
 		<div className="kanso-recent-activity__row">
@@ -78,6 +79,6 @@ function ActivityRow({ activity }: { activity: FlatActivity }) {
 			</div>
 		</div>
 	);
-}
+});
 
 // formatActivityAge 已提取至 lib/format-relative（S-11，与仪表盘共用）。

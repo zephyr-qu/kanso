@@ -24,7 +24,9 @@ func TestColumnMoveWIPErrors(t *testing.T) {
 			name: "WIP更新失败400", method: http.MethodPatch, path: "/api/columns/c1",
 			body: `{"wipLimit":5}`, want: http.StatusBadRequest,
 			failSQL: func(m sqlmock.Sqlmock) {
+				m.ExpectBegin()
 				m.ExpectQuery("UpdateColumnWIP").WillReturnError(errors.New("db down"))
+				m.ExpectRollback()
 			},
 		},
 		{
@@ -40,7 +42,9 @@ func TestColumnMoveWIPErrors(t *testing.T) {
 			name: "列重命名失败500", method: http.MethodPatch, path: "/api/columns/c1",
 			body: `{"name":"x"}`, want: http.StatusInternalServerError,
 			failSQL: func(m sqlmock.Sqlmock) {
+				m.ExpectBegin()
 				m.ExpectQuery("UpdateColumnName").WillReturnError(errors.New("db down"))
+				m.ExpectRollback()
 			},
 		},
 	}

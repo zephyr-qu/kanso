@@ -1079,6 +1079,12 @@ func TestHealthAndVerify(t *testing.T) {
 	if res, _ := e.do(t, http.MethodPost, "/api/auth/verify", `not-json`); res.StatusCode != http.StatusBadRequest {
 		t.Fatalf("非法 JSON 应 400，实际 %d", res.StatusCode)
 	}
+
+	// verify 超过 1 MiB 的请求体 → 400，避免解码器无界读取。
+	oversized := `{"key":"` + strings.Repeat("a", 1<<20) + `"}`
+	if res, _ := e.do(t, http.MethodPost, "/api/auth/verify", oversized); res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("超大请求体应 400，实际 %d", res.StatusCode)
+	}
 }
 
 // TestTaskMoveAcrossProjectsRejected 校验把任务移入另一项目的列被拒绝（数据完整性约束）。

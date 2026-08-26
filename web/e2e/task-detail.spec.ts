@@ -33,16 +33,26 @@ test("评论：发表后出现在列表，可删除", async ({ page }) => {
 	await page.getByRole("button", { name: "发表评论" }).click();
 
 	// 评论出现在列表中。
-	await expect(page.locator("main").getByText(comment)).toBeVisible({
+	await expect(
+		page.locator('[data-testid="task-detail-drawer"]').getByText(comment, { exact: true }),
+	).toBeVisible({
 		timeout: 5000,
 	});
 
 	// 删除评论（评论行 hover 显示删除按钮）。
-	const row = page.locator("main .kanso-comment", { hasText: comment }).last();
+	const row = page
+		.locator('[data-testid="task-detail-drawer"] .kanso-comment', {
+			hasText: comment,
+		})
+		.last();
 	await row.hover();
 	await row.getByRole("button", { name: "删除评论" }).click();
 	// 限定评论列表：活动时间线会显示「删除了评论『内容』」，全 main 匹配会误命中。
-	await expect(page.locator("main .kanso-comment-list").getByText(comment)).toHaveCount(0);
+	await expect(
+		page
+			.locator('[data-testid="task-detail-drawer"] .kanso-comment-list')
+			.getByText(comment),
+	).toHaveCount(0);
 });
 
 test("任务标题与描述编辑生效", async ({ page }) => {
@@ -50,32 +60,42 @@ test("任务标题与描述编辑生效", async ({ page }) => {
 
 	// 标题编辑：点击标题进入编辑态，改名保存。
 	// 详情页对齐原型后：顶部 header 的 h1 是项目名，任务标题是正文首个 h2。
-	await page.locator("main h2").first().click();
-	const titleInput = page.locator("main input").first();
+	await page.locator('[data-testid="task-detail-drawer"] h2').first().click();
+	const titleInput = page
+		.locator('[data-testid="task-detail-drawer"] input')
+		.first();
 	const newTitle = `改名标题${Date.now() % 100000}`;
 	await titleInput.fill(newTitle);
 	await titleInput.press("Enter");
-	await expect(page.locator("main h2").first()).toHaveText(newTitle, {
+	await expect(
+		page.locator('[data-testid="task-detail-drawer"] h2').first(),
+	).toHaveText(newTitle, {
 		timeout: 5000,
 	});
 
 	// 描述编辑：点击描述区（空描述提示文案），输入后保存。
 	await page
-		.locator("main")
+		.locator('[data-testid="task-detail-drawer"]')
 		.getByText(/暂无描述，点击编辑添加。/)
 		.click();
-	const descInput = page.locator("main textarea").first();
+	const descInput = page
+		.locator('[data-testid="task-detail-drawer"] textarea')
+		.first();
 	const descText = `验收描述${Date.now() % 100000}`;
 	await descInput.fill(descText);
 	await page.getByRole("button", { name: "保存" }).click();
-	await expect(page.locator("main").getByText(descText)).toBeVisible({
+	await expect(
+		page.locator('[data-testid="task-detail-drawer"]').getByText(descText),
+	).toBeVisible({
 		timeout: 5000,
 	});
 });
 
 test("活动流渲染：含创建活动与动作文案", async ({ page }) => {
 	await openFirstTaskDetail(page);
-	await expect(page.locator("main").getByText("创建了任务")).toBeVisible({
+	await expect(
+		page.locator('[data-testid="task-detail-drawer"]').getByText("创建了任务"),
+	).toBeVisible({
 		timeout: 5000,
 	});
 });
@@ -86,14 +106,24 @@ test("评论刷新后保留（真实后端 SQLite 持久化）", async ({ page }
 	const comment = `持久化评论${Date.now() % 100000}`;
 	await page.getByPlaceholder("写下评论…").fill(comment);
 	await page.getByRole("button", { name: "发表评论" }).click();
-	await expect(page.locator("main").getByText(comment, { exact: true })).toBeVisible({
+	await expect(
+		page
+			.locator('[data-testid="task-detail-drawer"]')
+			.getByText(comment, { exact: true }),
+	).toBeVisible({
 		timeout: 5000,
 	});
 
 	// 刷新页面：真实后端 SQLite 持久化，评论应保留。
 	await page.reload();
-	await page.waitForSelector('main textarea[placeholder="写下评论…"]');
-	await expect(page.locator("main").getByText(comment, { exact: true })).toBeVisible({
+	await page.waitForSelector(
+		'[data-testid="task-detail-drawer"] textarea[placeholder="写下评论…"]',
+	);
+	await expect(
+		page
+			.locator('[data-testid="task-detail-drawer"]')
+			.getByText(comment, { exact: true }),
+	).toBeVisible({
 		timeout: 5000,
 	});
 });

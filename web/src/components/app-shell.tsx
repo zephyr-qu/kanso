@@ -1,12 +1,15 @@
 // 应用壳：左侧导航框架（借鉴原型 rail：品牌块 + 工作区导航 + 底部退出）。
 // 全局浮动元素对齐原型 shell.jsx：⌘K 命令面板、Quick Capture FAB（Q 键）、底部键盘提示条。
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import {
 	CalendarDaysIcon,
+	ChevronLeftIcon,
+	ChevronRightIcon,
 	GaugeIcon,
 	HistoryIcon,
+	LayersIcon,
 	LogOutIcon,
 	PlusIcon,
 	SettingsIcon,
@@ -19,6 +22,11 @@ import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
 import { queryKeys } from "@/hooks/query-keys";
 import { usePinnedProjects } from "@/lib/pinned-projects";
+import { preloadRoute } from "@/lib/route-preload";
+import {
+	prefetchBoard,
+	prefetchWorkspaceProjects,
+} from "@/lib/query-prefetch";
 import { useAuthStore } from "@/store/auth";
 import type { MeResponse } from "@/types/me";
 import type { Workspace } from "@/types/workspace";
@@ -31,7 +39,69 @@ export default function AppShell() {
 	const [createOpen, setCreateOpen] = useState(false);
 	const [cmdOpen, setCmdOpen] = useState(false);
 	const [qcOpen, setQcOpen] = useState(false);
+	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+	const routeIntentRef = useRef<{
+		id: number;
+		from: string;
+		startMark: string;
+	} | null>(null);
+	const routeMeasureIdRef = useRef(0);
 	const { items: pinnedProjects } = usePinnedProjects();
+
+	// 开发环境记录“点击内部链接 → 下一帧”的路由耗时，便于在控制台和 Performance 面板定位卡顿来源。
+	useEffect(() => {
+		if (!import.meta.env.DEV) return;
+		const onClick = (event: MouseEvent) => {
+			const target = event.target;
+			if (!(target instanceof Element)) return;
+			const link = target.closest<HTMLAnchorElement>("a[href]");
+			if (!link || link.target === "_blank" || event.defaultPrevented) return;
+			const url = new URL(link.href, window.location.href);
+			if (url.origin !== window.location.origin || url.pathname === location.pathname) return;
+
+			const id = ++routeMeasureIdRef.current;
+			const startMark = `kanso-route-start-${id}`;
+			performance.mark(startMark);
+			routeIntentRef.current = {
+				id,
+				from: location.pathname,
+				startMark,
+			};
+		};
+		document.addEventListener("click", onClick, true);
+		return () => document.removeEventListener("click", onClick, true);
+	}, [location.pathname]);
+
+	const previousPathRef = useRef(location.pathname);
+	useEffect(() => {
+		if (!import.meta.env.DEV) {
+			previousPathRef.current = location.pathname;
+			return;
+		}
+		const from = previousPathRef.current;
+		const to = location.pathname;
+		previousPathRef.current = to;
+		if (from === to) return;
+
+		const pending = routeIntentRef.current?.from === from
+			? routeIntentRef.current
+			: null;
+		const id = pending?.id ?? ++routeMeasureIdRef.current;
+		const startMark = pending?.startMark ?? `kanso-route-start-${id}`;
+		if (!pending) performance.mark(startMark);
+		const endMark = `kanso-route-paint-${id}`;
+		const measureName = `kanso-route-${id}`;
+		const frameId = window.requestAnimationFrame(() => {
+			performance.mark(endMark);
+			performance.measure(measureName, startMark, endMark);
+			const [measure] = performance.getEntriesByName(measureName);
+			console.debug(
+				`[kanso] route ${from} -> ${to}: ${Math.round(measure?.duration ?? 0)}ms`,
+			);
+			if (routeIntentRef.current?.id === id) routeIntentRef.current = null;
+		});
+		return () => window.cancelAnimationFrame(frameId);
+	}, [location.pathname]);
 
 	// 快捷键：⌘K/Ctrl+K 命令面板；Q 快速捕获（非输入场景，避免与打字冲突）。
 	useEffect(() => {
@@ -70,7 +140,6 @@ export default function AppShell() {
 		queryFn: () => api<MeResponse>(buildPath("me")),
 	});
 	const member = meData?.member;
-
 	const createMutation = useMutation({
 		meta: { feedback: { success: "工作区已创建", errorTitle: "创建工作区失败" } },
 		mutationFn: (name: string) =>
@@ -86,7 +155,10 @@ export default function AppShell() {
 	return (
 		<>
 		<div data-testid="app-shell" data-kanso-app className="kanso-shell">
-			<aside data-testid="sidebar" className="kanso-sidebar">
+			<aside
+				data-testid="sidebar"
+				className={`kanso-sidebar${sidebarCollapsed ? " is-collapsed" : ""}`}
+			>
 				{/* 品牌块：主色方块 mark + 字标 */}
 				<div data-testid="brand" className="kanso-brand">
 					<span
@@ -96,27 +168,43 @@ export default function AppShell() {
 						簡
 					</span>
 					<span className="kanso-brand-name">Kanso</span>
-					<span className="rounded-full border px-1.5 py-px text-[10px] leading-none text-muted-foreground">
+					<span className="kanso-brand-mode rounded-full border px-1.5 py-px text-[10px] leading-none text-muted-foreground">
 						{meData?.mode === "team" ? "团队版" : "个人版"}
 					</span>
+					<button
+						type="button"
+						className="kanso-sidebar-toggle"
+						data-testid="sidebar-toggle"
+						aria-label={sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}
+						aria-expanded={!sidebarCollapsed}
+						aria-controls="kanso-sidebar-nav"
+						title={sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}
+						onClick={() => setSidebarCollapsed((value) => !value)}
+					>
+						{sidebarCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+					</button>
 				</div>
 
-				<nav className="kanso-sidebar-nav">
+				<nav id="kanso-sidebar-nav" className="kanso-sidebar-nav">
 					<section className="kanso-sidebar-group">
 						<p className="kanso-sidebar-group-label">总览</p>
 					<NavLink
 						to="/dashboard"
 						className="kanso-sidebar-item"
+						onMouseEnter={() => preloadRoute("dashboard")}
+						onFocus={() => preloadRoute("dashboard")}
 					>
 						<GaugeIcon />
-						仪表盘
+						<span className="kanso-sidebar-label">仪表盘</span>
 					</NavLink>
 					<NavLink
 						to="/calendar"
 						className="kanso-sidebar-item"
+						onMouseEnter={() => preloadRoute("calendar")}
+						onFocus={() => preloadRoute("calendar")}
 					>
 						<CalendarDaysIcon />
-						日历
+						<span className="kanso-sidebar-label">日历</span>
 					</NavLink>
 					</section>
 
@@ -126,11 +214,20 @@ export default function AppShell() {
 							<ul>
 								{pinnedProjects.map((p) => (
 									<li key={p.projectId}>
-										<NavLink
-											to={`/w/${p.workspaceId}/p/${p.projectId}`}
-											className="kanso-sidebar-item"
-										>
-											{p.name}
+												<NavLink
+													to={`/w/${p.workspaceId}/p/${p.projectId}`}
+																className="kanso-sidebar-item"
+															onMouseEnter={() => {
+															preloadRoute("board");
+															prefetchBoard(queryClient, p.projectId);
+														}}
+															onFocus={() => {
+															preloadRoute("board");
+															prefetchBoard(queryClient, p.projectId);
+														}}
+												>
+													<LayersIcon />
+													<span className="kanso-sidebar-label">{p.name}</span>
 										</NavLink>
 									</li>
 								))}
@@ -143,11 +240,20 @@ export default function AppShell() {
 					<ul>
 						{workspaces?.map((workspace) => (
 							<li key={workspace.id}>
-								<NavLink
-									to={`/w/${workspace.id}`}
-									className="kanso-sidebar-item"
-								>
-									{workspace.name}
+														<NavLink
+															to={`/w/${workspace.id}`}
+																		className="kanso-sidebar-item"
+																						onMouseEnter={() => {
+																						preloadRoute("workspace");
+																						prefetchWorkspaceProjects(queryClient, workspace.id);
+																					}}
+																						onFocus={() => {
+																						preloadRoute("workspace");
+																						prefetchWorkspaceProjects(queryClient, workspace.id);
+																					}}
+												>
+													<LayersIcon />
+													<span className="kanso-sidebar-label">{workspace.name}</span>
 								</NavLink>
 							</li>
 						))}
@@ -157,7 +263,8 @@ export default function AppShell() {
 						className="kanso-sidebar-item"
 						onClick={() => setCreateOpen(true)}
 					>
-						<PlusIcon className="size-3.5" /> 新建工作区
+						<PlusIcon className="size-3.5" />
+						<span className="kanso-sidebar-label">新建工作区</span>
 					</button>
 					</section>
 
@@ -168,14 +275,14 @@ export default function AppShell() {
 						className="kanso-sidebar-item"
 					>
 						<HistoryIcon />
-						活动
+						<span className="kanso-sidebar-label">活动</span>
 					</NavLink>
 					<NavLink
 						to="/settings"
 						className="kanso-sidebar-item"
 					>
 						<SettingsIcon />
-						设置
+						<span className="kanso-sidebar-label">设置</span>
 					</NavLink>
 					</section>
 				</nav>
@@ -192,7 +299,7 @@ export default function AppShell() {
 						) : (
 							<span className="size-7 rounded-full bg-muted" aria-hidden />
 						)}
-						<span className="min-w-0 flex-1 truncate">{member?.name ?? "未登录"}</span>
+						<span className="kanso-sidebar-identity-label min-w-0 flex-1 truncate">{member?.name ?? "未登录"}</span>
 					</NavLink>
 					<button
 						type="button"

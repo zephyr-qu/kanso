@@ -152,6 +152,7 @@ func TestHandler500WriteOps(t *testing.T) {
 				m.ExpectQuery("FROM member WHERE id").
 					WillReturnRows(sqlmock.NewRows(memberRowCols).
 						AddRow(memberRow("m1")...))
+				m.ExpectBegin()
 				// GetWorkspace 成功，成员统计失败 → 500。
 				m.ExpectQuery("FROM workspace WHERE id").
 					WillReturnRows(sqlmock.NewRows([]string{"id", "name", "created_at"}).
@@ -163,6 +164,7 @@ func TestHandler500WriteOps(t *testing.T) {
 			name: "createWorkspace", method: http.MethodPost, path: "/api/workspaces",
 			body: `{"name":"工作区"}`,
 			failSQL: func(m sqlmock.Sqlmock) {
+				m.ExpectBegin()
 				m.ExpectQuery("CreateWorkspace").WillReturnError(errors.New("db down"))
 			},
 		},
@@ -280,6 +282,7 @@ func TestHandler500ReadOps(t *testing.T) {
 			name: "renameProject", method: http.MethodPatch, path: "/api/projects/p1",
 			body: `{"name":"x"}`,
 			failSQL: func(m sqlmock.Sqlmock) {
+				m.ExpectBegin()
 				m.ExpectQuery("UpdateProjectName").WillReturnError(errors.New("db down"))
 			},
 		},
@@ -354,7 +357,9 @@ func TestUpdateColumn500(t *testing.T) {
 		{
 			name: "rename", body: `{"name":"x"}`,
 			mock: func(m sqlmock.Sqlmock) {
+				m.ExpectBegin()
 				m.ExpectQuery("UpdateColumnName").WillReturnError(errors.New("db down"))
+				m.ExpectRollback()
 			},
 		},
 	}
