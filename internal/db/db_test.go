@@ -95,6 +95,55 @@ func TestMigrate(t *testing.T) {
 	}
 }
 
+func TestMigrateUsesGlobalMembersAndWorkspaceMemberships(t *testing.T) {
+	database, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	if err := Migrate(database); err != nil {
+		t.Fatalf("Migrate 失败: %v", err)
+	}
+
+	rows, err := database.Query("PRAGMA table_info(member)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var columns []string
+	for rows.Next() {
+		var cid int
+		var name, columnType string
+		var notNull, primaryKey int
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			t.Fatal(err)
+		}
+		columns = append(columns, name)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	for _, column := range columns {
+		if column == "workspace_id" {
+			t.Fatal("最终 member 表不应保留 workspace_id")
+		}
+	}
+
+	var relationTable string
+	if err := database.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='workspace_member'").Scan(&relationTable); err != nil {
+		t.Fatalf("workspace_member 表缺失: %v", err)
+	}
+	var ownerIndex int
+	if err := database.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_member_single_owner'").Scan(&ownerIndex); err != nil {
+		t.Fatal(err)
+	}
+	if ownerIndex != 0 {
+		t.Fatal("最终 schema 不应保留单一 owner 唯一索引")
+	}
+}
+
 func TestMigrateIdempotent(t *testing.T) {
 	database, err := Open(t.TempDir())
 	if err != nil {

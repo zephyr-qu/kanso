@@ -56,7 +56,7 @@ func ClassifyError(err error) ErrorKind {
 		errors.Is(err, ErrCrossProjectMove), errors.Is(err, ErrLabelNotFound),
 		errors.Is(err, ErrReservedName):
 		return ErrorInvalidInput
-	case errors.Is(err, ErrConflict), errors.Is(err, ErrMemberLimit):
+	case errors.Is(err, ErrConflict), errors.Is(err, ErrMemberLimit), errors.Is(err, ErrAdminLimit):
 		return ErrorConflict
 	default:
 		return ErrorInternal
@@ -76,6 +76,7 @@ const (
 	// actorCtxKey 保存当前请求的执行者名（personal 模式恒为 "Admin"；team 模式为成员名）。
 	// 由 httpapi 的 actor 中间件写入，dispatch 在记录活动/广播时读取（ADR-0013 决策 5）。
 	actorCtxKey ctxKey = iota
+	memberRoleCtxKey
 )
 
 // ActorFromContext 返回 context 中的执行者名；未注入时回退 "Admin"（如种子流程）。
@@ -89,6 +90,17 @@ func ActorFromContext(ctx context.Context) string {
 // WithActor 返回携带执行者名的 context（httpapi 中间件使用）。
 func WithActor(ctx context.Context, actor string) context.Context {
 	return context.WithValue(ctx, actorCtxKey, actor)
+}
+
+// WithMemberRole carries the authenticated member role across the HTTP seam,
+// avoiding a second identity lookup for every capability check.
+func WithMemberRole(ctx context.Context, role string) context.Context {
+	return context.WithValue(ctx, memberRoleCtxKey, role)
+}
+
+func MemberRoleFromContext(ctx context.Context) (string, bool) {
+	role, ok := ctx.Value(memberRoleCtxKey).(string)
+	return role, ok && role != ""
 }
 
 // Service 持有数据库句柄与运行模式，提供全部领域操作。
@@ -161,11 +173,30 @@ func (s *Service) emitAll(eventType, workspaceID, entityID string) {
 	if s.broadcaster == nil {
 		return
 	}
-	s.broadcaster.BroadcastAll(realtime.Event{
+	event := realtime.Event{
 		Type:        eventType,
 		WorkspaceID: workspaceID,
 		EntityID:    entityID,
-	})
+	}
+	if workspaceID != "" {
+		if scoped, ok := s.broadcaster.(interface{ BroadcastWorkspace(string, realtime.Event) }); ok {
+			scoped.BroadcastWorkspace(workspaceID, event)
+			return
+		}
+	}
+	s.broadcaster.BroadcastAll(event)
+}
+
+func (s *Service) emitWorkspace(workspaceID, eventType, entityID string) {
+	if s.broadcaster == nil || workspaceID == "" {
+		return
+	}
+	event := realtime.Event{Type: eventType, WorkspaceID: workspaceID, EntityID: entityID}
+	if scoped, ok := s.broadcaster.(interface{ BroadcastWorkspace(string, realtime.Event) }); ok {
+		scoped.BroadcastWorkspace(workspaceID, event)
+		return
+	}
+	s.broadcaster.BroadcastAll(event)
 }
 
 // beginTx 开启写事务并绑定查询句柄（全部写操作的统一起始头；只读导出保留独立 TX）。

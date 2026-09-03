@@ -18,9 +18,12 @@ const BoardPage = lazy(routeLoaders.board);
 const CalendarPage = lazy(routeLoaders.calendar);
 const DashboardPage = lazy(routeLoaders.dashboard);
 const LoginPage = lazy(routeLoaders.login);
+const LandingPage = lazy(routeLoaders.landing);
+const WorkspaceSwitcherPrototype = lazy(routeLoaders.workspaceSwitcherPrototype);
 const ProfilePage = lazy(routeLoaders.profile);
 const RedirectHome = lazy(routeLoaders.redirectHome);
 const SettingsPage = lazy(routeLoaders.settings);
+const TeamPage = lazy(routeLoaders.team);
 const TaskDetailPage = lazy(routeLoaders.taskDetail);
 const WorkspacePage = lazy(routeLoaders.workspace);
 
@@ -41,6 +44,8 @@ function RequireAuth() {
 }
 
 const router = createBrowserRouter([
+	{ path: "/", element: <LandingPage /> },
+	{ path: "/prototype/workspace-switcher", element: <WorkspaceSwitcherPrototype /> },
 	{ path: "/login", element: <LoginPage /> },
 	{
 		element: <RequireAuth />,
@@ -48,13 +53,19 @@ const router = createBrowserRouter([
 			{
 				element: <AppShell />,
 				children: [
-					{ index: true, element: <RedirectHome /> },
-					{ path: "dashboard", element: <DashboardPage /> },
-					{ path: "calendar", element: <CalendarPage /> },
-					{ path: "activity", element: <ActivityPage /> },
+					{ path: "app", element: <RedirectHome /> },
 					{ path: "settings", element: <SettingsPage /> },
-					{ path: "profile", element: <ProfilePage /> },
-					{ path: "w/:workspaceId", element: <WorkspacePage /> },
+					{
+						path: "w/:workspaceId",
+						children: [
+							{ index: true, element: <WorkspacePage /> },
+							{ path: "dashboard", element: <DashboardPage /> },
+							{ path: "calendar", element: <CalendarPage /> },
+							{ path: "activity", element: <ActivityPage /> },
+							{ path: "team", element: <TeamPage /> },
+							{ path: "profile", element: <ProfilePage /> },
+						],
+					},
 					{
 						path: "w/:workspaceId/p/:projectId",
 						element: <BoardPage />,

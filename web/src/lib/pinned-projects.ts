@@ -1,19 +1,18 @@
-// 项目置顶（后端持久化 project.pinned）：跨设备同步、重命名/删除随项目实时。
-// 侧边栏"置顶"分组、项目卡与看板标题图钉共用此查询。类型见 types/pinned-project.ts（ADR-0009）。
+// 项目置顶（后端持久化 project.pinned）：查询始终限定当前工作区。
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
+import { invalidatePinnedProjects, queryKeys } from "@/hooks/query-keys";
 import type { PinnedProject } from "@/types/pinned-project";
 
 export type { PinnedProject } from "@/types/pinned-project";
 
-const KEY = ["pinned-projects"] as const;
-
-export function usePinnedProjects() {
+export function usePinnedProjects(workspaceId: string) {
 	const queryClient = useQueryClient();
 	const { data: items = [] } = useQuery({
-		queryKey: KEY,
-		queryFn: () => api<PinnedProject[]>(buildPath("pinnedProjects")),
+		queryKey: queryKeys.pinnedProjects(workspaceId),
+		queryFn: () => api<PinnedProject[]>(buildPath("pinnedProjects", { workspaceId })),
+		enabled: Boolean(workspaceId),
 	});
 
 	const setPinned = useMutation({
@@ -23,7 +22,7 @@ export function usePinnedProjects() {
 				method: "POST",
 				body: JSON.stringify({ pinned }),
 			}),
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: KEY }),
+		onSuccess: () => invalidatePinnedProjects(queryClient, workspaceId),
 	});
 
 	const toggle = (projectId: string) => {

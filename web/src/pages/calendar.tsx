@@ -2,17 +2,14 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDaysIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
-import { queryKeys } from "@/hooks/query-keys";
+import { invalidateTaskScope, queryKeys } from "@/hooks/query-keys";
 import { useRealtime } from "@/hooks/use-realtime";
 import { PageContent, PageHeader } from "@/components/kanso-ui";
 import { toastManager } from "@/components/ui/toast";
 import { normalizePriority, priorityColor } from "@/lib/priority";
-import type { Board } from "@/types/board";
-import type { Project } from "@/types/project";
-import type { Workspace } from "@/types/workspace";
 
 import type { CalendarTask } from "@/types/calendar";
 
@@ -23,8 +20,8 @@ type CalendarData = {
 const WEEKDAYS = ["一", "二", "三", "四", "五", "六", "日"];
 
 export default function CalendarPage() {
-	// 全局实时订阅：任何变更（含备份导入）失效日历聚合查询。
-	useRealtime(undefined);
+	const { workspaceId = "" } = useParams();
+	useRealtime(workspaceId, { scope: "workspace" });
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const today = new Date();
@@ -34,38 +31,9 @@ export default function CalendarPage() {
 	const [dragOverDate, setDragOverDate] = useState<string | null>(null);
 
 	const { data, isLoading, isError } = useQuery({
-		queryKey: queryKeys.calendar(),
-		queryFn: async (): Promise<CalendarData> => {
-			const workspaces = await api<Workspace[]>(buildPath("workspaces"));
-			const projectGroups = await Promise.all(
-				workspaces.map(async (workspace) => ({
-					workspace,
-					projects: await api<Project[]>(
-						`/api/workspaces/${workspace.id}/projects`,
-					),
-				})),
-			);
-			const boards = await Promise.all(
-				projectGroups.flatMap(({ workspace, projects }) =>
-					projects.map(async (project) => ({
-						workspace,
-						project,
-						board: await api<Board>(buildPath("project", { id: project.id })),
-					})),
-				),
-			);
-			return {
-				tasks: boards.flatMap(({ workspace, project, board }) =>
-					board.columns.flatMap((column) =>
-						column.tasks.map((task) => ({
-							...task,
-							projectName: project.name,
-							workspaceId: workspace.id,
-						})),
-					),
-				),
-			};
-		},
+		queryKey: queryKeys.calendar(workspaceId),
+		queryFn: () => api<CalendarData>(buildPath("calendar", { workspaceId })),
+		enabled: Boolean(workspaceId),
 	});
 
 	const monthCells = useMemo(() => {
@@ -115,9 +83,11 @@ export default function CalendarPage() {
 			});
 			return;
 		}
-		await queryClient.invalidateQueries({ queryKey: queryKeys.calendar() });
-		queryClient.invalidateQueries({ queryKey: queryKeys.board(task.projectId) });
-		queryClient.invalidateQueries({ queryKey: queryKeys.dashboard() });
+		invalidateTaskScope(queryClient, {
+			projectId: task.projectId,
+			workspaceId,
+			taskId: task.id,
+		});
 	}
 
 	return (

@@ -31,12 +31,12 @@ import { useMilestoneMutations } from "@/hooks/use-milestone-mutations";
 import { useMilestoneLink } from "@/hooks/use-milestone-link";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useTaskMutations } from "@/hooks/use-task-mutations";
+import { useWorkspaceContext } from "@/hooks/use-workspace-context";
 import { useBoardDrag, swimlaneGroups } from "@/hooks/use-board-drag";
 import { overSignal } from "@/lib/board-dnd";
 import type { Board, BoardColumn, Milestone } from "@/types/board";
 import type { Label } from "@/types/label";
 import type { Task } from "@/types/task";
-import type { Workspace } from "@/types/workspace";
 import { PageContent } from "@/components/kanso-ui";
 import { BoardToolbar } from "@/components/board/board-toolbar";
 
@@ -48,19 +48,14 @@ const BoardDialogs = lazy(() =>
 
 export default function BoardPage() {
 	const { projectId = "", workspaceId = "" } = useParams();
+	const { workspace } = useWorkspaceContext();
 
 	// 打开项目即记录"最近打开"，供仪表盘"项目速览"展示。
 	useEffect(() => {
 		if (workspaceId && projectId) recordProjectOpen(workspaceId, projectId);
 	}, [workspaceId, projectId]);
 	const navigate = useNavigate();
-	const { data: workspaces } = useQuery({
-		queryKey: queryKeys.workspaces(),
-		queryFn: () => api<Workspace[]>(buildPath("workspaces")),
-	});
-	const workspaceName =
-		workspaces?.find((workspace) => workspace.id === workspaceId)?.name ??
-		"工作区";
+	const workspaceName = workspace?.name ?? "工作区";
 
 	const [createOpen, setCreateOpen] = useState(false);
 	const [deleting, setDeleting] = useState<BoardColumn | null>(null);
@@ -92,8 +87,8 @@ export default function BoardPage() {
 		() => (board ? swimlaneGroups(board) : []),
 		[board],
 	);
-	const taskOps = useTaskMutations(projectId);
-	const labelOps = useLabelMutations(projectId);
+	const taskOps = useTaskMutations(projectId, workspaceId);
+	const labelOps = useLabelMutations(projectId, workspaceId);
 	// 拖拽状态机（useBoardDrag）：视觉状态 + dragend 提交计划，纯函数在 hooks/use-board-drag.ts。
 	const {
 		dragState,
@@ -118,14 +113,17 @@ export default function BoardPage() {
 		enabled: projectId !== "",
 	});
 	// 里程碑所有操作收敛到领域 hook（建/改名/设截止/删除/关联，成功统一失效列表）。
-	const milestoneOps = useMilestoneMutations(projectId);
+	const milestoneOps = useMilestoneMutations(projectId, workspaceId);
 	const { milestoneLink, startMilestoneLink, clearLinkPress, suppressClickRef } =
 		useMilestoneLink((taskId, milestoneId) =>
 			milestoneOps.attach.mutate({ taskId, milestoneId }),
 		);
 
 	// 实时：其他窗口的写操作经 WS 推送后 invalidate 本页查询。
-	useRealtime(projectId, { deferInvalidation: dragState.activeId !== null });
+	useRealtime(projectId, {
+		deferInvalidation: dragState.activeId !== null,
+		workspaceId,
+	});
 
 	const sensors = useSensors(
 		useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),

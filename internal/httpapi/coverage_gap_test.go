@@ -83,7 +83,7 @@ func TestMemberCannotDeleteWorkspace(t *testing.T) {
 func TestListWorkspacesDatabaseError(t *testing.T) {
 	srv, mock := newMockRouter(t)
 	expectAuth(mock, "m1")
-	mock.ExpectQuery("ListWorkspaces").WillReturnError(errors.New("db down"))
+	mock.ExpectQuery("FROM workspace w").WillReturnError(errors.New("db down"))
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/workspaces", strings.NewReader(""))
 	if err != nil {
@@ -103,8 +103,6 @@ func TestListWorkspacesDatabaseError(t *testing.T) {
 func TestBackupImportDatabaseError(t *testing.T) {
 	srv, mock := newMockRouter(t)
 	expectAuth(mock, "m1")
-	mock.ExpectQuery("FROM member WHERE id").
-		WillReturnRows(sqlmock.NewRows(memberRowCols).AddRow(memberRow("m1")...))
 	mock.ExpectBegin().WillReturnError(errors.New("db down"))
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/api/settings/backup", strings.NewReader(`{"workspaces":[{"id":"w1","name":"Workspace","created_at":"2026-01-01"}]}`))
@@ -130,8 +128,7 @@ func TestValidationErrorsForMemberAndMilestone(t *testing.T) {
 		path   string
 		body   string
 	}{
-		{http.MethodPost, "/api/members", `{"workspaceId":"","name":"x"}`},
-		{http.MethodPost, "/api/members", `{"workspaceId":"w1","name":""}`},
+		{http.MethodPost, "/api/members", `{"name":""}`},
 		{http.MethodPatch, "/api/members/nope", `{"avatar":123}`},
 		{http.MethodPost, "/api/projects/nope/milestones", `{"name":""}`},
 		{http.MethodPatch, "/api/milestones/nope", `{"name":""}`},
@@ -186,7 +183,6 @@ func TestAdditionalNotFoundBranches(t *testing.T) {
 		{http.MethodPost, "/api/projects/nope/labels", `{"name":"x"}`},
 		{http.MethodPost, "/api/workspaces/nope/projects", `{"name":"x"}`},
 		{http.MethodPost, "/api/members", "{"},
-		{http.MethodPost, "/api/members", `{"workspaceId":"nope","name":"x"}`},
 	}
 	for _, tc := range cases {
 		res, _ := e.do(t, tc.method, tc.path, tc.body)
@@ -228,7 +224,9 @@ func TestMemberSelfUpdateRejectsMalformedAvatar(t *testing.T) {
 func TestDeleteWorkspaceDatabaseError(t *testing.T) {
 	srv, mock := newMockRouter(t)
 	expectAuth(mock, "m1")
-	mock.ExpectQuery("FROM member WHERE id").WillReturnRows(sqlmock.NewRows(memberRowCols).AddRow(memberRow("m1")...))
+	mock.ExpectQuery("SELECT EXISTS\\(SELECT 1 FROM workspace WHERE id").
+		WithArgs("w1").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(1))
 	mock.ExpectBegin()
 	workspaceCols := []string{"id", "name", "created_at"}
 	mock.ExpectQuery("FROM workspace WHERE id").WillReturnRows(sqlmock.NewRows(workspaceCols).AddRow("w1", "Workspace", "2026-01-01"))
@@ -263,9 +261,12 @@ func TestRequireOwnerLookupErrors(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			srv, mock := newMockRouter(t)
-			expectAuth(mock, "m1")
+			// 让 actor 反查和统一 capability 反查都走错误分支；前者不应
+			// 把失败身份当成已授权，后者负责映射 401/500。
+			mock.ExpectQuery("FROM member WHERE access_key_hash").WillReturnRows(sqlmock.NewRows(memberRowCols).AddRow(memberRow("m1")...))
 			mock.ExpectQuery("FROM member WHERE id").WillReturnError(tc.err)
-			req, err := http.NewRequest(http.MethodPost, srv.URL+"/api/members", strings.NewReader(`{"workspaceId":"w1","name":"New"}`))
+			mock.ExpectQuery("FROM member WHERE id").WillReturnError(tc.err)
+			req, err := http.NewRequest(http.MethodPost, srv.URL+"/api/members", strings.NewReader(`{"name":"New"}`))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -359,14 +360,12 @@ func TestGetMeMemberNotFound(t *testing.T) {
 
 func TestMemberCannotManageMembers(t *testing.T) {
 	srv, mock := newMockRouter(t)
-	mock.ExpectQuery("FROM member WHERE access_key").WillReturnRows(sqlmock.NewRows(memberRowCols).
-		AddRow("m1", "w1", "Member", "member", nil, nil, "mock-key", "2026-01-01"))
+	mock.ExpectQuery("FROM member WHERE access_key_hash").WillReturnRows(sqlmock.NewRows(memberRowCols).
+		AddRow("m1", "Member", "member", nil, nil, "mock-key", "2026-01-01"))
 	mock.ExpectQuery("FROM member WHERE id").WillReturnRows(sqlmock.NewRows(memberRowCols).
-		AddRow("m1", "w1", "Member", "member", nil, nil, "mock-key", "2026-01-01"))
-	mock.ExpectQuery("FROM member WHERE id").WillReturnRows(sqlmock.NewRows(memberRowCols).
-		AddRow("m1", "w1", "Member", "member", nil, nil, "mock-key", "2026-01-01"))
+		AddRow("m1", "Member", "member", nil, nil, "mock-key", "2026-01-01"))
 
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/api/members", strings.NewReader(`{"workspaceId":"w1","name":"Other"}`))
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/api/members", strings.NewReader(`{"name":"Other"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -385,8 +384,6 @@ func TestMemberCannotManageMembers(t *testing.T) {
 func TestDeleteProjectDatabaseError(t *testing.T) {
 	srv, mock := newMockRouter(t)
 	expectAuth(mock, "m1")
-	mock.ExpectQuery("FROM member WHERE id").WillReturnRows(sqlmock.NewRows(memberRowCols).
-		AddRow(memberRow("m1")...))
 	mock.ExpectBegin()
 	mock.ExpectQuery("FROM project WHERE id").WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at"}).
 		AddRow("p1", "w1", "Project", 0, "2026-01-01", "2026-01-01"))
@@ -429,7 +426,7 @@ func TestMemberManagementDatabaseErrors(t *testing.T) {
 		path   string
 		body   string
 	}{
-		{"create", http.MethodPost, "/api/members", `{"workspaceId":"w1","name":"New"}`},
+		{"create", http.MethodPost, "/api/members", `{"name":"New"}`},
 		{"delete", http.MethodDelete, "/api/members/m2", ""},
 		{"key", http.MethodPost, "/api/members/m2/key", ""},
 	}
@@ -437,15 +434,17 @@ func TestMemberManagementDatabaseErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv, mock := newMockRouter(t)
 			expectAuth(mock, "m1")
-			mock.ExpectQuery("FROM member WHERE id").WillReturnRows(sqlmock.NewRows(memberRowCols).AddRow(memberRow("m1")...))
 			if tc.name == "create" {
 				mock.ExpectBegin()
-				mock.ExpectQuery("FROM workspace WHERE id").WillReturnError(errors.New("db down"))
+				mock.ExpectQuery("CountMembers").WillReturnError(errors.New("db down"))
 			} else {
 				if tc.name == "delete" {
 					mock.ExpectBegin()
+					mock.ExpectQuery("FROM member WHERE id").WillReturnError(errors.New("db down"))
+				} else {
+					mock.ExpectQuery("FROM member WHERE id").WillReturnRows(sqlmock.NewRows(memberRowCols).AddRow(memberRow("m1")...))
+					mock.ExpectQuery("FROM member WHERE id").WillReturnError(errors.New("db down"))
 				}
-				mock.ExpectQuery("FROM member WHERE id").WillReturnError(errors.New("db down"))
 			}
 			req, err := http.NewRequest(tc.method, srv.URL+tc.path, strings.NewReader(tc.body))
 			if err != nil {
@@ -508,6 +507,9 @@ func TestMilestoneAssociationDatabaseErrors(t *testing.T) {
 func TestWorkspaceRenameDatabaseError(t *testing.T) {
 	srv, mock := newMockRouter(t)
 	expectAuth(mock, "m1")
+	mock.ExpectQuery("SELECT EXISTS\\(SELECT 1 FROM workspace WHERE id").
+		WithArgs("w1").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(1))
 	mock.ExpectBegin()
 	mock.ExpectQuery("UpdateWorkspaceName").WillReturnError(errors.New("db down"))
 
@@ -530,7 +532,6 @@ func TestWorkspaceRenameDatabaseError(t *testing.T) {
 func TestDeleteProjectOperationDatabaseError(t *testing.T) {
 	srv, mock := newMockRouter(t)
 	expectAuth(mock, "m1")
-	mock.ExpectQuery("FROM member WHERE id").WillReturnRows(sqlmock.NewRows(memberRowCols).AddRow(memberRow("m1")...))
 	mock.ExpectBegin()
 	mock.ExpectQuery("FROM project WHERE id").WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at"}).
 		AddRow("p1", "w1", "Project", 0, "2026-01-01", "2026-01-01"))

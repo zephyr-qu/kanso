@@ -52,6 +52,9 @@ func TestColumnMoveWIPErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv, mock := newMockRouter(t)
 			expectAuth(mock, "m1")
+			if strings.HasPrefix(tc.path, "/api/workspaces/w1/") {
+				expectWorkspaceExists(mock, "w1")
+			}
 			tc.failSQL(mock)
 
 			req, err := http.NewRequest(tc.method, srv.URL+tc.path, strings.NewReader(tc.body))
@@ -215,7 +218,7 @@ func TestFinalHandler500(t *testing.T) {
 			name: "成员列表失败500", method: http.MethodGet, path: "/api/workspaces/w1/members",
 			want: http.StatusInternalServerError,
 			failSQL: func(m sqlmock.Sqlmock) {
-				m.ExpectQuery("ListMembersByWorkspace").WillReturnError(errors.New("db down"))
+				m.ExpectQuery("FROM member m").WillReturnError(errors.New("db down"))
 			},
 		},
 	}
@@ -223,6 +226,9 @@ func TestFinalHandler500(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv, mock := newMockRouter(t)
 			expectAuth(mock, "m1")
+			if strings.HasPrefix(tc.path, "/api/workspaces/w1/") {
+				expectWorkspaceExists(mock, "w1")
+			}
 			tc.failSQL(mock)
 
 			req, err := http.NewRequest(tc.method, srv.URL+tc.path, strings.NewReader(tc.body))

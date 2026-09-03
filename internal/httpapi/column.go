@@ -39,6 +39,9 @@ func (a *API) getBoard(w http.ResponseWriter, r *http.Request) {
 
 // createColumn 在项目末尾追加新列（可携带初始 WIP 限制；0006 Phase 3 任务 3.6）。
 func (a *API) createColumn(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityManageStructure) {
+		return
+	}
 	var body struct {
 		Name     string `json:"name"`
 		WipLimit *int64 `json:"wipLimit"`
@@ -70,6 +73,9 @@ func (a *API) createColumn(w http.ResponseWriter, r *http.Request) {
 // wipLimit 用 RawMessage 区分三种情况：未传（保持）、null（清空）、数值（设置）。
 // 0006 Phase 3 任务 3.6：此前 *int64 无法表达「传 null 清空」。
 func (a *API) updateColumn(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityManageStructure) {
+		return
+	}
 	var body struct {
 		Name     *string         `json:"name"`
 		Position *int64          `json:"position"`
@@ -135,7 +141,7 @@ func (a *API) updateColumn(w http.ResponseWriter, r *http.Request) {
 
 // deleteColumn 删除列（其下任务级联删除）。
 func (a *API) deleteColumn(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOwnerInTeam(w, r) {
+	if !a.requireCapability(w, r, service.CapabilityDeleteData) {
 		return
 	}
 	if err := a.svc.DeleteColumn(r.Context(), chi.URLParam(r, "id")); err != nil {

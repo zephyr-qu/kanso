@@ -1,25 +1,40 @@
-// 个人中心：当前成员信息（可编辑名称）+ 个人活跃热力图 + 团队成员列表。
+// 个人中心：当前成员信息（可编辑名称）+ 个人活跃热力图。
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PencilIcon, PlusIcon, TrashIcon, UploadIcon } from "lucide-react";
+import { Link, useParams } from "react-router";
+import {
+	ActivityIcon,
+	AlertTriangleIcon,
+	ArrowRightIcon,
+	CheckCircle2Icon,
+	HistoryIcon,
+	ListTodoIcon,
+	PencilIcon,
+	ShieldCheckIcon,
+	UploadIcon,
+	type LucideIcon,
+} from "lucide-react";
 import { MemberAvatar } from "@/components/member-avatar";
+import { MemberKeyButton } from "@/components/member-key-button";
+import ActivityItem from "@/components/activity-item";
+import { activityIconForAction } from "@/components/activity-icon";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "@/components/ui/popover";
-import ConfirmDialog from "@/components/confirm-dialog";
-import NameDialog from "@/components/name-dialog";
 import { PageContent, PageHeader, SurfaceCard } from "@/components/kanso-ui";
-import { toastManager } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
 import { avatarColor, AVATAR_COLORS } from "@/lib/avatar";
-import { queryKeys } from "@/hooks/query-keys";
+import { formatActivityAge } from "@/lib/format-relative";
+import { invalidateMe, queryKeys } from "@/hooks/query-keys";
+import { useWorkspaceContext } from "@/hooks/use-workspace-context";
+import type { DashboardData } from "@/lib/dashboard";
 import type { Activity } from "@/types/task-detail";
 import type { Member, MemberRole } from "@/types/member";
 import type { MeResponse } from "@/types/me";
 
 const ROLE_LABEL: Record<MemberRole, string> = {
-	owner: "所有者",
+	admin: "管理员",
 	member: "成员",
 };
 
@@ -29,7 +44,7 @@ const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"];
 function localDateKey(d: Date): string {
 	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-/** 个人活跃热力图：近 13 周按天计数（GitHub 风格），颜色按活动密度分级。 */
+/** 个人活跃热力图：近一年按天计数（GitHub 风格），颜色按活动密度分级。 */
 function ActivityHeatmap({ activities }: { activities: Activity[] }) {
 	const today = new Date();
 	today.setHours(0, 0, 0, 0);
@@ -151,6 +166,8 @@ className="min-w-0 flex-1 overflow-visible whitespace-nowrap text-[9px] leading-
 }
 
 export default function ProfilePage() {
+	const { workspaceId = "" } = useParams();
+	const { workspace } = useWorkspaceContext();
 	const queryClient = useQueryClient();
 	// 内联编辑名称（小操作不弹面板）：点编辑 → 输入框，Enter 保存，Esc/失焦取消。
 	const [editing, setEditing] = useState(false);
@@ -160,21 +177,20 @@ export default function ProfilePage() {
 		queryFn: () => api<MeResponse>(buildPath("me")),
 	});
 	const mode = data?.mode ?? "team";
-	const { data: workspaces } = useQuery({
-		queryKey: queryKeys.workspaces(),
-		queryFn: () => api<{ id: string; name: string }[]>(buildPath("workspaces")),
-	});
-	const { data: members } = useQuery({
-		queryKey: queryKeys.members(data?.workspaceId ?? ""),
-		queryFn: () =>
-			api<Member[]>(
-				buildPath("workspaceMembers", { id: data?.workspaceId ?? "" }),
-			),
-		enabled: Boolean(data?.workspaceId) && mode === "team",
-	});
 	const { data: activities } = useQuery({
-		queryKey: queryKeys.activities(),
-		queryFn: () => api<Activity[]>(buildPath("activity")),
+		queryKey: queryKeys.activities(workspaceId),
+		queryFn: () => api<Activity[]>(buildPath("activity", { workspaceId })),
+		enabled: Boolean(workspaceId),
+	});
+	const { data: dashboard } = useQuery({
+		queryKey: queryKeys.dashboard(workspaceId),
+		queryFn: () => api<DashboardData>(buildPath("dashboard", { workspaceId })),
+		enabled: Boolean(workspaceId),
+	});
+	const { data: teamMembers } = useQuery({
+		queryKey: queryKeys.members(workspaceId),
+		queryFn: () => api<Member[]>(buildPath("workspaceMembers", { id: workspaceId })),
+		enabled: mode === "team" && Boolean(workspaceId),
 	});
 
 	const updateMember = useMutation({
@@ -188,41 +204,8 @@ export default function ProfilePage() {
 				method: "PATCH",
 				body: JSON.stringify(patch),
 			}),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: queryKeys.me() });
-			queryClient.invalidateQueries({
-				queryKey: queryKeys.members(data?.workspaceId ?? ""),
-			});
-		},
-	});
-	// 成员管理：5 人上限（mock 层同步限制），所有者受保护不可删除。
-	const [addOpen, setAddOpen] = useState(false);
-	const [deleteTarget, setDeleteTarget] = useState<Member | null>(null);
-	const memberCount = members?.length ?? 0;
-	const memberLimit = 5;
-	const atMemberLimit = memberCount >= memberLimit;
-	const createMember = useMutation({
-		meta: { feedback: { success: "成员已添加", errorTitle: "添加成员失败" } },
-		mutationFn: (name: string) =>
-			api<Member>(buildPath("members"), {
-				method: "POST",
-				body: JSON.stringify({ workspaceId: data?.workspaceId, name }),
-			}),
-		onSuccess: () => {
-			queryClient.invalidateQueries({
-				queryKey: queryKeys.members(data?.workspaceId ?? ""),
-			});
-		},
-	});
-	const deleteMemberMutation = useMutation({
-		meta: { feedback: { success: "成员已移除", errorTitle: "移除成员失败" } },
-		mutationFn: (memberId: string) =>
-			api<void>(buildPath("member", { id: memberId }), { method: "DELETE" }),
-		onSuccess: () => {
-			queryClient.invalidateQueries({
-				queryKey: queryKeys.members(data?.workspaceId ?? ""),
-			});
-			queryClient.invalidateQueries({ queryKey: queryKeys.me() });
+			onSuccess: () => {
+				invalidateMe(queryClient);
 		},
 	});
 	const fileRef = useRef<HTMLInputElement>(null);
@@ -255,14 +238,26 @@ export default function ProfilePage() {
 	};
 
 	const member = data?.member;
-	const canManageMembers = member?.role === "owner";
-	const workspaceName =
-		workspaces?.find((w) => w.id === data?.workspaceId)?.name ?? "";
+	const workspaceName = workspace?.name ?? "";
+	const activityOwner = mode === "team" ? member?.name : "Admin";
+	const myActivities = (activities ?? []).filter(
+		(activity) => !activityOwner || activity.actor === activityOwner,
+	);
+	const recentActivities = myActivities.slice(0, 5);
+	const recentActivityCount = myActivities.filter(
+		(activity) => Date.now() - new Date(activity.createdAt).getTime() <= 7 * 86_400_000,
+	).length;
+	const inProgressTasks = dashboard
+		? Math.max(0, dashboard.totalTasks - dashboard.doneTasks)
+		: null;
 
 	return (
 		<div className="flex h-full flex-col">
 			<PageHeader>
 				<h1 className="text-[17px] font-[650] tracking-tight">个人中心</h1>
+				<span className="text-[13px] text-muted-foreground">
+					当前成员 · 资料、活动与安全
+				</span>
 			</PageHeader>
 			<PageContent className="px-[30px] pb-11 pt-[26px]">
 				{isLoading || !member ? (
@@ -270,7 +265,7 @@ export default function ProfilePage() {
 						<Spinner />
 					</div>
 				) : (
-					<div className="w-full space-y-4">
+					<div className="w-full max-w-5xl space-y-4">
 						{/* 当前成员卡 */}
 						<SurfaceCard className="flex items-center gap-4 p-5">
 							{editing ? (
@@ -412,188 +407,155 @@ export default function ProfilePage() {
 							</Button>
 						</SurfaceCard>
 
-						{/* 个人活跃热力图 */}
-						<SurfaceCard className="p-5">
-							<div className="mb-3 flex items-center justify-between">
-								<span className="text-[13px] font-semibold">个人活跃</span>
+						{/* 工作区概览：任务没有分配人，因此这里明确标注为工作区数据。 */}
+						<div>
+							<div className="mb-2 flex items-center justify-between">
+								<span className="text-[13px] font-semibold">工作区概览</span>
+								<span className="text-xs text-muted-foreground/70">当前工作区</span>
 							</div>
-							<ActivityHeatmap activities={activities ?? []} />
-						</SurfaceCard>
+							<div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+								<ProfileStat icon={ListTodoIcon} label="进行中" value={inProgressTasks} />
+								<ProfileStat icon={CheckCircle2Icon} label="已完成" value={dashboard?.doneTasks ?? null} />
+								<ProfileStat icon={AlertTriangleIcon} label="需关注" value={dashboard?.urgent ?? null} />
+								<ProfileStat icon={ActivityIcon} label="近 7 天活动" value={recentActivityCount} />
+							</div>
+						</div>
 
-						{/* 团队成员（仅团队模式；personal 无成员表，ADR-0013） */}
-						{mode === "team" ? (
+						<div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+							{/* 我的最近活动 */}
 							<SurfaceCard className="p-5">
 								<div className="mb-3 flex items-center justify-between">
-									<span className="text-[13px] font-semibold">团队成员</span>
-									<div className="flex items-center gap-2.5">
-										<span className="text-xs text-muted-foreground/80">
-											{memberCount}/{memberLimit} 人
-										</span>
-										<Button
-											size="sm"
-											onClick={() => setAddOpen(true)}
-											disabled={!canManageMembers || atMemberLimit}
-											title={
-												canManageMembers
-													? atMemberLimit
-														? `成员数量已达上限（${memberLimit} 人）`
-														: undefined
-													: "只有所有者可以管理成员"
-											}
-										>
-											<PlusIcon className="size-3.5" /> 增加成员
-										</Button>
+									<div>
+										<h2 className="text-[13px] font-semibold">我的最近活动</h2>
+										<p className="mt-1 text-xs text-muted-foreground/70">最近参与的项目操作</p>
 									</div>
+									<HistoryIcon className="size-4 text-muted-foreground/55" />
 								</div>
-								<ul className="space-y-1">
-									{(members ?? []).map((m) => (
-										<li
-											key={m.id}
-											className="flex items-center gap-3 rounded-lg px-2 py-2"
-										>
-											<MemberAvatar
-												member={m}
-												className="size-8 text-sm font-semibold text-white"
-											/>
-											<span className="min-w-0 flex-1 truncate text-sm">{m.name}</span>
-											<span className="shrink-0 text-xs text-muted-foreground/70">
-												{ROLE_LABEL[m.role]}
-											</span>
-											{canManageMembers ? (
-												<MemberKeyButton memberId={m.id} isOwner={m.role === "owner"} />
-											) : null}
-											{canManageMembers && m.role !== "owner" ? (
-												<Button
-													size="icon-sm"
-													variant="ghost"
-													className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-													aria-label={`删除成员 ${m.name}`}
-													onClick={() => setDeleteTarget(m)}
-												>
-													<TrashIcon className="size-3.5" />
-												</Button>
-											) : null}
-										</li>
-									))}
-								</ul>
-								<p className="mt-3 border-t pt-3 text-[11px] leading-relaxed text-muted-foreground/70">
-									管理员（所有者）使用后台密钥登录；其他成员由管理员分配密钥进入。密钥在成员行点击生成。
-								</p>
+								{recentActivities.length > 0 ? (
+									<div className="divide-y">
+										{recentActivities.map((activity) => {
+											const Icon = activityIconForAction(activity.action);
+											return (
+												<div key={activity.id} className="flex min-w-0 items-start gap-3 py-3 first:pt-0 last:pb-0">
+												<span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+													<Icon className="size-3.5" />
+												</span>
+												<div className="min-w-0 flex-1">
+													<ActivityItem
+														projectName={activity.projectName}
+														action={activity.action}
+														data={activity.data}
+														actor="你"
+														className="block text-[13px]"
+													/>
+													<p className="mt-1 text-[11px] text-muted-foreground/70">
+														{formatActivityAge(activity.createdAt)}
+													</p>
+												</div>
+											</div>
+											);
+										})}
+									</div>
+								) : (
+									<div className="flex flex-col items-center justify-center py-8 text-center">
+										<HistoryIcon className="size-5 text-muted-foreground/45" />
+										<p className="mt-2 text-sm text-muted-foreground">还没有个人活动</p>
+										<p className="mt-1 text-xs text-muted-foreground/70">开始编辑任务后，这里会显示你的操作。</p>
+									</div>
+								)}
 							</SurfaceCard>
-						) : null}
+
+							{mode === "team" ? (
+									<SurfaceCard className="p-5">
+										<div className="flex items-start justify-between gap-3">
+											<div>
+												<h2 className="text-[13px] font-semibold">账号与安全</h2>
+												<p className="mt-1 text-xs text-muted-foreground/70">管理当前成员的访问凭证</p>
+											</div>
+											<ShieldCheckIcon className="size-4 text-primary" />
+										</div>
+										<div className="mt-4 space-y-2.5">
+											<SecurityMeta label="所属工作区" value={workspaceName || "当前工作区"} />
+											<SecurityMeta label="团队角色" value={ROLE_LABEL[member.role]} />
+											<SecurityMeta label="团队成员" value={`${teamMembers?.length ?? "—"} / 5 人`} />
+											<div className="flex items-center justify-between gap-3 border-t pt-3">
+											<div className="min-w-0">
+												<p className="text-sm font-medium">访问密钥</p>
+												<p className={`mt-1 text-xs ${member.hasKey ? "text-emerald-600" : "text-amber-600"}`}>
+													{member.hasKey ? "已授权，可正常登录" : "未授权，需要生成密钥"}
+												</p>
+											</div>
+											<MemberKeyButton
+												memberId={member.id}
+												hasKey={member.hasKey}
+												isSelf
+												canRotate
+												onRotated={() => {
+															invalidateMe(queryClient);
+													}}
+											/>
+											</div>
+										</div>
+										<div className="mt-4 rounded-lg bg-muted/55 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+											密钥只在生成时显示一次；轮换后，旧密钥会立即失效。
+										</div>
+										<Link to="/team" className="mt-4 flex items-center justify-between border-t pt-3 text-xs text-muted-foreground transition-colors hover:text-foreground">
+											<span>前往团队管理</span>
+											<ArrowRightIcon className="size-3.5" />
+										</Link>
+									</SurfaceCard>
+								) : null}
+						</div>
+
+						<SurfaceCard className="p-5">
+							<div className="mb-3 flex items-center justify-between">
+								<div>
+									<h2 className="text-[13px] font-semibold">个人活跃</h2>
+									<p className="mt-1 text-xs text-muted-foreground/70">只统计你的操作记录</p>
+								</div>
+								<ActivityIcon className="size-4 text-muted-foreground/55" />
+							</div>
+							<div className="overflow-x-auto">
+								<div className="min-w-[680px]">
+									<ActivityHeatmap activities={myActivities} />
+								</div>
+							</div>
+						</SurfaceCard>
+
 					</div>
 				)}
 			</PageContent>
-			<NameDialog
-				open={addOpen}
-				onOpenChange={setAddOpen}
-				title="添加成员"
-				description={`为工作区添加协作者（上限 ${memberLimit} 人）。`}
-				submitLabel="添加"
-				onSubmit={async (name) => {
-					await createMember.mutateAsync(name);
-				}}
-			/>
-			<ConfirmDialog
-				open={deleteTarget !== null}
-				onOpenChange={(open) => {
-					if (!open) setDeleteTarget(null);
-				}}
-				title="删除成员"
-				description={`确定删除成员「${deleteTarget?.name ?? ""}」？删除后其访问密钥立即失效。`}
-				confirmLabel="删除"
-				onConfirm={async () => {
-					if (deleteTarget) await deleteMemberMutation.mutateAsync(deleteTarget.id);
-				}}
-			/>
 		</div>
 	);
 }
 
-/** 成员访问密钥：管理员查看后台密钥；成员生成密钥 → 复制完成授权。 */
-function MemberKeyButton({
-	memberId,
-	isOwner,
-}: {
-	memberId: string;
-	isOwner: boolean;
-}) {
-	const [key, setKey] = useState<string | null>(null);
-	const [copied, setCopied] = useState(false);
-	const [loading, setLoading] = useState(false);
-
-	const generate = async () => {
-		if (loading) return;
-		setLoading(true);
-		try {
-			const res = await api<{ key: string }>(
-				buildPath("memberKey", { id: memberId }),
-				{ method: "POST" },
-			);
-			setKey(res.key);
-		} catch (error) {
-			// W-8：密钥生成失败给出反馈（此前为未处理的 promise rejection）。
-			toastManager.add({
-				title: "生成密钥失败",
-				description: error instanceof Error ? error.message : "网络错误",
-				type: "error",
-			});
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	const copy = async () => {
-		if (!key) return;
-		try {
-			// 部分环境（无头/权限弹窗）writeText 可能挂起，500ms 超时走兜底
-			await Promise.race([
-				navigator.clipboard.writeText(key),
-				new Promise((_, reject) =>
-					setTimeout(() => reject(new Error("clipboard timeout")), 500),
-				),
-			]);
-		} catch {
-			// 兜底：临时 textarea + execCommand
-			const textarea = document.createElement("textarea");
-			textarea.value = key;
-			textarea.style.position = "fixed";
-			textarea.style.opacity = "0";
-			document.body.appendChild(textarea);
-			textarea.select();
-			document.execCommand("copy");
-			textarea.remove();
-		}
-		setCopied(true);
-		setTimeout(() => setCopied(false), 1500);
-	};
-
-	if (!key) {
-		return (
-			<Button
-				size="sm"
-				variant="outline"
-				className="shrink-0 text-xs text-[var(--semantic-action-primary)]"
-				onClick={generate}
-				loading={loading}
-			>
-				{isOwner ? "后台密钥" : "生成密钥"}
-			</Button>
-		);
-	}
+function SecurityMeta({ label, value }: { label: string; value: string }) {
 	return (
-		<span className="flex shrink-0 items-center gap-1.5">
-			<code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">
-				{key}
-			</code>
-			<Button
-				size="sm"
-				variant="outline"
-				className="shrink-0 text-xs text-[var(--semantic-action-primary)]"
-				onClick={copy}
-			>
-				{copied ? "已复制" : "复制"}
-			</Button>
-		</span>
+		<div className="flex items-center justify-between gap-3 text-xs">
+			<span className="text-muted-foreground">{label}</span>
+			<span className="truncate text-right font-medium text-foreground">{value}</span>
+		</div>
+	);
+}
+
+function ProfileStat({
+	icon: Icon,
+	label,
+	value,
+}: {
+	icon: LucideIcon;
+	label: string;
+	value: number | null;
+}) {
+	return (
+		<SurfaceCard className="flex items-center gap-3 p-4">
+			<span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+				<Icon className="size-4" />
+			</span>
+			<div className="min-w-0">
+				<div className="text-lg font-semibold tracking-tight">{value ?? "—"}</div>
+				<div className="mt-0.5 truncate text-xs text-muted-foreground">{label}</div>
+			</div>
+		</SurfaceCard>
 	);
 }

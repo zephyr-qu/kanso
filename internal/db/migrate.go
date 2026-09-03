@@ -20,8 +20,8 @@ func AppliedMigrationCount(database *sql.DB) (int, error) {
 }
 
 // Migrate 按文件名顺序执行未应用的迁移（embed 自 migrations/ 目录）。
-// 所有迁移（含 0007 member 表）在 personal/team 两种模式均应用：
-// personal = 单一 owner 成员的团队模式（ADR-0013 修订）。
+// 所有迁移在 personal/team 两种模式均应用；模式只影响初始化与界面简化，
+// 成员身份和工作区授权始终使用同一套模型。
 func Migrate(database *sql.DB) error {
 	if _, err := database.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
 		version    TEXT PRIMARY KEY,

@@ -1,6 +1,7 @@
 // 全局活动记录：对齐原型的单卡片操作轨迹布局。
 import { memo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useParams } from "react-router";
 import { HistoryIcon } from "lucide-react";
 import ActivityItem from "@/components/activity-item";
 import { activityIconForAction } from "@/components/activity-icon";
@@ -14,11 +15,12 @@ import { PageContent, PageHeader, SurfaceCard } from "@/components/kanso-ui";
 import { formatActivityAge } from "@/lib/format-relative";
 
 export default function ActivityPage() {
-	// 全局实时订阅：任何变更（含备份导入）失效活动流查询。
-	useRealtime(undefined);
+	const { workspaceId = "" } = useParams();
+	useRealtime(workspaceId, { scope: "workspace" });
 	const { data, isLoading, isError } = useQuery({
-		queryKey: queryKeys.activities(),
-		queryFn: () => api<FlatActivity[]>(buildPath("activity")),
+		queryKey: queryKeys.activities(workspaceId),
+		queryFn: () => api<FlatActivity[]>(buildPath("activity", { workspaceId })),
+		enabled: Boolean(workspaceId),
 	});
 
 	const activities = data
@@ -32,7 +34,7 @@ export default function ActivityPage() {
 					活动记录
 				</h1>
 				<span className="text-[13px] text-muted-foreground">
-					全部工作区 · 操作轨迹
+					当前工作区 · 操作轨迹
 				</span>
 			</PageHeader>
 

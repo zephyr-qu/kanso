@@ -75,13 +75,7 @@ func New(ctx context.Context, cfg config.Config, version string, assets fs.FS) (
 		return fail(fmt.Errorf("初始化默认工作区失败: %w", err))
 	}
 	if err := svc.SeedOwnerMember(ctx, cfg.AccessKey); err != nil {
-		return fail(fmt.Errorf("初始化所有者成员失败: %w", err))
-	}
-	// owner 名非 "Admin" 时把历史归属重写为当前 owner 名。
-	if owner, ok := svc.OwnerMember(ctx); ok && owner.Name != "Admin" {
-		if err := svc.ReownLegacyAdmin(ctx, owner.Name); err != nil {
-			log.Printf("⚠️ 重写历史归属失败（非致命）: %v", err)
-		}
+		return fail(fmt.Errorf("初始化管理员成员失败: %w", err))
 	}
 
 	hub := realtime.NewHub()

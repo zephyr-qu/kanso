@@ -40,9 +40,15 @@ func (s *Service) SeedDefaultWorkspace(ctx context.Context) error {
 	return nil
 }
 
-// ListWorkspaces 返回全部工作区（单用户场景通常只有一个）。
-func (s *Service) ListWorkspaces(ctx context.Context) ([]gen.Workspace, error) {
-	workspaces, err := gen.New(s.db).ListWorkspaces(ctx)
+// ListWorkspaces 返回当前成员可访问的工作区；未传成员 ID 仅供启动/内部工具读取全量。
+func (s *Service) ListWorkspaces(ctx context.Context, memberID ...string) ([]gen.Workspace, error) {
+	var workspaces []gen.Workspace
+	var err error
+	if len(memberID) > 0 && memberID[0] != "" {
+		workspaces, err = s.ListAccessibleWorkspaces(ctx, memberID[0])
+	} else {
+		workspaces, err = gen.New(s.db).ListWorkspaces(ctx)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -50,6 +56,20 @@ func (s *Service) ListWorkspaces(ctx context.Context) ([]gen.Workspace, error) {
 		return []gen.Workspace{}, nil
 	}
 	return workspaces, nil
+}
+
+func (s *Service) aggregateWorkspaceID(ctx context.Context, workspaceIDs ...string) (string, error) {
+	if len(workspaceIDs) > 0 && workspaceIDs[0] != "" {
+		return workspaceIDs[0], nil
+	}
+	workspaces, err := gen.New(s.db).ListWorkspaces(ctx)
+	if err != nil {
+		return "", fmt.Errorf("查询工作区失败: %w", err)
+	}
+	if len(workspaces) == 0 {
+		return "", ErrNotFound
+	}
+	return workspaces[0].ID, nil
 }
 
 // CreateWorkspace 创建新工作区。
@@ -72,7 +92,14 @@ func (s *Service) CreateWorkspace(ctx context.Context, name string) (gen.Workspa
 	if err != nil {
 		return gen.Workspace{}, err
 	}
-	if err := s.commitEvent(ctx, tx, q, Event{Action: EventWorkspaceCreated, WorkspaceID: workspace.ID, EntityID: workspace.ID, Data: map[string]string{"name": workspace.Name}, RecordActivity: true}); err != nil {
+	project, err := createProjectInTx(ctx, q, workspace.ID, defaultProjectName)
+	if err != nil {
+		return gen.Workspace{}, fmt.Errorf("创建默认项目失败: %w", err)
+	}
+	if err := s.commitEvents(ctx, tx, q,
+		Event{Action: EventWorkspaceCreated, WorkspaceID: workspace.ID, EntityID: workspace.ID, Data: map[string]string{"name": workspace.Name}, RecordActivity: true},
+		Event{Action: EventProjectCreated, ProjectID: project.ID, WorkspaceID: workspace.ID, EntityID: project.ID, Data: map[string]string{"name": project.Name}, RecordActivity: true},
+	); err != nil {
 		return gen.Workspace{}, err
 	}
 	return workspace, nil
@@ -93,18 +120,18 @@ func (s *Service) RenameWorkspace(ctx context.Context, workspaceID, name string)
 	if err != nil {
 		return gen.Workspace{}, mapNoRows(err)
 	}
-	if err := s.commitEvent(ctx, tx, q, Event{Action: EventWorkspaceUpdated, WorkspaceID: workspace.ID, EntityID: workspace.ID, Data: map[string]string{"name": workspace.Name}, RecordActivity: true}); err != nil {
+	if err := s.commitEvents(ctx, tx, q, Event{Action: EventWorkspaceUpdated, WorkspaceID: workspace.ID, EntityID: workspace.ID, Data: map[string]string{"name": workspace.Name}, RecordActivity: true}); err != nil {
 		return gen.Workspace{}, err
 	}
 	return workspace, nil
 }
 
 // ErrLastWorkspace 表示试图删除最后一个工作区（HTTP 层映射为 400）。
-// 工作区承载 owner 成员（member.workspace_id 级联删除），删光会导致认证身份失效。
+// 删除工作区不会删除全局成员身份；只会级联清理其业务数据和授权关系。
 var ErrLastWorkspace = errors.New("cannot delete last workspace")
 
 // DeleteWorkspace 删除工作区，其下项目/列/任务等由外键级联删除；不存在时返回 ErrNotFound。
-// 最后一个工作区不可删除（个人/团队模式均适用：owner 成员随工作区级联删除）。
+// 最后一个工作区不可删除，避免实例进入无可用工作区状态。
 func (s *Service) DeleteWorkspace(ctx context.Context, workspaceID string) error {
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
@@ -134,5 +161,5 @@ func (s *Service) DeleteWorkspace(ctx context.Context, workspaceID string) error
 	if n == 0 {
 		return ErrNotFound
 	}
-	return s.commitEvent(ctx, tx, q, Event{Action: EventWorkspaceDeleted, WorkspaceID: workspaceID, EntityID: workspaceID, Data: map[string]string{"name": workspace.Name}, RecordActivity: true})
+	return s.commitEvents(ctx, tx, q, Event{Action: EventWorkspaceDeleted, WorkspaceID: workspaceID, EntityID: workspaceID, Data: map[string]string{"name": workspace.Name}, RecordActivity: true})
 }

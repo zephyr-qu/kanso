@@ -224,7 +224,7 @@ export default function SettingsPage() {
 								onChange={setAddr}
 							/>
 							{/* 自动归档：放在移除访问密钥后的左栏空位 */}
-							<div className="mt-4">
+							<div className="setting-field">
 								<div className="text-sm font-semibold">自动归档</div>
 								<div className="mt-1 text-xs text-muted-foreground/70">
 									完成任务保留 {autoArchiveAfterDays} 天后自动归档。

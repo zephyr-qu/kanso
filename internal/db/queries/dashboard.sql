@@ -4,7 +4,9 @@ SELECT
     c.name AS column_name,
     COUNT(t.id) AS task_count
 FROM column AS c
+INNER JOIN project AS p ON p.id = c.project_id
 LEFT JOIN task AS t ON c.id = t.column_id AND t.archived_at IS NULL
+WHERE p.workspace_id = ?
 GROUP BY c.name
 ORDER BY task_count DESC;
 
@@ -12,8 +14,9 @@ ORDER BY task_count DESC;
 SELECT
     priority,
     COUNT(*) AS task_count
-FROM task
-WHERE archived_at IS NULL
+FROM task AS t
+INNER JOIN project AS p ON p.id = t.project_id
+WHERE t.archived_at IS NULL AND p.workspace_id = ?
 GROUP BY priority
 ORDER BY CASE priority
     WHEN 'urgent' THEN 0
@@ -34,16 +37,18 @@ SELECT
 FROM project AS p
 LEFT JOIN column AS c ON p.id = c.project_id
 LEFT JOIN task AS t ON c.id = t.column_id AND t.archived_at IS NULL
+WHERE p.workspace_id = ?
 GROUP BY p.id, c.id
 ORDER BY p.created_at, c.position;
 
 -- name: ListAllTasks :many
 SELECT
-    id,
-    priority,
-    created_at
-FROM task
-WHERE archived_at IS NULL;
+    t.id,
+    t.priority,
+    t.created_at
+FROM task AS t
+INNER JOIN project AS p ON p.id = t.project_id
+WHERE t.archived_at IS NULL AND p.workspace_id = ?;
 
 -- name: ListFocusCandidates :many
 -- focus candidates: priority=urgent or due date set. Exclude last column and cap at 8 in Go.
@@ -62,13 +67,14 @@ INNER JOIN project AS p ON c.project_id = p.id
 WHERE
     t.archived_at IS NULL
     AND (t.priority = 'urgent' OR t.due_date IS NOT NULL)
+    AND p.workspace_id = ?
 ORDER BY t.updated_at DESC;
 -- name: ListTaskCreationTrend :many
 SELECT
     SUBSTR(a.created_at, 1, 10) AS day,
     COUNT(*) AS count
 FROM activity AS a
-WHERE a.action = 'task.created'
+WHERE a.action = 'task.created' AND a.workspace_id = ?
 GROUP BY day
 ORDER BY day;
 
@@ -80,6 +86,7 @@ SELECT
     COUNT(*) AS count
 FROM activity AS a
 INNER JOIN task AS t ON a.resource_id = t.id
+INNER JOIN project AS p ON p.id = t.project_id
 WHERE
     a.action = 'task.moved'
     AND JSON_EXTRACT(a.data, '$.from') != JSON_EXTRACT(a.data, '$.to')
@@ -92,6 +99,7 @@ WHERE
             WHERE c2.project_id = t.project_id
         )
     )
+    AND p.workspace_id = ?
 GROUP BY day
 ORDER BY day;
 
@@ -105,12 +113,14 @@ SELECT
     COUNT(*) AS count
 FROM task AS t
 INNER JOIN column AS c ON t.column_id = c.id
+INNER JOIN project AS p ON p.id = t.project_id
 WHERE
     c.position = (
         SELECT MAX(c2.position)
         FROM column AS c2
         WHERE c2.project_id = t.project_id
     )
+    AND p.workspace_id = ?
     AND t.archived_at IS NULL
     AND NOT EXISTS (
         SELECT 1
@@ -139,4 +149,5 @@ SELECT
 FROM activity AS a
 LEFT JOIN project AS p ON a.project_id = p.id
 LEFT JOIN workspace AS w ON a.workspace_id = w.id
+WHERE a.workspace_id = ?
 ORDER BY a.created_at DESC;

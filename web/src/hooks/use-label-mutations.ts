@@ -2,14 +2,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
-import { invalidateBoard } from "@/hooks/query-keys";
+import { invalidateProjectScope, invalidateTaskScope } from "@/hooks/query-keys";
 import type { Label } from "@/types/label";
 
-export function useLabelMutations(projectId: string) {
+export function useLabelMutations(projectId: string, workspaceId = "") {
 	const queryClient = useQueryClient();
 
-	// workspaceId 在调用时从看板缓存读取（保证缓存加载后再建标签也有正确的工作区）。
-	// 标签属于项目：创建直接打到项目端点。
+	// 标签属于项目；显式 workspaceId 让聚合查询只失效当前工作区。
 	const createLabel = useMutation({
 		meta: { feedback: { success: "标签已创建", errorTitle: "创建标签失败" } },
 		mutationFn: ({ name }: { name: string }) =>
@@ -17,7 +16,7 @@ export function useLabelMutations(projectId: string) {
 				method: "POST",
 				body: JSON.stringify({ name }),
 			}),
-		onSuccess: () => invalidateBoard(queryClient, projectId),
+		onSuccess: () => invalidateProjectScope(queryClient, { projectId, workspaceId }),
 	});
 
 	const renameLabel = useMutation({
@@ -27,14 +26,14 @@ export function useLabelMutations(projectId: string) {
 				method: "PATCH",
 				body: JSON.stringify({ name }),
 			}),
-		onSuccess: () => invalidateBoard(queryClient, projectId),
+		onSuccess: () => invalidateProjectScope(queryClient, { projectId, workspaceId }),
 	});
 
 	const deleteLabel = useMutation({
 		meta: { feedback: { success: "标签已删除", errorTitle: "删除标签失败" } },
 		mutationFn: (id: string) =>
 			api<void>(buildPath("label", { id }), { method: "DELETE" }),
-		onSuccess: () => invalidateBoard(queryClient, projectId),
+		onSuccess: () => invalidateProjectScope(queryClient, { projectId, workspaceId }),
 	});
 
 	// 贴/摘标签：方向由调用方显式给出（attach=true 贴 / false 摘），成功后失效看板（徽章刷新）。
@@ -45,7 +44,8 @@ export function useLabelMutations(projectId: string) {
 			api<void>(buildPath("taskLabels", { taskId, labelId }), {
 				method: attach ? "POST" : "DELETE",
 			}),
-		onSuccess: () => invalidateBoard(queryClient, projectId),
+		onSuccess: (_data, { taskId }) =>
+			invalidateTaskScope(queryClient, { projectId, workspaceId, taskId }),
 	});
 
 	return { createLabel, renameLabel, deleteLabel, toggleLabel };

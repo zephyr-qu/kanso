@@ -150,9 +150,6 @@ func TestColumnServiceErrors(t *testing.T) {
 			name: "删除列清活动失败500", method: http.MethodDelete, path: "/api/columns/c1",
 			want: http.StatusInternalServerError,
 			failSQL: func(m sqlmock.Sqlmock) {
-				// requireOwnerInTeam 的 GetMember（第三次）。
-				m.ExpectQuery("FROM member WHERE id").
-					WillReturnRows(sqlmock.NewRows(memberRowCols).AddRow(memberRow("m1")...))
 				m.ExpectBegin()
 				m.ExpectQuery("FROM column WHERE id").
 					WillReturnRows(sqlmock.NewRows([]string{"id", "project_id", "name", "position", "wip_limit", "created_at"}).
@@ -189,8 +186,6 @@ func TestColumnServiceErrors(t *testing.T) {
 func TestBackupExportError(t *testing.T) {
 	srv, mock := newMockRouter(t)
 	expectAuth(mock, "m1")
-	mock.ExpectQuery("FROM member WHERE id").
-		WillReturnRows(sqlmock.NewRows(memberRowCols).AddRow(memberRow("m1")...))
 	mock.ExpectBegin()
 	mock.ExpectQuery("ListWorkspaces").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "created_at"}).AddRow("w1", "工作区", "2026-01-01"))

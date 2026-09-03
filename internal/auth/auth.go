@@ -1,4 +1,4 @@
-// 认证中间件：Authorization: Bearer <key> 命中某成员密钥（member.access_key）后注入成员身份。
+// 认证中间件：Authorization: Bearer <key> 命中某成员凭证哈希后注入成员身份。
 // 密钥即身份（ADR-0002 演进，见 0006 规划 Phase 1）：不再有单一共享密钥，每个成员独立密钥。
 package auth
 

@@ -12,7 +12,7 @@ async function loginAndOpenBoard(page: Page) {
 	await page.goto("/login");
 	await page.fill("#access-key", key);
 	await page.getByRole("button", { name: "进入" }).click();
-	await page.waitForURL((u) => u.pathname !== "/login");
+	await page.waitForURL(/\/w\/[^/]+\/dashboard/);
 	await page.waitForSelector('a[href*="/p/"]');
 	await page.locator('a[href*="/p/"]').first().click();
 	await page.waitForSelector("text=新建列");

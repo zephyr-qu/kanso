@@ -27,10 +27,11 @@ describe("Mock REST contract", () => {
 			body: JSON.stringify({ name: "设计工作区" }),
 		});
 		expect(created.response.status).toBe(201);
-		const projects = await json<Array<{ id: string }>>(
+		const projects = await json<Array<{ id: string; name: string }>>(
 			`/api/workspaces/${created.body.id}/projects`,
 		);
-		expect(projects.body).toEqual([]);
+		expect(projects.body).toHaveLength(1);
+		expect(projects.body[0].name).toBe("默认项目");
 	});
 
 	it("keeps task detail, labels, comments and activities consistent", async () => {
@@ -142,17 +143,23 @@ describe("Mock REST contract", () => {
 		expect(p2?.progress?.total).toBe(1);
 	});
 
-it("supports member create/delete with owner protection and 5-person limit", async () => {
+it("supports global member create/delete with last-admin protection and 6-person limit", async () => {
 	const workspaces = await json<Array<{ id: string }>>("/api/workspaces");
 	const workspaceId = workspaces.body[0].id;
 	// 创建成员（默认角色 member）
 	const created = await json<{ id: string; role: string }>("/api/members", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ workspaceId, name: "新成员" }),
+		body: JSON.stringify({ name: "新成员" }),
 	});
 	expect(created.response.status).toBe(201);
 	expect(created.body.role).toBe("member");
+	const granted = await fetch(`http://localhost/api/workspaces/${workspaceId}/members`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ memberId: created.body.id }),
+	});
+	expect(granted.status).toBe(204);
 	let members = await json<Array<{ id: string }>>(
 		`/api/workspaces/${workspaceId}/members`,
 	);
@@ -173,16 +180,16 @@ it("supports member create/delete with owner protection and 5-person limit", asy
 		{ method: "DELETE" },
 	);
 	expect(denied.status).toBe(400);
-	// 5 人上限：seed 3 人 + 2 个新成员后，第 6 个被拒
-	for (let i = 0; i < 3; i++) {
+	// 6 人上限：seed 3 人 + 3 个新成员后，第 7 个被拒
+	for (let i = 0; i < 4; i++) {
 		const result = await json<{ error?: string }>("/api/members", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ workspaceId, name: `M${i}` }),
+			body: JSON.stringify({ name: `M${i}` }),
 		});
-		if (i < 2) expect(result.response.status).toBe(201);
+		if (i < 3) expect(result.response.status).toBe(201);
 		else {
-			expect(result.response.status).toBe(400);
+			expect(result.response.status).toBe(409);
 			expect(result.body.error).toContain("上限");
 		}
 	}
@@ -205,6 +212,49 @@ it("rejects invalid access keys on verify/me, accepts authorized keys", async ()
 		headers: { Authorization: "Bearer wrong-key" },
 	});
 	expect(me401.status).toBe(401);
+});
+
+it("rotates, revokes and transfers member credentials with role checks", async () => {
+	const workspaces = await json<Array<{ id: string }>>("/api/workspaces");
+	const workspaceId = workspaces.body[0].id;
+	const created = await json<{ id: string }>("/api/members", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ name: "安全成员" }),
+	});
+	const authorized = await fetch(`http://localhost/api/workspaces/${workspaceId}/members`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ memberId: created.body.id }),
+	});
+	expect(authorized.status).toBe(204);
+	const first = await json<{ key: string }>(`/api/members/${created.body.id}/key`, { method: "POST" });
+	const second = await json<{ key: string }>(`/api/members/${created.body.id}/key`, { method: "POST" });
+	expect(second.body.key).not.toBe(first.body.key);
+	const oldKey = await fetch("http://localhost/api/me", { headers: { Authorization: `Bearer ${first.body.key}` } });
+	expect(oldKey.status).toBe(401);
+	const newKey = await fetch("http://localhost/api/me", { headers: { Authorization: `Bearer ${second.body.key}` } });
+	expect(newKey.status).toBe(200);
+	const revoked = await fetch(`http://localhost/api/members/${created.body.id}/key`, { method: "DELETE" });
+	expect(revoked.status).toBe(204);
+	const afterRevoke = await json<Array<{ id: string; hasKey: boolean }>>(`/api/workspaces/${workspaceId}/members`);
+	expect(afterRevoke.body.find((item) => item.id === created.body.id)?.hasKey).toBe(false);
+
+	const promote = await fetch("http://localhost/api/members/mock-member-2/role", {
+		method: "PATCH",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ role: "admin" }),
+	});
+	expect(promote.status).toBe(200);
+	const promoteThird = await fetch("http://localhost/api/members/mock-member-3/role", {
+		method: "PATCH",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ role: "admin" }),
+	});
+	expect(promoteThird.status).toBe(400);
+	const members = await json<Array<{ id: string; role: string }>>(`/api/workspaces/${workspaceId}/members`);
+	expect(members.body.find((item) => item.id === "mock-member-1")?.role).toBe("admin");
+	expect(members.body.find((item) => item.id === "mock-member-2")?.role).toBe("admin");
 });
 
 it("keeps archived tasks intact after same-column reorder", async () => {
@@ -273,7 +323,7 @@ it("reports milestone progress and non-empty completed trend", async () => {
 	// dashboard 趋势「完成」线不再恒为 0（seed 末列任务带 completedAt；真实后端按 activity 推导，
 	// 口径含「移入末列」与「末列直建」，与 seed 场景等价）。
 	const dashboard = await json<{ trend: Array<{ completed: number }> }>(
-		"/api/dashboard",
+		`/api/workspaces/${workspaces.body[0].id}/dashboard`,
 	);
 	const totalCompleted = dashboard.body.trend.reduce(
 		(sum, day) => sum + day.completed,
@@ -307,4 +357,31 @@ it("creates projects with fixed kanban columns, ignoring template", async () => 
 		"已阻塞",
 		"已完成",
 	]);
+});
+
+it("enforces workspace and admin permissions in the mock API", async () => {
+	const createdWorkspace = await json<{ id: string }>("/api/workspaces", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ name: "受保护工作区" }),
+	});
+	const member = await json<{ id: string }>("/api/members", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ name: "普通成员" }),
+	});
+	const key = await json<{ key: string }>(`/api/members/${member.body.id}/key`, {
+		method: "POST",
+	});
+	const init = { headers: { Authorization: `Bearer ${key.body.key}` } };
+
+	const projects = await fetch(
+		`http://localhost/api/workspaces/${createdWorkspace.body.id}/projects`,
+		init,
+	);
+	expect(projects.status).toBe(403);
+	const board = await fetch("http://localhost/api/projects/mock-project", init);
+	expect(board.status).toBe(403);
+	const backup = await fetch("http://localhost/api/settings/backup", init);
+	expect(backup.status).toBe(403);
 });

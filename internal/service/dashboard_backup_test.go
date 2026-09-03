@@ -25,7 +25,7 @@ func TestGetDashboard(t *testing.T) {
 	_, _, err = env.svc.CreateTask(ctx, cols[3], "已完成任务", "", "low", nil, nil)
 	requireNoErr(t, err)
 
-	data, err := env.svc.GetDashboard(ctx)
+	data, err := env.svc.GetDashboard(ctx, defaultWorkspaceID(t, env))
 	requireNoErr(t, err)
 
 	if data.TotalTasks != 3 {

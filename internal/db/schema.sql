@@ -1,5 +1,5 @@
 -- 0001_init: Kanso 核心看板 schema（8 张表）
--- 单用户（admin 身份为常量，不入库）；时间戳统一 TEXT (RFC3339 UTC)，由应用层写入。
+-- 工作区级业务数据 + 实例级成员身份；时间戳统一 TEXT (RFC3339 UTC)，由应用层写入。
 
 CREATE TABLE workspace (
     id TEXT PRIMARY KEY,
@@ -100,15 +100,21 @@ CREATE INDEX idx_activity_resource ON activity (resource_type, resource_id);
 CREATE INDEX idx_activity_project ON activity (project_id, created_at);
 CREATE INDEX idx_activity_workspace ON activity (workspace_id, created_at);
 
--- 0007: 成员（轻量 1-3 人小团队；owner/member 两级角色，多密钥认证）
+-- 0007: 成员身份（管理员/成员；访问密钥绑定全局身份）
 CREATE TABLE member (
     id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES workspace (id) ON DELETE CASCADE,
     name TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'member', -- 'owner' | 'member'
+    role TEXT NOT NULL DEFAULT 'member', -- 'admin' | 'member'
     avatar_color TEXT,                   -- 头像底色（前端色板值）
     avatar TEXT,                         -- 上传头像（data URL）
-    access_key TEXT UNIQUE,              -- 访问密钥（授权后生成；owner 由启动种子注入）
+    access_key_hash TEXT UNIQUE,         -- 访问密钥单向哈希（明文只在轮换响应中出现）
     created_at TEXT NOT NULL
 );
-CREATE INDEX idx_member_workspace ON member (workspace_id);
+-- 成员身份与工作区的授权关系。管理员不需要写入关系，天然访问全部工作区。
+CREATE TABLE workspace_member (
+    workspace_id TEXT NOT NULL REFERENCES workspace (id) ON DELETE CASCADE,
+    member_id TEXT NOT NULL REFERENCES member (id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (workspace_id, member_id)
+);
+CREATE INDEX idx_workspace_member_member ON workspace_member (member_id, workspace_id);

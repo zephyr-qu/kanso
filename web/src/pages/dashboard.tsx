@@ -1,8 +1,8 @@
-// 仪表盘页（全局汇总）：统计卡 / 完成进度 / 需要关注 / 列分布 / 任务趋势 / 项目速览 / 最近活动。
-// 数据来自 /api/dashboard（跨全部工作区聚合；完成口径按列位置=末列；任务分布仅「按状态 / 按优先级」两种模板）。
+// 仪表盘页（当前工作区汇总）：统计卡 / 完成进度 / 需要关注 / 列分布 / 任务趋势 / 项目速览 / 最近活动。
+// 数据来自当前工作区仪表盘接口；完成口径按列位置=末列。
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { Link } from "react-router";
+import { Link, useParams } from "react-router";
 import { CalendarDaysIcon, CheckIcon, LayoutTemplateIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,11 +33,12 @@ const DIST_TEMPLATES = [
 type DistTemplateId = (typeof DIST_TEMPLATES)[number]["id"];
 
 export default function DashboardPage() {
-	// 全局实时订阅：任何变更（含备份导入）失效聚合查询。
-	useRealtime(undefined);
+	const { workspaceId = "" } = useParams();
+	useRealtime(workspaceId, { scope: "workspace" });
 	const { data, isLoading, isError } = useQuery({
-		queryKey: queryKeys.dashboard(),
-		queryFn: () => api<DashboardData>(buildPath("dashboard")),
+		queryKey: queryKeys.dashboard(workspaceId),
+		queryFn: () => api<DashboardData>(buildPath("dashboard", { workspaceId })),
+		enabled: Boolean(workspaceId),
 	});
 	const focusProjectQueries = useQueries({
 		queries: (data?.focus ?? []).map((focus) => ({
@@ -57,7 +58,7 @@ export default function DashboardPage() {
 		project?: number;
 	}>({});
 
-	// 项目速览：全部工作区最近打开的 5 个（打开记录在进入看板时写入 localStorage）。
+	// 项目速览：当前工作区最近打开的项目（打开记录在进入看板时写入 localStorage）。
 	// Hook 必须在加载态 return 之前调用，否则 data 从 undefined 变为对象时会改变 Hook 数量。
 	const { recentProjects, recentProjectEntryById } = useMemo(() => {
 		if (!data) {
@@ -145,7 +146,7 @@ export default function DashboardPage() {
 		<div className="kanso-dashboard flex h-full flex-col">
 			<PageHeader>
 				<h1 className="text-[17px] font-[650] tracking-tight">仪表盘</h1>
-				<span className="text-[13px] text-muted-foreground">全部工作区 · 汇总</span>
+				<span className="text-[13px] text-muted-foreground">当前工作区 · 汇总</span>
 			</PageHeader>
 
 			<PageContent className="px-[30px] pb-7 pt-[26px]">
@@ -163,7 +164,7 @@ export default function DashboardPage() {
 						accent
 					/>
 					<StatCard num={data.urgent} label="紧急" trend="需要关注" warn />
-					<StatCard num={data.projects.length} label="项目" trend="全部工作区" />
+					<StatCard num={data.projects.length} label="项目" trend="当前工作区" />
 				</div>
 
 				{/* 面板网格 */}

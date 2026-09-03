@@ -9,8 +9,12 @@ import { invalidateRealtimeEvent } from "@/hooks/query-keys";
 // 真实后端模式订阅 WebSocket；Mock 模式由 MSW 提供 REST 数据，不建立连接。
 // project 参数后端仅作订阅桶（非空即可）：全局订阅用固定哨兵值，仍会收到 BroadcastAll。
 export function useRealtime(
-	projectId: string | undefined,
-	options: { deferInvalidation?: boolean } = {},
+	scopeId: string | undefined,
+	options: {
+		deferInvalidation?: boolean;
+		scope?: "project" | "workspace";
+		workspaceId?: string;
+	} = {},
 ) {
 	const queryClient = useQueryClient();
 	const deferInvalidation = options.deferInvalidation ?? false;
@@ -32,14 +36,19 @@ export function useRealtime(
 				deferredRef.current = true;
 				return;
 			}
-			invalidateRealtimeEvent(queryClient, projectId, eventType);
+			invalidateRealtimeEvent(queryClient, {
+				scopeId,
+				eventType,
+				scope: options.scope ?? "project",
+				workspaceId: options.workspaceId,
+			});
 		};
 
 		const connect = () => {
 			if (closed) return;
 			const scheme = location.protocol === "https:" ? "wss" : "ws";
-			const project = projectId ?? "__all__";
-			const url = `${scheme}://${location.host}/api/ws?project=${encodeURIComponent(project)}&key=${encodeURIComponent(key)}`;
+			const scopeParam = options.scope === "workspace" ? `workspace=${encodeURIComponent(scopeId ?? "")}` : `project=${encodeURIComponent(scopeId ?? "")}`;
+			const url = `${scheme}://${location.host}/api/ws?${scopeParam}&key=${encodeURIComponent(key)}`;
 			ws = new WebSocket(url);
 
 			ws.onopen = () => {
@@ -66,12 +75,17 @@ export function useRealtime(
 			if (retry) clearTimeout(retry);
 			ws?.close();
 		};
-	}, [projectId, queryClient]);
+	}, [scopeId, queryClient, options.scope, options.workspaceId]);
 
 	useEffect(() => {
-		if (!deferInvalidation && deferredRef.current && projectId) {
+		if (!deferInvalidation && deferredRef.current && scopeId) {
 			deferredRef.current = false;
-			invalidateRealtimeEvent(queryClient, projectId, "deferred");
+			invalidateRealtimeEvent(queryClient, {
+				scopeId,
+				eventType: "deferred",
+				scope: options.scope ?? "project",
+				workspaceId: options.workspaceId,
+			});
 		}
-	}, [deferInvalidation, projectId, queryClient]);
+	}, [deferInvalidation, scopeId, queryClient, options.scope, options.workspaceId]);
 }

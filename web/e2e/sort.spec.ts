@@ -9,15 +9,15 @@ async function loginToApp(page: import("@playwright/test").Page) {
 	await page.goto("/login");
 	await page.fill("#access-key", key);
 	await page.getByRole("button", { name: "进入" }).click();
-	await page.waitForURL((u) => u.pathname !== "/login");
+	await page.waitForURL(/\/w\/[^/]+\/dashboard/);
 }
 
 test("排序切换：标题升序/降序/恢复原顺序，position 不变", async ({ page }) => {
 	await loginToApp(page);
 
 	// 进入「原型演示」项目（待办列含 3 个不同标题的任务）。
-	await page.waitForSelector('a[href*="/p/"]');
-	await page.locator('a[href*="/p/"]', { hasText: "原型演示" }).click();
+	await page.waitForSelector('aside a[href*="/p/"]');
+	await page.locator('aside a[href*="/p/"]', { hasText: "原型演示" }).click();
 	await page.waitForSelector("text=新建列");
 
 	const firstCol = page.locator("div[class*='w-[282px]']").first();
@@ -67,8 +67,8 @@ test("排序切换：标题升序/降序/恢复原顺序，position 不变", asy
 
 test("优先级排序：urgent/high/low 生效（字段入口 + 排序顺序）", async ({ page }) => {
 	await loginToApp(page);
-	await page.waitForSelector('a[href*="/p/"]');
-	await page.locator('a[href*="/p/"]', { hasText: "原型演示" }).click();
+	await page.waitForSelector('aside a[href*="/p/"]');
+	await page.locator('aside a[href*="/p/"]', { hasText: "原型演示" }).click();
 	await page.waitForSelector("text=新建列");
 
 	// seed 任务无优先级：经 API 给待办列 3 任务打点不同优先级（PATCH 只改 priority）。

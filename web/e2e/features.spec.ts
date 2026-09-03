@@ -41,6 +41,9 @@ test("Quick Capture：FAB 创建任务停留原页 + toast 反馈", async ({ pag
 	await expect(dialog.getByText("快速捕获")).toBeVisible();
 	const title = `快捕任务${Date.now() % 100000}`;
 	await dialog.getByPlaceholder("任务标题…").fill(title);
+	// 从仪表盘发起快捷创建时必须先明确任务归属项目。
+	await dialog.getByRole("combobox", { name: "项目" }).click();
+	await page.getByRole("option").first().click();
 	await dialog.getByRole("button", { name: "创建任务" }).click();
 	// 创建后停留原页（不跳转项目看板，ADR-0015），toast 反馈创建成功；Dialog 自动关闭。
 	await expect(page.getByText("任务已创建", { exact: true })).toBeVisible({ timeout: 5000 });
@@ -69,7 +72,11 @@ test("任务详情：优先级展示 + 截止日期设置", async ({ page }) => 
 	await expect(page.getByRole("button", { name: /紧急|高|中|低/ }).first()).toBeVisible();
 	// 设置截止日期（今天）：DatePicker 是 Popover 按钮 + 日历格子（非 input，不能 fill）。
 	await page.getByLabel("截止日期").click();
-	await page.getByRole("button", { name: String(new Date().getDate()) }).click();
+	await page
+		.getByRole("dialog")
+		.last()
+		.getByRole("button", { name: String(new Date().getDate()), exact: true })
+		.click();
 	// Popover 关闭带 ~150ms 动画：先等其完全关闭（弹层卸载、清除按钮消失），
 	// 再断言触发按钮显示所选日期——避免在过渡态断言弹层内元素可见性造成偶发失败。
 	await expect(page.getByRole("button", { name: "清除日期" })).toHaveCount(0, {

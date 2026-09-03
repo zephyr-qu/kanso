@@ -8,8 +8,8 @@ test.beforeEach(async () => {
 
 async function openBoard(page: import("@playwright/test").Page) {
 	await loginToApp(page);
-	await page.waitForSelector('a[href*="/p/"]');
-	await page.locator('a[href*="/p/"]', { hasText: "原型演示" }).first().click();
+	await page.waitForSelector('aside a[href*="/p/"]');
+	await page.locator('aside a[href*="/p/"]', { hasText: "原型演示" }).first().click();
 	await page.waitForURL((url) => url.pathname.includes("/p/"));
 }
 

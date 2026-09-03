@@ -1,22 +1,44 @@
 // 登录页（借鉴原型 #login）：品牌侧（主色 mark + 标语）+ 表单侧（密钥入口）。
 // 保留现有功能：校验密钥、错误提示、loading、401 重定向。
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { Input } from "@/components/ui/input";
 import { setAccessKey, verifyAccessKey } from "@/lib/api";
+import { buildPath } from "@/lib/endpoints";
 import { useAuthStore } from "@/store/auth";
 import { PrimaryButton } from "@/components/kanso-ui";
+import type { HealthResponse, KansoMode } from "@/types/me";
 
 
 export default function LoginPage() {
 	const [key, setKey] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
+	const [mode, setMode] = useState<KansoMode | null>(null);
 	const navigate = useNavigate();
 	const location = useLocation();
 	const login = useAuthStore((s) => s.login);
+	useEffect(() => {
+		let active = true;
+		void fetch(buildPath("health"))
+			.then(async (response) => {
+				if (!response.ok) return null;
+				return (await response.json()) as HealthResponse;
+			})
+			.then((health) => {
+				if (active && (health?.mode === "team" || health?.mode === "personal")) {
+					setMode(health.mode);
+				}
+			})
+			.catch(() => {
+				// 模式标记是辅助信息，健康检查失败不影响登录流程。
+			});
+		return () => {
+			active = false;
+		};
+	}, []);
 	// RequireAuth 重定向到登录页时携带 state.from，登录成功后回跳原页面。
-	const redirectTo = (location.state as { from?: string } | null)?.from ?? "/";
+	const redirectTo = (location.state as { from?: string } | null)?.from ?? "/app";
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault();
 		const trimmed = key.trim();
@@ -50,6 +72,14 @@ export default function LoginPage() {
 						簡
 					</span>
 					<span className="text-[17px] font-bold tracking-[-0.01em]">Kanso</span>
+					{mode ? (
+						<span
+							className="kanso-login-mode rounded-full border px-1.5 py-px text-[10px] leading-none text-muted-foreground"
+							title={`当前运行模式：${mode === "team" ? "团队版" : "个人版"}`}
+						>
+							{mode === "team" ? "团队版" : "个人版"}
+						</span>
+					) : null}
 				</div>
 
 				{/* 中部：标语（上，左对齐）→ 插画（下，居中） */}

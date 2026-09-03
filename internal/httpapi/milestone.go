@@ -22,6 +22,9 @@ func (a *API) listMilestones(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) createMilestone(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityEditContent) {
+		return
+	}
 	var body struct {
 		Name    string  `json:"name"`
 		DueDate *string `json:"dueDate"`
@@ -46,6 +49,9 @@ func (a *API) createMilestone(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) updateMilestone(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityEditContent) {
+		return
+	}
 	var body struct {
 		Name    *string `json:"name"`
 		DueDate *string `json:"dueDate"`
@@ -70,6 +76,9 @@ func (a *API) updateMilestone(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) deleteMilestone(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityDeleteData) {
+		return
+	}
 	if err := a.svc.DeleteMilestone(r.Context(), chi.URLParam(r, "id")); err != nil {
 		if errors.Is(err, service.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "里程碑不存在")
@@ -82,6 +91,9 @@ func (a *API) deleteMilestone(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) attachMilestone(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityEditContent) {
+		return
+	}
 	err := a.svc.SetTaskMilestone(r.Context(), chi.URLParam(r, "taskId"), chi.URLParam(r, "milestoneId"), true)
 	if err != nil {
 		if errors.Is(err, service.ErrNotFound) {
@@ -99,6 +111,9 @@ func (a *API) attachMilestone(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) detachMilestone(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityEditContent) {
+		return
+	}
 	err := a.svc.SetTaskMilestone(r.Context(), chi.URLParam(r, "taskId"), chi.URLParam(r, "milestoneId"), false)
 	if err != nil {
 		if errors.Is(err, service.ErrNotFound) {

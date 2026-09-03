@@ -4,7 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
-import { queryKeys } from "@/hooks/query-keys";
+	import {
+	invalidateMilestoneTasks,
+	invalidateMilestones,
+	invalidateProjectScope,
+	queryKeys,
+} from "@/hooks/query-keys";
 import { progressPct } from "@/lib/milestone-progress";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -37,7 +42,7 @@ export default function MilestoneDetailDialog(props: {
 	const { milestone, open } = props;
 
 	const { data: tasks, isLoading } = useQuery({
-		queryKey: ["milestone-tasks", milestone?.id],
+		queryKey: queryKeys.milestoneTasks(milestone?.id ?? ""),
 		queryFn: () =>
 			api<MilestoneTask[]>(buildPath("milestoneTasks", { id: milestone!.id })),
 		enabled: open && !!milestone,
@@ -52,9 +57,11 @@ export default function MilestoneDetailDialog(props: {
 				{ method: "DELETE" }
 			),
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["milestone-tasks", milestone?.id] });
-			queryClient.invalidateQueries({
-				queryKey: queryKeys.milestones(props.projectId),
+			if (milestone?.id) invalidateMilestoneTasks(queryClient, milestone.id);
+			invalidateMilestones(queryClient, props.projectId);
+			invalidateProjectScope(queryClient, {
+				projectId: props.projectId,
+				workspaceId: props.workspaceId,
 			});
 		},
 	});

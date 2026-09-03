@@ -31,18 +31,18 @@ func newMockService(t *testing.T) (sqlmock.Sqlmock, *Service) {
 
 func TestGetDashboardQueryError(t *testing.T) {
 	mock, svc := newMockService(t)
-	mock.ExpectQuery("ListColumnDistributions").
+	mock.ExpectQuery("ListColumnDistributions").WithArgs("w1").
 		WillReturnError(errors.New("列分布查询失败"))
-	if _, err := svc.GetDashboard(context.Background()); err == nil {
+	if _, err := svc.GetDashboard(context.Background(), "w1"); err == nil {
 		t.Fatal("列分布查询失败时应返回错误")
 	}
 }
 
 func TestGetActivitiesQueryError(t *testing.T) {
 	mock, svc := newMockService(t)
-	mock.ExpectQuery("ListActivitiesWithProject").
+	mock.ExpectQuery("ListActivitiesWithProject").WithArgs("w1").
 		WillReturnError(errors.New("活动查询失败"))
-	if _, err := svc.GetActivities(context.Background()); err == nil {
+	if _, err := svc.GetActivities(context.Background(), "w1"); err == nil {
 		t.Fatal("活动查询失败时应返回错误")
 	}
 }
@@ -51,7 +51,7 @@ func TestSearchTasksQueryError(t *testing.T) {
 	mock, svc := newMockService(t)
 	mock.ExpectQuery("SearchTasks").
 		WillReturnError(errors.New("搜索失败"))
-	if _, err := svc.SearchTasks(context.Background(), "q"); err == nil {
+	if _, err := svc.SearchTasks(context.Background(), "w1", "q"); err == nil {
 		t.Fatal("搜索失败时应返回错误")
 	}
 }

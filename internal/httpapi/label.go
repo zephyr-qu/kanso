@@ -11,6 +11,9 @@ import (
 
 // createLabel 创建项目级标签（名称必填；0006 Phase 2：路由 /api/projects/{id}/labels）。
 func (a *API) createLabel(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityEditContent) {
+		return
+	}
 	name, ok := decodeNameBody(w, r, "标签名称")
 	if !ok {
 		return
@@ -29,6 +32,9 @@ func (a *API) createLabel(w http.ResponseWriter, r *http.Request) {
 
 // updateLabel 更新标签名称。
 func (a *API) updateLabel(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityEditContent) {
+		return
+	}
 	var body struct {
 		Name *string `json:"name"`
 	}
@@ -53,6 +59,9 @@ func (a *API) updateLabel(w http.ResponseWriter, r *http.Request) {
 
 // deleteLabel 删除标签（任务关联级联清除）。
 func (a *API) deleteLabel(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityDeleteData) {
+		return
+	}
 	if err := a.svc.DeleteLabel(r.Context(), chi.URLParam(r, "id")); err != nil {
 		if errors.Is(err, service.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "标签不存在")
@@ -66,6 +75,9 @@ func (a *API) deleteLabel(w http.ResponseWriter, r *http.Request) {
 
 // attachLabel 给任务贴标签。
 func (a *API) attachLabel(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityEditContent) {
+		return
+	}
 	if err := a.svc.AttachLabel(r.Context(), chi.URLParam(r, "taskId"), chi.URLParam(r, "labelId")); err != nil {
 		if errors.Is(err, service.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "任务或标签不存在")
@@ -83,6 +95,9 @@ func (a *API) attachLabel(w http.ResponseWriter, r *http.Request) {
 
 // detachLabel 从任务移除标签。
 func (a *API) detachLabel(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityEditContent) {
+		return
+	}
 	if err := a.svc.DetachLabel(r.Context(), chi.URLParam(r, "taskId"), chi.URLParam(r, "labelId")); err != nil {
 		if errors.Is(err, service.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "任务或标签不存在")

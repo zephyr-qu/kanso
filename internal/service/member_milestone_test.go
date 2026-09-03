@@ -14,8 +14,8 @@ func TestMemberLifecycle(t *testing.T) {
 
 	// 初始 owner 存在（SeedOwnerMember 种了 test-key）。
 	owner, ok := env.svc.OwnerMember(ctx)
-	if !ok || owner.Role != memberRoleOwner {
-		t.Fatalf("owner 成员应存在: %+v ok=%v", owner, ok)
+	if !ok || owner.Role != memberRoleAdmin {
+		t.Fatalf("管理员成员应存在: %+v ok=%v", owner, ok)
 	}
 
 	// 密钥校验：test-key 命中 owner；未知密钥不命中。
@@ -33,11 +33,8 @@ func TestMemberLifecycle(t *testing.T) {
 	}
 
 	// GetMe / MemberNameByID / RequireOwner。
-	me, workspaceID, err := env.svc.GetMe(ctx, owner.ID)
+	me, err := env.svc.GetMe(ctx, owner.ID)
 	requireNoErr(t, err)
-	if workspaceID != wsID {
-		t.Fatalf("GetMe workspace 不符: %q", workspaceID)
-	}
 	if name, ok := env.svc.MemberNameByID(ctx, owner.ID); !ok || name != me.Name {
 		t.Fatalf("MemberNameByID 不符: %q ok=%v", name, ok)
 	}
@@ -50,10 +47,11 @@ func TestMemberLifecycle(t *testing.T) {
 	}
 
 	// 创建普通成员（team 模式）→ 非 owner。
-	member, err := env.svc.CreateMember(ctx, wsID, "普通成员")
+	member, err := env.svc.CreateMember(ctx, "普通成员")
 	requireNoErr(t, err)
-	if member.Role == memberRoleOwner {
-		t.Fatal("新成员不应是 owner")
+	requireNoErr(t, env.svc.AddMemberToWorkspace(ctx, wsID, member.ID))
+	if member.Role == memberRoleAdmin {
+		t.Fatal("新成员不应是管理员")
 	}
 	if err := env.svc.RequireOwner(ctx, member.ID); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("非 owner 成员 RequireOwner 应 ErrForbidden，实际 %v", err)
@@ -67,7 +65,7 @@ func TestMemberLifecycle(t *testing.T) {
 	}
 
 	// 生成密钥 → 立即可用。
-	key, err := env.svc.GetOrCreateMemberKey(ctx, member.ID)
+	key, err := env.svc.RotateMemberKey(ctx, member.ID)
 	requireNoErr(t, err)
 	if key == "" {
 		t.Fatal("密钥不应为空")
@@ -75,11 +73,46 @@ func TestMemberLifecycle(t *testing.T) {
 	if _, ok := env.svc.MemberIDByKey(ctx, key); !ok {
 		t.Fatal("新密钥应命中")
 	}
-	// 再次生成返回同一密钥。
-	key2, err := env.svc.GetOrCreateMemberKey(ctx, member.ID)
+	// 再次轮换生成新密钥，旧密钥立即失效。
+	key2, err := env.svc.RotateMemberKey(ctx, member.ID)
 	requireNoErr(t, err)
-	if key != key2 {
-		t.Fatalf("重复生成应返回同一密钥: %q vs %q", key, key2)
+	if key == key2 {
+		t.Fatalf("重复轮换不应复用旧密钥: %q", key)
+	}
+	if _, ok := env.svc.MemberIDByKey(ctx, key); ok {
+		t.Fatal("轮换后旧密钥应失效")
+	}
+	if _, ok := env.svc.MemberIDByKey(ctx, key2); !ok {
+		t.Fatal("轮换后新密钥应命中")
+	}
+	var storedHash string
+	if err := env.db.QueryRow("SELECT access_key_hash FROM member WHERE id = ?", member.ID).Scan(&storedHash); err != nil {
+		t.Fatalf("读取成员密钥哈希失败: %v", err)
+	}
+	if storedHash != hashAccessKey(key2) || storedHash == key2 {
+		t.Fatalf("数据库应只保存密钥哈希，实际 %q", storedHash)
+	}
+	if err := env.svc.RevokeMemberKey(ctx, member.ID); err != nil {
+		t.Fatalf("撤销成员密钥失败: %v", err)
+	}
+	if _, ok := env.svc.MemberIDByKey(ctx, key2); ok {
+		t.Fatal("撤销后成员密钥应失效")
+	}
+	members, err = env.svc.ListMembers(ctx, wsID)
+	requireNoErr(t, err)
+	for _, item := range members {
+		if item.ID == member.ID && item.HasKey {
+			t.Fatal("撤销后成员记录应保留但 hasKey=false")
+		}
+	}
+
+	// 角色提升在一个事务内完成，允许保留多名管理员。
+	target, err := env.svc.CreateMember(ctx, "新成员")
+	requireNoErr(t, err)
+	updatedRole, err := env.svc.UpdateMemberRole(ctx, target.ID, memberRoleAdmin)
+	requireNoErr(t, err)
+	if updatedRole.Role != memberRoleAdmin {
+		t.Fatalf("目标应成为管理员: %+v", updatedRole)
 	}
 
 	// 更新资料（改名 + 头像色 + 头像）。
@@ -101,9 +134,12 @@ func TestMemberLifecycle(t *testing.T) {
 	if !env.hub.hasType(EventMemberCreated) || !env.hub.hasType(EventMemberDeleted) {
 		t.Fatalf("成员事件缺失: %v", env.hub.types())
 	}
+	if !env.hub.hasType(EventMemberKeyRotated) || !env.hub.hasType(EventMemberKeyRevoked) {
+		t.Fatalf("成员安全事件缺失: %v", env.hub.types())
+	}
 }
 
-func TestReownLegacyAdmin(t *testing.T) {
+func TestMemberProfileKeepsActivityActor(t *testing.T) {
 	env := newTestService(t)
 	ctx := context.Background()
 	_, projectID, cols := setupBoard(t, env)
@@ -112,19 +148,15 @@ func TestReownLegacyAdmin(t *testing.T) {
 	_, _, err := env.svc.CreateTask(ctx, cols[0], "历史任务", "", "", nil, nil)
 	requireNoErr(t, err)
 
-	// 把 owner 改名为非 Admin 后重写历史归属。
+	// 把管理员改名后，身份资料与活动记录保持可用。
 	owner, _ := env.svc.OwnerMember(ctx)
 	if _, err := env.svc.UpdateMemberProfile(ctx, owner.ID, ptr("新主人"), nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	requireNoErr(t, env.svc.ReownLegacyAdmin(ctx, "新主人"))
-
-	activities, err := env.svc.GetActivities(ctx)
+	activities, err := env.svc.GetActivities(ctx, defaultWorkspaceID(t, env))
 	requireNoErr(t, err)
-	for _, a := range activities {
-		if a.Actor == "Admin" {
-			t.Fatalf("历史 Admin 归属应重写为 新主人: %+v", a)
-		}
+	if len(activities) == 0 {
+		t.Fatal("应保留活动记录")
 	}
 	_ = projectID
 }

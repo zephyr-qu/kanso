@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import {
 	CalendarDaysIcon,
+	ChevronDownIcon,
 	ChevronLeftIcon,
 	ChevronRightIcon,
 	GaugeIcon,
@@ -12,15 +13,21 @@ import {
 	LayersIcon,
 	LogOutIcon,
 	PlusIcon,
-	SettingsIcon,
+		SettingsIcon,
+		UsersIcon,
 } from "lucide-react";
 import { CommandPalette } from "@/components/command-palette";
 import { MemberAvatar } from "@/components/member-avatar";
 import NameDialog from "@/components/name-dialog";
 import { QuickCapture, QuickCaptureFab } from "@/components/quick-capture";
+import { WorkspaceUnavailable } from "@/components/workspace-unavailable";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
-import { queryKeys } from "@/hooks/query-keys";
+import { invalidateWorkspaces, queryKeys } from "@/hooks/query-keys";
+import {
+	useWorkspaceContext,
+	WorkspaceContextProvider,
+} from "@/hooks/use-workspace-context";
 import { usePinnedProjects } from "@/lib/pinned-projects";
 import { preloadRoute } from "@/lib/route-preload";
 import {
@@ -29,9 +36,10 @@ import {
 } from "@/lib/query-prefetch";
 import { useAuthStore } from "@/store/auth";
 import type { MeResponse } from "@/types/me";
+import type { Project } from "@/types/project";
 import type { Workspace } from "@/types/workspace";
 
-export default function AppShell() {
+function AppShellContent() {
 	const logout = useAuthStore((s) => s.logout);
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
@@ -39,14 +47,15 @@ export default function AppShell() {
 	const [createOpen, setCreateOpen] = useState(false);
 	const [cmdOpen, setCmdOpen] = useState(false);
 	const [qcOpen, setQcOpen] = useState(false);
+	const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+	const workspaceContext = useWorkspaceContext();
 	const routeIntentRef = useRef<{
 		id: number;
 		from: string;
 		startMark: string;
 	} | null>(null);
 	const routeMeasureIdRef = useRef(0);
-	const { items: pinnedProjects } = usePinnedProjects();
 
 	// 开发环境记录“点击内部链接 → 下一帧”的路由耗时，便于在控制台和 Performance 面板定位卡顿来源。
 	useEffect(() => {
@@ -127,19 +136,21 @@ export default function AppShell() {
 		return () => window.removeEventListener("keydown", onKey);
 	}, []);
 
-	// 从当前 URL 解析项目 id（Quick Capture 默认落点）。仅匹配看板/任务详情路由。
-	const currentProjectId = location.pathname.match(
-		/^\/w\/[^/]+\/p\/([^/]+)/,
-	)?.[1];
-	const { data: workspaces } = useQuery({
-		queryKey: queryKeys.workspaces(),
-		queryFn: () => api<Workspace[]>(buildPath("workspaces")),
-	});
 	const { data: meData } = useQuery({
 		queryKey: queryKeys.me(),
 		queryFn: () => api<MeResponse>(buildPath("me")),
 	});
 	const member = meData?.member;
+	const currentWorkspaceId = workspaceContext.workspaceId;
+	const currentWorkspace = workspaceContext.workspace;
+	const currentProjectId = workspaceContext.currentProjectId;
+	const { workspaces } = workspaceContext;
+	const { items: pinnedProjects } = usePinnedProjects(currentWorkspaceId);
+	const { data: currentWorkspaceProjects } = useQuery({
+		queryKey: queryKeys.projects(currentWorkspaceId),
+		queryFn: () => api<Project[]>(buildPath("workspaceProjects", { workspaceId: currentWorkspaceId })),
+		enabled: workspaceContext.isReady,
+	});
 	const createMutation = useMutation({
 		meta: { feedback: { success: "工作区已创建", errorTitle: "创建工作区失败" } },
 		mutationFn: (name: string) =>
@@ -148,10 +159,17 @@ export default function AppShell() {
 				body: JSON.stringify({ name }),
 			}),
 		onSuccess: (created) => {
-			queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
-			navigate(`/w/${created.id}`);
+			invalidateWorkspaces(queryClient);
+			navigate(workspaceContext.workspaceDashboardPath(created.id));
 		},
 	});
+	const canCreateWorkspace = member?.role === "admin";
+	const unavailableStatus =
+		workspaceContext.status === "loading"
+			? "loading"
+			: workspaceContext.status === "empty"
+				? "empty"
+				: "unavailable";
 	return (
 		<>
 		<div data-testid="app-shell" data-kanso-app className="kanso-shell">
@@ -185,11 +203,61 @@ export default function AppShell() {
 					</button>
 				</div>
 
+				{/* 原型：工作区是上下文切换器，不再作为项目分类平铺在导航中。 */}
+				<div className={`kanso-workspace-switcher${workspaceMenuOpen ? " is-open" : ""}`}>
+					<button
+						type="button"
+						className="kanso-workspace-switcher-trigger"
+						aria-expanded={workspaceMenuOpen}
+						aria-haspopup="menu"
+						aria-label={`当前工作区：${currentWorkspace?.name ?? "未选择"}`}
+						onClick={() => setWorkspaceMenuOpen((open) => !open)}
+					>
+						<span className="kanso-workspace-switcher-icon" aria-hidden="true">{currentWorkspace?.name?.slice(0, 1) ?? "·"}</span>
+						<span className="kanso-workspace-switcher-copy">
+							<span className="kanso-workspace-switcher-label">当前工作区</span>
+							<strong>{currentWorkspace?.name ?? "选择工作区"}</strong>
+						</span>
+						<ChevronDownIcon className="kanso-workspace-switcher-chevron" />
+					</button>
+					{workspaceMenuOpen ? (
+						<div className="kanso-workspace-switcher-menu" role="menu" aria-label="切换工作区">
+							<div className="kanso-workspace-switcher-menu-label">切换工作区</div>
+							{(workspaces ?? []).map((workspace) => (
+								<NavLink
+									key={workspace.id}
+									to={workspaceContext.workspaceDashboardPath(workspace.id)}
+									role="menuitem"
+									className={`kanso-workspace-switcher-option${workspace.id === currentWorkspaceId ? " is-current" : ""}`}
+									onClick={() => setWorkspaceMenuOpen(false)}
+								>
+									<span className="kanso-workspace-option-dot" aria-hidden="true">{workspace.name.slice(0, 1)}</span>
+									<span className="kanso-workspace-option-name">{workspace.name}</span>
+									{workspace.id === currentWorkspaceId ? <span className="kanso-workspace-option-check">✓</span> : null}
+								</NavLink>
+							))}
+							<div className="kanso-workspace-switcher-divider" />
+							{canCreateWorkspace ? (
+								<button
+									type="button"
+									className="kanso-workspace-switcher-create"
+									onClick={() => { setWorkspaceMenuOpen(false); setCreateOpen(true); }}
+								>
+									<PlusIcon />
+									新建工作区
+								</button>
+							) : null}
+						</div>
+					) : null}
+				</div>
+
 				<nav id="kanso-sidebar-nav" className="kanso-sidebar-nav">
+					{workspaceContext.isReady ? (
+						<>
 					<section className="kanso-sidebar-group">
 						<p className="kanso-sidebar-group-label">总览</p>
 					<NavLink
-						to="/dashboard"
+						to={workspaceContext.workspacePath(currentWorkspaceId, "dashboard")}
 						className="kanso-sidebar-item"
 						onMouseEnter={() => preloadRoute("dashboard")}
 						onFocus={() => preloadRoute("dashboard")}
@@ -198,13 +266,29 @@ export default function AppShell() {
 						<span className="kanso-sidebar-label">仪表盘</span>
 					</NavLink>
 					<NavLink
-						to="/calendar"
+						to={workspaceContext.workspacePath(currentWorkspaceId, "calendar")}
 						className="kanso-sidebar-item"
 						onMouseEnter={() => preloadRoute("calendar")}
 						onFocus={() => preloadRoute("calendar")}
 					>
 						<CalendarDaysIcon />
 						<span className="kanso-sidebar-label">日历</span>
+					</NavLink>
+					<NavLink
+						to={`/w/${currentWorkspaceId}`}
+						end
+						className="kanso-sidebar-item"
+						onMouseEnter={() => {
+							preloadRoute("workspace");
+							prefetchWorkspaceProjects(queryClient, currentWorkspaceId);
+						}}
+						onFocus={() => {
+							preloadRoute("workspace");
+							prefetchWorkspaceProjects(queryClient, currentWorkspaceId);
+						}}
+					>
+						<LayersIcon />
+						<span className="kanso-sidebar-label">项目</span>
 					</NavLink>
 					</section>
 
@@ -226,7 +310,7 @@ export default function AppShell() {
 															prefetchBoard(queryClient, p.projectId);
 														}}
 												>
-													<LayersIcon />
+															<LayersIcon />
 													<span className="kanso-sidebar-label">{p.name}</span>
 										</NavLink>
 									</li>
@@ -236,71 +320,89 @@ export default function AppShell() {
 						)}
 
 					<section className="kanso-sidebar-group">
-						<p className="kanso-sidebar-group-label">工作区</p>
-					<ul>
-						{workspaces?.map((workspace) => (
-							<li key={workspace.id}>
-														<NavLink
-															to={`/w/${workspace.id}`}
-																		className="kanso-sidebar-item"
-																						onMouseEnter={() => {
-																						preloadRoute("workspace");
-																						prefetchWorkspaceProjects(queryClient, workspace.id);
-																					}}
-																						onFocus={() => {
-																						preloadRoute("workspace");
-																						prefetchWorkspaceProjects(queryClient, workspace.id);
-																					}}
-												>
-													<LayersIcon />
-													<span className="kanso-sidebar-label">{workspace.name}</span>
-								</NavLink>
-							</li>
-						))}
-					</ul>
-					<button
-						type="button"
-						className="kanso-sidebar-item"
-						onClick={() => setCreateOpen(true)}
-					>
-						<PlusIcon className="size-3.5" />
-						<span className="kanso-sidebar-label">新建工作区</span>
-					</button>
+						<p className="kanso-sidebar-group-label">看板</p>
+						<ul>
+							{currentWorkspaceProjects?.map((project) => (
+								<li key={project.id}>
+									<NavLink
+										to={`/w/${currentWorkspaceId}/p/${project.id}`}
+										className="kanso-sidebar-item"
+										onMouseEnter={() => {
+											preloadRoute("board");
+											prefetchBoard(queryClient, project.id);
+										}}
+										onFocus={() => {
+											preloadRoute("board");
+											prefetchBoard(queryClient, project.id);
+										}}
+									>
+											<LayersIcon />
+										<span className="kanso-sidebar-label">{project.name}</span>
+									</NavLink>
+								</li>
+							))}
+						</ul>
 					</section>
 
 					<section className="kanso-sidebar-group">
 						<p className="kanso-sidebar-group-label">管理</p>
 					<NavLink
-						to="/activity"
+					to={workspaceContext.workspacePath(currentWorkspaceId, "activity")}
 						className="kanso-sidebar-item"
 					>
 						<HistoryIcon />
 						<span className="kanso-sidebar-label">活动</span>
 					</NavLink>
-					<NavLink
-						to="/settings"
-						className="kanso-sidebar-item"
-					>
-						<SettingsIcon />
-						<span className="kanso-sidebar-label">设置</span>
-					</NavLink>
+					{meData?.mode === "team" ? (
+						<NavLink
+							to={workspaceContext.workspacePath(currentWorkspaceId, "team")}
+							className="kanso-sidebar-item"
+							onMouseEnter={() => preloadRoute("team")}
+							onFocus={() => preloadRoute("team")}
+						>
+							<UsersIcon />
+							<span className="kanso-sidebar-label">团队</span>
+						</NavLink>
+					) : null}
 					</section>
+						</>
+					) : null}
+					{member?.role === "admin" ? (
+						<section className="kanso-sidebar-group">
+							<p className="kanso-sidebar-group-label">管理</p>
+							<NavLink to="/settings" className="kanso-sidebar-item">
+								<SettingsIcon />
+								<span className="kanso-sidebar-label">系统设置</span>
+							</NavLink>
+						</section>
+					) : null}
 				</nav>
 
-				<div className="kanso-sidebar-footer">
-					<NavLink
-						to="/profile"
-						aria-label="个人中心"
-						title="个人中心"
-						className="kanso-sidebar-identity"
-					>
+			<div className="kanso-sidebar-footer">
+					{workspaceContext.isReady ? (
+						<NavLink
+							to={workspaceContext.workspacePath(currentWorkspaceId, "profile")}
+							aria-label="个人中心"
+							title="个人中心"
+							className="kanso-sidebar-identity"
+						>
 						{member ? (
 							<MemberAvatar member={member} className="size-7 text-[11px] font-semibold text-white" />
 						) : (
 							<span className="size-7 rounded-full bg-muted" aria-hidden />
 						)}
 						<span className="kanso-sidebar-identity-label min-w-0 flex-1 truncate">{member?.name ?? "未登录"}</span>
-					</NavLink>
+						</NavLink>
+					) : (
+						<div className="kanso-sidebar-identity" aria-label="个人中心">
+							{member ? (
+								<MemberAvatar member={member} className="size-7 text-[11px] font-semibold text-white" />
+							) : (
+								<span className="size-7 rounded-full bg-muted" aria-hidden />
+							)}
+							<span className="kanso-sidebar-identity-label min-w-0 flex-1 truncate">{member?.name ?? "未登录"}</span>
+						</div>
+					)}
 					<button
 						type="button"
 						aria-label="退出登录"
@@ -313,8 +415,20 @@ export default function AppShell() {
 				</div>
 			</aside>
 
-			<main data-testid="main-region" className="kanso-main">
-				<Outlet />
+			<main
+				data-testid="main-region"
+				className="kanso-main"
+			>
+				{workspaceContext.isReady || workspaceContext.status === "not-required" ? (
+					<Outlet />
+				) : (
+					<WorkspaceUnavailable
+						status={unavailableStatus}
+						canCreate={canCreateWorkspace}
+						onCreate={() => setCreateOpen(true)}
+						onChoose={() => setWorkspaceMenuOpen(true)}
+					/>
+				)}
 			</main>
 		</div>
 		<NameDialog
@@ -329,7 +443,9 @@ export default function AppShell() {
 		/>
 
 		{/* 全局浮动元素（原型 shell）：FAB + 键盘提示条 + 命令面板 + 快速捕获 */}
-		<QuickCaptureFab onClick={() => setQcOpen(true)} />
+		{workspaceContext.isReady ? (
+			<QuickCaptureFab onClick={() => setQcOpen(true)} />
+		) : null}
 		<div
 			className="kanso-keyboard-tip pointer-events-none fixed bottom-5 left-1/2 z-[85] -translate-x-1/2"
 			aria-hidden
@@ -348,12 +464,24 @@ export default function AppShell() {
 			</span>
 		</div>
 
-		<CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
-		<QuickCapture
-			open={qcOpen}
-			onClose={() => setQcOpen(false)}
-			defaultProjectId={currentProjectId}
-		/>
+		<CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} workspaceId={currentWorkspaceId} canManage={member?.role === "admin"} />
+		{workspaceContext.isReady ? (
+			<QuickCapture
+				open={qcOpen}
+				onClose={() => setQcOpen(false)}
+				defaultProjectId={currentProjectId}
+				workspaceId={currentWorkspaceId}
+				workspaceName={currentWorkspace?.name}
+			/>
+		) : null}
 		</>
+	);
+}
+
+export default function AppShell() {
+	return (
+		<WorkspaceContextProvider>
+			<AppShellContent />
+		</WorkspaceContextProvider>
 	);
 }

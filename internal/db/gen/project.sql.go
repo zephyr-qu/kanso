@@ -24,7 +24,16 @@ type CreateProjectParams struct {
 	UpdatedAt   string `json:"updatedAt"`
 }
 
-func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error) {
+type CreateProjectRow struct {
+	ID          string `json:"id"`
+	WorkspaceID string `json:"workspaceId"`
+	Name        string `json:"name"`
+	Position    int64  `json:"position"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
+}
+
+func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (CreateProjectRow, error) {
 	row := q.db.QueryRowContext(ctx, createProject,
 		arg.ID,
 		arg.WorkspaceID,
@@ -33,7 +42,7 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
-	var i Project
+	var i CreateProjectRow
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
@@ -61,9 +70,18 @@ const getProject = `-- name: GetProject :one
 SELECT id, workspace_id, name, position, created_at, updated_at FROM project WHERE id = ?
 `
 
-func (q *Queries) GetProject(ctx context.Context, id string) (Project, error) {
+type GetProjectRow struct {
+	ID          string `json:"id"`
+	WorkspaceID string `json:"workspaceId"`
+	Name        string `json:"name"`
+	Position    int64  `json:"position"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
+}
+
+func (q *Queries) GetProject(ctx context.Context, id string) (GetProjectRow, error) {
 	row := q.db.QueryRowContext(ctx, getProject, id)
-	var i Project
+	var i GetProjectRow
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
@@ -79,15 +97,24 @@ const listProjectsByWorkspace = `-- name: ListProjectsByWorkspace :many
 SELECT id, workspace_id, name, position, created_at, updated_at FROM project WHERE workspace_id = ? ORDER BY position, created_at
 `
 
-func (q *Queries) ListProjectsByWorkspace(ctx context.Context, workspaceID string) ([]Project, error) {
+type ListProjectsByWorkspaceRow struct {
+	ID          string `json:"id"`
+	WorkspaceID string `json:"workspaceId"`
+	Name        string `json:"name"`
+	Position    int64  `json:"position"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
+}
+
+func (q *Queries) ListProjectsByWorkspace(ctx context.Context, workspaceID string) ([]ListProjectsByWorkspaceRow, error) {
 	rows, err := q.db.QueryContext(ctx, listProjectsByWorkspace, workspaceID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Project
+	var items []ListProjectsByWorkspaceRow
 	for rows.Next() {
-		var i Project
+		var i ListProjectsByWorkspaceRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
@@ -119,9 +146,18 @@ type UpdateProjectNameParams struct {
 	ID        string `json:"id"`
 }
 
-func (q *Queries) UpdateProjectName(ctx context.Context, arg UpdateProjectNameParams) (Project, error) {
+type UpdateProjectNameRow struct {
+	ID          string `json:"id"`
+	WorkspaceID string `json:"workspaceId"`
+	Name        string `json:"name"`
+	Position    int64  `json:"position"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
+}
+
+func (q *Queries) UpdateProjectName(ctx context.Context, arg UpdateProjectNameParams) (UpdateProjectNameRow, error) {
 	row := q.db.QueryRowContext(ctx, updateProjectName, arg.Name, arg.UpdatedAt, arg.ID)
-	var i Project
+	var i UpdateProjectNameRow
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,

@@ -17,16 +17,41 @@ type Event struct {
 
 // Hub 管理所有 WebSocket 订阅者并转发事件。
 type Hub struct {
-	mu        sync.Mutex
-	byProject map[string]map[chan []byte]struct{}
-	all       map[chan []byte]struct{}
+	mu          sync.Mutex
+	byProject   map[string]map[chan []byte]struct{}
+	byWorkspace map[string]map[chan []byte]struct{}
+	all         map[chan []byte]struct{}
 }
 
 // NewHub 构造空 Hub。
 func NewHub() *Hub {
 	return &Hub{
-		byProject: make(map[string]map[chan []byte]struct{}),
-		all:       make(map[chan []byte]struct{}),
+		byProject:   make(map[string]map[chan []byte]struct{}),
+		byWorkspace: make(map[string]map[chan []byte]struct{}),
+		all:         make(map[chan []byte]struct{}),
+	}
+}
+
+// SubscribeWorkspace registers a subscriber for one workspace's aggregate and team events.
+func (h *Hub) SubscribeWorkspace(workspaceID string) chan []byte {
+	send := make(chan []byte, 32)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, ok := h.byWorkspace[workspaceID]; !ok {
+		h.byWorkspace[workspaceID] = make(map[chan []byte]struct{})
+	}
+	h.byWorkspace[workspaceID][send] = struct{}{}
+	return send
+}
+
+func (h *Hub) UnsubscribeWorkspace(workspaceID string, send chan []byte) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if conns, ok := h.byWorkspace[workspaceID]; ok {
+		delete(conns, send)
+		if len(conns) == 0 {
+			delete(h.byWorkspace, workspaceID)
+		}
 	}
 }
 
@@ -72,6 +97,17 @@ func (h *Hub) BroadcastAll(event Event) {
 	h.mu.Lock()
 	targets := make([]chan []byte, 0, len(h.all))
 	for c := range h.all {
+		targets = append(targets, c)
+	}
+	h.mu.Unlock()
+	h.send(targets, event)
+}
+
+// BroadcastWorkspace sends an event only to subscribers of the owning workspace.
+func (h *Hub) BroadcastWorkspace(workspaceID string, event Event) {
+	h.mu.Lock()
+	targets := make([]chan []byte, 0, len(h.byWorkspace[workspaceID]))
+	for c := range h.byWorkspace[workspaceID] {
 		targets = append(targets, c)
 	}
 	h.mu.Unlock()

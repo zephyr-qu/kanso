@@ -151,3 +151,25 @@ func (q *Queries) ReownLegacyComments(ctx context.Context, author string) (int64
 	}
 	return result.RowsAffected()
 }
+
+const updateComment = `-- name: UpdateComment :one
+UPDATE comment SET content = ? WHERE id = ? RETURNING id, task_id, content, created_at, author
+`
+
+type UpdateCommentParams struct {
+	Content string `json:"content"`
+	ID      string `json:"id"`
+}
+
+func (q *Queries) UpdateComment(ctx context.Context, arg UpdateCommentParams) (Comment, error) {
+	row := q.db.QueryRowContext(ctx, updateComment, arg.Content, arg.ID)
+	var i Comment
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.Content,
+		&i.CreatedAt,
+		&i.Author,
+	)
+	return i, err
+}

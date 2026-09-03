@@ -19,7 +19,12 @@ import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
 import { formatUpdated } from "@/lib/format-relative";
-import { queryKeys } from "@/hooks/query-keys";
+import {
+	invalidateWorkspaceProjects,
+	invalidateWorkspaces,
+	queryKeys,
+} from "@/hooks/query-keys";
+import { useWorkspaceContext } from "@/hooks/use-workspace-context";
 import { preloadRoute } from "@/lib/route-preload";
 import { prefetchBoard } from "@/lib/query-prefetch";
 import type { Project } from "@/types/project";
@@ -29,6 +34,7 @@ import { PageContent, PageHeader, PrimaryButton } from "@/components/kanso-ui";
 
 export default function WorkspacePage() {
 	const { workspaceId = "" } = useParams();
+	const { workspace } = useWorkspaceContext();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const [createOpen, setCreateOpen] = useState(false);
@@ -38,21 +44,13 @@ export default function WorkspacePage() {
 	const [wsRenaming, setWsRenaming] = useState(false);
 	const [wsDeleting, setWsDeleting] = useState(false);
 
-	// 当前工作区名（来自工作区列表；重命名后同步）。
-	const { data: workspaces } = useQuery({
-		queryKey: queryKeys.workspaces(),
-		queryFn: () => api<Workspace[]>(buildPath("workspaces")),
-	});
-	const workspaceName =
-		workspaces?.find((w) => w.id === workspaceId)?.name ?? "工作区";
+	// 当前工作区名来自共享工作区上下文；重命名后由 Query 缓存统一同步。
+	const workspaceName = workspace?.name ?? "工作区";
 
-	const invalidateWorkspaces = () => {
-		queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() });
+	const refreshWorkspaces = () => {
+		invalidateWorkspaces(queryClient);
 	};
-	const invalidateProjects = () =>
-		queryClient.invalidateQueries({
-			queryKey: queryKeys.projects(workspaceId),
-		});
+	const invalidateProjects = () => invalidateWorkspaceProjects(queryClient, workspaceId);
 
 	const wsRenameMutation = useMutation({
 		meta: { feedback: { success: "工作区已更新", errorTitle: "重命名工作区失败" } },
@@ -61,15 +59,15 @@ export default function WorkspacePage() {
 				method: "PATCH",
 				body: JSON.stringify({ name }),
 			}),
-		onSuccess: invalidateWorkspaces,
+		onSuccess: refreshWorkspaces,
 	});
 	const wsDeleteMutation = useMutation({
 		meta: { feedback: { success: "工作区已删除", errorTitle: "删除工作区失败" } },
 		mutationFn: () =>
 			api<void>(buildPath("workspace", { id: workspaceId }), { method: "DELETE" }),
 		onSuccess: () => {
-			invalidateWorkspaces();
-			navigate("/"); // RedirectHome 落到剩余工作区
+			refreshWorkspaces();
+			navigate("/app"); // RedirectHome 落到剩余工作区
 		},
 	});
 
@@ -106,20 +104,14 @@ export default function WorkspacePage() {
 				method: "PATCH",
 				body: JSON.stringify({ name }),
 			}),
-		onSuccess: () => {
-			invalidateProjects();
-			queryClient.invalidateQueries({ queryKey: ["pinned-projects"] });
-		},
+		onSuccess: invalidateProjects,
 	});
 
 	const deleteMutation = useMutation({
 		meta: { feedback: { success: "项目已删除", errorTitle: "删除项目失败" } },
 		mutationFn: (id: string) =>
 			api<void>(buildPath("project", { id }), { method: "DELETE" }),
-		onSuccess: () => {
-			invalidateProjects();
-			queryClient.invalidateQueries({ queryKey: ["pinned-projects"] });
-		},
+		onSuccess: invalidateProjects,
 	});
 
 	return (
@@ -207,7 +199,7 @@ export default function WorkspacePage() {
 								onClick={(e) => e.preventDefault()}
 								onPointerDown={(e) => e.stopPropagation()}
 							>
-								<PinToggleButton projectId={project.id} name={project.name} className="size-7" />
+								<PinToggleButton workspaceId={workspaceId} projectId={project.id} name={project.name} className="size-7" />
 									<Button
 										variant="ghost"
 									size="icon"

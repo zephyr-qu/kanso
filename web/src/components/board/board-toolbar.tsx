@@ -49,7 +49,7 @@ export function BoardToolbar({
 				</Link>
 				<span className="kanso-board-breadcrumb__separator">/</span>
 				<h1 className="truncate text-[17px] font-[650] tracking-tight">{board?.project.name ?? "看板"}</h1>
-				{board && <PinToggleButton projectId={projectId} name={board.project.name} />}
+				{board && <PinToggleButton workspaceId={board.project.workspaceId} projectId={projectId} name={board.project.name} />}
 			</div>
 			<div className="kanso-board-toolbar flex gap-2">
 				<Select

@@ -6,9 +6,12 @@ export const routeLoaders = {
 	calendar: () => import("@/pages/calendar"),
 	dashboard: () => import("@/pages/dashboard"),
 	login: () => import("@/pages/login"),
+	landing: () => import("@/pages/landing"),
+	workspaceSwitcherPrototype: () => import("@/pages/workspace-switcher-prototype"),
 	profile: () => import("@/pages/profile"),
 	redirectHome: () => import("@/pages/redirect-home"),
 	settings: () => import("@/pages/settings"),
+	team: () => import("@/pages/team"),
 	taskDetail: () => import("@/pages/task-detail"),
 	workspace: () => import("@/pages/workspace"),
 };

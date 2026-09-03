@@ -16,8 +16,8 @@ async function loginToApp(page: Page): Promise<void> {
 
 async function openPrototypeBoard(page: Page): Promise<void> {
 	await loginToApp(page);
-	await page.waitForSelector('a[href*="/p/"]');
-	await page.locator('a[href*="/p/"]', { hasText: "原型演示" }).click();
+	await page.waitForSelector('aside a[href*="/p/"]');
+	await page.locator('aside a[href*="/p/"]', { hasText: "原型演示" }).click();
 	await page.waitForSelector("text=新建列");
 	await expect(page.locator(".kanso-task-card").first()).toBeVisible();
 }

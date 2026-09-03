@@ -7,6 +7,7 @@ import (
 	"github.com/coder/websocket"
 
 	"kanso/internal/realtime"
+	"kanso/internal/service"
 )
 
 // handleWS 升级 WebSocket 连接并订阅项目。
@@ -16,15 +17,31 @@ import (
 func (a *API) handleWS(hub *realtime.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		projectID := r.URL.Query().Get("project")
-		if projectID == "" {
-			writeError(w, http.StatusBadRequest, "缺少 project 参数")
+		workspaceID := r.URL.Query().Get("workspace")
+		if projectID == "" && workspaceID == "" {
+			writeError(w, http.StatusBadRequest, "缺少 workspace 或 project 参数")
+			return
+		}
+		if projectID != "" && workspaceID != "" {
+			writeError(w, http.StatusBadRequest, "不能同时指定 workspace 和 project 参数")
 			return
 		}
 		key := r.URL.Query().Get("key")
-		// 按成员表校验密钥（personal = 单一 owner，owner.access_key = KANSO_ACCESS_KEY）。
-		authed := a.svc.VerifyKey(r.Context(), key)
-		if !authed {
+		memberID, ok := a.svc.MemberIDByKey(r.Context(), key)
+		if !ok {
 			writeError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		if workspaceID == "" {
+			var err error
+			workspaceID, err = a.admission.ResolveResourceWorkspace(r.Context(), service.ResourceProject, projectID)
+			if err != nil {
+				writeServiceError(w, err, "项目不存在")
+				return
+			}
+		}
+		if err := a.admission.AdmitWorkspace(r.Context(), memberID, workspaceID); err != nil {
+			writeServiceError(w, err, "无权访问当前工作区")
 			return
 		}
 
@@ -41,16 +58,20 @@ func (a *API) handleWS(hub *realtime.Hub) http.HandlerFunc {
 		defer conn.CloseNow()
 
 		ctx := r.Context()
-		send := hub.Subscribe(projectID)
-		defer hub.Unsubscribe(projectID, send)
+		var send chan []byte
+		if projectID != "" {
+			send = hub.Subscribe(projectID)
+			defer hub.Unsubscribe(projectID, send)
+		} else {
+			send = hub.SubscribeWorkspace(workspaceID)
+			defer hub.UnsubscribeWorkspace(workspaceID, send)
+		}
 
 		// 写协程：把 hub 事件写入连接，直到读侧断开。
 		// 写协程：把 hub 事件写入连接，直到读侧断开（S-13：WaitGroup 汇合，关闭确定）。
 		done := make(chan struct{})
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for {
 				select {
 				case <-done:
@@ -61,7 +82,7 @@ func (a *API) handleWS(hub *realtime.Hub) http.HandlerFunc {
 					}
 				}
 			}
-		}()
+		})
 
 		// 读循环：保持连接直到客户端断开（客户端消息忽略，实时是单向推送）。
 		for {

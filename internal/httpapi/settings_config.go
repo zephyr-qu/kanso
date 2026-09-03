@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"kanso/internal/config"
+	"kanso/internal/service"
 )
 
 type settingsConfigRequest struct {
@@ -19,7 +20,7 @@ type settingsConfigRequest struct {
 
 // getSettingsConfig 返回当前生效配置（GET /api/settings/config）。
 func (a *API) getSettingsConfig(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOwnerInTeam(w, r) {
+	if !a.requireCapability(w, r, service.CapabilityManageSettings) {
 		return
 	}
 	a.cfgMu.RLock()
@@ -38,7 +39,7 @@ func (a *API) getSettingsConfig(w http.ResponseWriter, r *http.Request) {
 
 // updateSettingsConfig 保存配置到文件（PUT /api/settings/config）。
 func (a *API) updateSettingsConfig(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOwnerInTeam(w, r) {
+	if !a.requireCapability(w, r, service.CapabilityManageSettings) {
 		return
 	}
 	a.cfgMu.Lock()

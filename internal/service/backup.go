@@ -53,8 +53,14 @@ func (s *Service) GetBackup(ctx context.Context) (BackupData, error) {
 	if b.Workspaces, err = q.ListWorkspaces(ctx); err != nil {
 		return BackupData{}, fmt.Errorf("导出工作区失败: %w", err)
 	}
-	if b.Projects, err = q.ListAllProjects(ctx); err != nil {
+	projectRows, projectErr := q.ListAllProjects(ctx)
+	if projectErr != nil {
+		err = projectErr
 		return BackupData{}, fmt.Errorf("导出项目失败: %w", err)
+	}
+	b.Projects = make([]gen.Project, 0, len(projectRows))
+	for _, projectRow := range projectRows {
+		b.Projects = append(b.Projects, projectFromBackupRow(projectRow))
 	}
 	if b.Columns, err = q.ListAllColumns(ctx); err != nil {
 		return BackupData{}, fmt.Errorf("导出列失败: %w", err)
@@ -102,7 +108,7 @@ func (s *Service) GetBackup(ctx context.Context) (BackupData, error) {
 
 // ImportBackup 全量替换恢复：同一事务内清空全部业务表，再按依赖序写回快照。
 // 语义为「恢复还原」——保留快照原始 ID，覆盖（丢弃）当前全部数据。
-// 成员（member）不随快照迁移：清空前快照、恢复后原样写回，认证态不因导入而丢失。
+// 成员（member）不随快照迁移：清空前快照、恢复后原样写回，认证哈希不进入备份文件。
 func (s *Service) ImportBackup(ctx context.Context, b BackupData) error {
 	if err := validateBackup(b); err != nil {
 		return err
@@ -124,6 +130,30 @@ func (s *Service) ImportBackup(ctx context.Context, b BackupData) error {
 	if err != nil {
 		return fmt.Errorf("快照成员失败: %w", err)
 	}
+	type memberWorkspace struct {
+		workspaceID string
+		memberID    string
+		createdAt   string
+	}
+	var memberships []memberWorkspace
+	rows, err := tx.QueryContext(ctx, `SELECT workspace_id, member_id, created_at FROM workspace_member`)
+	if err != nil {
+		return fmt.Errorf("快照工作区成员关系失败: %w", err)
+	}
+	for rows.Next() {
+		var item memberWorkspace
+		if err := rows.Scan(&item.workspaceID, &item.memberID, &item.createdAt); err != nil {
+			rows.Close()
+			return fmt.Errorf("读取工作区成员关系失败: %w", err)
+		}
+		memberships = append(memberships, item)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("关闭工作区成员关系快照失败: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("遍历工作区成员关系失败: %w", err)
+	}
 
 	// 清空各表（子→父；FR 依赖由 ON DELETE CASCADE 兜底，逐表清更显式）。
 	for _, table := range []string{
@@ -142,8 +172,7 @@ func (s *Service) ImportBackup(ctx context.Context, b BackupData) error {
 			return fmt.Errorf("导入工作区失败: %w", err)
 		}
 	}
-	// 成员写回：挂到快照中存在的工作区；快照不含该工作区（跨实例迁移）时回退到
-	// 首个恢复的工作区。快照无工作区则无法挂载，跳过（退化场景，认证态随库丢失）。
+	// 成员写回不再附带旧 workspace_id；随后按快照恢复 workspace_member 关系。
 	restoredWS := make(map[string]bool, len(b.Workspaces))
 	fallbackWS := ""
 	for i, w := range b.Workspaces {
@@ -153,15 +182,20 @@ func (s *Service) ImportBackup(ctx context.Context, b BackupData) error {
 		}
 	}
 	for _, m := range members {
-		wsID := m.WorkspaceID
-		if !restoredWS[wsID] {
-			wsID = fallbackWS
+		if err := q.ImportMembers(ctx, gen.ImportMembersParams{ID: m.ID, Name: m.Name, Role: m.Role, AvatarColor: m.AvatarColor, Avatar: m.Avatar, AccessKeyHash: m.AccessKeyHash, CreatedAt: m.CreatedAt}); err != nil {
+			return fmt.Errorf("写回成员失败: %w", err)
 		}
-		if wsID == "" {
+	}
+	for _, relation := range memberships {
+		workspaceID := relation.workspaceID
+		if !restoredWS[workspaceID] {
+			workspaceID = fallbackWS
+		}
+		if workspaceID == "" {
 			continue
 		}
-		if err := q.ImportMembers(ctx, gen.ImportMembersParams{ID: m.ID, WorkspaceID: wsID, Name: m.Name, Role: m.Role, AvatarColor: m.AvatarColor, Avatar: m.Avatar, AccessKey: m.AccessKey, CreatedAt: m.CreatedAt}); err != nil {
-			return fmt.Errorf("写回成员失败: %w", err)
+		if err := q.ImportWorkspaceMember(ctx, gen.ImportWorkspaceMemberParams{WorkspaceID: workspaceID, MemberID: relation.memberID, CreatedAt: relation.createdAt}); err != nil {
+			return fmt.Errorf("恢复工作区成员关系失败: %w", err)
 		}
 	}
 	for _, p := range b.Projects {

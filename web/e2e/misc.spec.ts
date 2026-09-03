@@ -11,7 +11,7 @@ async function loginToApp(page: Page) {
 	await page.goto("/login");
 	await page.fill("#access-key", key);
 	await page.getByRole("button", { name: "进入" }).click();
-	await page.waitForURL((u) => u.pathname !== "/login");
+	await page.waitForURL(/\/w\/[^/]+\/dashboard/);
 }
 
 test("看板标签弹窗：打开可见创建区与标签库", async ({ page }) => {
@@ -31,7 +31,7 @@ test("settings 服务配置：可编辑保存，数据卡含备份导入导出",
 	await loginToApp(page);
 	await page.waitForSelector('a[href*="/p/"]');
 
-	await page.getByRole("link", { name: "设置", exact: true }).click();
+	await page.getByRole("link", { name: "系统设置", exact: true }).click();
 	// 页头副标题含「外观 · 服务配置 · 数据 · 关于」，用 exact 命中卡片标题。
 	await expect(page.getByText("服务配置", { exact: true })).toBeVisible();
 	// 字段说明展示（保存到配置文件）。

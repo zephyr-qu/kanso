@@ -20,7 +20,9 @@ export type MockDb = {
 	boards: Record<string, Board>;
 	details: Record<string, TaskDetail>;
 	labels: Record<string, Label[]>;
-	members: Record<string, Member[]>;
+	/** 全局成员身份；workspaceMembers 只保存授权关系。 */
+	members: Member[];
+	workspaceMembers: Record<string, string[]>;
 	memberKeys: Record<string, string>;
 	milestones: Record<string, Milestone[]>;
 	taskMilestones: Record<string, string[]>;
@@ -42,23 +44,23 @@ function seedDb(): MockDb {
 		name: "个人工作区",
 		createdAt: iso(12),
 	};
-	// 轻量成员（1-3 人）：当前登录身份固定为 owner（Ad）。
+	// 当前登录身份固定为管理员（Ad）。
 	const members: Member[] = [
-		{ id: "mock-member-1", workspaceId: workspace.id, name: "Ad", role: "owner" },
+		{ id: "mock-member-1", name: "Ad", role: "admin", hasKey: true },
 		{
 			id: "mock-member-2",
-			workspaceId: workspace.id,
 			name: "Kim",
 			role: "member",
+			hasKey: false,
 		},
 		{
 			id: "mock-member-3",
-			workspaceId: workspace.id,
 			name: "Jay",
 			role: "member",
+			hasKey: false,
 		},
 	];
-	// 成员访问密钥：owner 持有后台密钥，其他成员由管理员分配（初始为空）。
+	// 成员访问密钥：管理员持有后台密钥，其他成员由管理员分配（初始为空）。
 	const memberKeys: Record<string, string> = { [members[0].id]: "kanso-admin" };
 	const projects: Project[] = [
 		{
@@ -340,7 +342,8 @@ function seedDb(): MockDb {
 		boards,
 		details,
 		labels: labelsByProject,
-		members: { [workspace.id]: members },
+		members,
+		workspaceMembers: { [workspace.id]: members.map((member) => member.id) },
 		memberKeys,
 		milestones: {
 			[projects[0].id]: [
@@ -385,12 +388,14 @@ export function loadMockDb(): void {
 			parsed.details &&
 			parsed.labels &&
 			parsed.members &&
+			parsed.workspaceMembers &&
 			parsed.memberKeys &&
 			parsed.milestones &&
 			parsed.taskMilestones &&
 			parsed.activities
 		) {
 			db = parsed;
+			for (const member of db.members) member.hasKey = Boolean(db.memberKeys[member.id]);
 			// v5 迁移：早期种子的「阻塞中」列统一改名为规范名「已阻塞」。
 			for (const board of Object.values(db.boards)) {
 				for (const column of board.columns) {
@@ -414,6 +419,18 @@ export function persistMockDb(): void {
 export function getMockDb(): MockDb {
 	return db;
 }
+
+/** 返回某个工作区的成员视图：管理员隐式可见，普通成员必须有授权关系。 */
+export function membersForWorkspace(workspaceId: string): Member[] {
+	const ids = new Set(db.workspaceMembers[workspaceId] ?? []);
+	return db.members.filter((member) => member.role === "admin" || ids.has(member.id));
+}
+
+export function memberCanAccessWorkspace(memberId: string, workspaceId: string): boolean {
+	const member = db.members.find((item) => item.id === memberId);
+	return member?.role === "admin" || (db.workspaceMembers[workspaceId] ?? []).includes(memberId);
+}
+
 export function newMockId(prefix: string): string {
 	return id(prefix);
 }
@@ -610,58 +627,70 @@ export function projectSummaries(workspaceId: string): Project[] {
 export function board(projectId: string): Board | undefined {
 	return clone(db.boards[projectId]);
 }
-/** 当前登录成员：按 Authorization 密钥匹配成员；未匹配/无密钥时回退 owner。 */
+/** 当前登录成员：按 Authorization 密钥匹配成员；未匹配/无密钥时回退管理员。 */
 export function me(authKey?: string): {
 	member: Member | undefined;
-	workspaceId: string;
 	mode: "team";
 } {
-	const workspace = db.workspaces[0];
-	const members = db.members[workspace?.id] ?? [];
-	const owner = members.find((item) => item.role === "owner") ?? members[0];
+	const owner = db.members.find((item) => item.role === "admin");
 	if (authKey) {
 		const matchedId = Object.entries(db.memberKeys).find(
 			([, key]) => key === authKey,
 		)?.[0];
-		const matched = members.find((item) => item.id === matchedId);
+		const matched = db.members.find((item) => item.id === matchedId);
 		if (matched)
-			return { member: matched, workspaceId: workspace?.id ?? "", mode: "team" };
+			return { member: matched, mode: "team" };
 	}
-	return { member: owner, workspaceId: workspace?.id ?? "", mode: "team" };
+	return { member: owner, mode: "team" };
 }
 
-/** 为成员生成访问密钥（管理员授权）：已存在则原样返回。 */
+/** 为成员生成新访问密钥；旧密钥立即失效，明文只由本次调用返回。 */
 export function generateMemberKey(memberId: string): string | undefined {
-	const existing = db.memberKeys[memberId];
-	if (existing) return existing;
-	const member = Object.values(db.members)
-		.flat()
-		.find((item) => item.id === memberId);
+	const member = db.members.find((item) => item.id === memberId);
 	if (!member) return undefined;
 	const key = `kanso-${Math.random().toString(36).slice(2, 10)}`;
 	db.memberKeys[memberId] = key;
+	member.hasKey = true;
 	persistMockDb();
 	return key;
 }
 
-/** 工作区成员数量上限（个人版 5 人）。 */
-export const MEMBER_LIMIT = 5;
+export function revokeMemberKey(memberId: string): boolean {
+	const member = db.members.find((item) => item.id === memberId);
+	if (!member || member.role === "admin") return false;
+	delete db.memberKeys[memberId];
+	member.hasKey = false;
+	persistMockDb();
+	return true;
+}
+
+export function transferOwner(memberId: string): boolean {
+	const members = db.members;
+	const target = members.find((item) => item.id === memberId);
+	const current = members.find((item) => item.role === "admin");
+	if (!target || !current || target.id === current.id) return false;
+	current.role = "member";
+	target.role = "admin";
+	persistMockDb();
+	return true;
+}
+
+/** 实例身份数量上限。 */
+export const MEMBER_LIMIT = 6;
 
 /** 创建成员（普通成员）；超过上限返回错误文案。 */
 export function createMember(
-	workspaceId: string,
 	name: string,
 ): { ok: true; member: Member } | { ok: false; error: string } {
-	const list = db.members[workspaceId] ?? [];
-	if (list.length >= MEMBER_LIMIT)
+	if (db.members.length >= MEMBER_LIMIT)
 		return { ok: false, error: `成员数量已达上限（${MEMBER_LIMIT} 人）` };
 	const member: Member = {
 		id: newMockId("member"),
-		workspaceId,
 		name: name.trim(),
 		role: "member",
+		hasKey: false,
 	};
-	list.push(member);
+	db.members.push(member);
 	return { ok: true, member: persistAnd(member) };
 }
 
@@ -669,16 +698,18 @@ export function createMember(
 export function deleteMember(
 	memberId: string,
 ): { ok: true } | { ok: false; error: string } {
-	for (const list of Object.values(db.members)) {
-		const index = list.findIndex((item) => item.id === memberId);
-		if (index >= 0) {
-			if (list[index].role === "owner")
-				return { ok: false, error: "不能删除所有者" };
-			list.splice(index, 1);
-			delete db.memberKeys[memberId];
-			persistMockDb();
-			return { ok: true };
+	const index = db.members.findIndex((item) => item.id === memberId);
+	if (index >= 0) {
+		if (db.members[index].role === "admin" && db.members.filter((item) => item.role === "admin").length <= 1)
+				return { ok: false, error: "至少保留一名管理员" };
+		db.members.splice(index, 1);
+		for (const ids of Object.values(db.workspaceMembers)) {
+			const relationIndex = ids.indexOf(memberId);
+			if (relationIndex >= 0) ids.splice(relationIndex, 1);
 		}
+		delete db.memberKeys[memberId];
+		persistMockDb();
+		return { ok: true };
 	}
 	return { ok: false, error: "成员不存在" };
 }
@@ -693,14 +724,15 @@ export function taskDetail(taskId: string): TaskDetail | undefined {
 		.map((m) => ({ id: m.id, name: m.name, dueDate: m.dueDate ?? null }));
 	return detail;
 }
-export function activities(): Activity[] {
+export function activities(workspaceId?: string): Activity[] {
 	return clone(db.activities)
+		.filter((item) => !workspaceId || findProject(item.projectId)?.workspaceId === workspaceId)
 		.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 		.map(({ projectId: _projectId, ...activity }) => activity);
 }
 
-export function dashboard(): DashboardData {
-	const boards = Object.values(db.boards);
+export function dashboard(workspaceId?: string): DashboardData {
+	const boards = Object.values(db.boards).filter((item) => !workspaceId || item.project.workspaceId === workspaceId);
 	const tasks = boards
 		.flatMap((item) => item.columns.flatMap((column) => column.tasks))
 		.filter((task) => !task.archivedAt);
@@ -780,7 +812,7 @@ export function dashboard(): DashboardData {
 			};
 		}),
 		focus,
-		recentActivity: activities()
+		recentActivity: activities(workspaceId)
 			.slice(0, 8)
 			.map((item) => ({
 				id: item.id,
@@ -826,7 +858,7 @@ export function backup(): Record<string, unknown> {
 	};
 }
 
-export function search(query: string): SearchHit[] {
+export function search(query: string, workspaceId?: string): SearchHit[] {
 	const q = query.trim().toLowerCase();
 	const rows = Object.values(db.boards).flatMap((item) =>
 		item.columns.flatMap((column) =>
@@ -835,8 +867,9 @@ export function search(query: string): SearchHit[] {
 	);
 	return rows
 		.filter(
-			({ task }) =>
-				!q || `${task.title} ${task.description ?? ""}`.toLowerCase().includes(q),
+			({ task, project }) =>
+				(!workspaceId || project.workspaceId === workspaceId) &&
+				(!q || `${task.title} ${task.description ?? ""}`.toLowerCase().includes(q)),
 		)
 		.slice(0, 20)
 		.map(({ task, column, project }) => ({

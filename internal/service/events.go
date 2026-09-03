@@ -29,6 +29,7 @@ const (
 	EventLabelAttached     = "label.attached"
 	EventLabelDetached     = "label.detached"
 	EventCommentCreated    = "comment.created"
+	EventCommentUpdated    = "comment.updated"
 	EventCommentDeleted    = "comment.deleted"
 	EventMilestoneCreated  = "milestone.created"
 	EventMilestoneUpdated  = "milestone.updated"
@@ -38,6 +39,8 @@ const (
 	EventMemberCreated     = "member.created"
 	EventMemberUpdated     = "member.updated"
 	EventMemberDeleted     = "member.deleted"
+	EventMemberKeyRotated  = "member.key_rotated"
+	EventMemberKeyRevoked  = "member.key_revoked"
 	EventWorkspaceCreated  = "workspace.created"
 	EventWorkspaceUpdated  = "workspace.updated"
 	EventWorkspaceDeleted  = "workspace.deleted"
@@ -66,16 +69,21 @@ type Event struct {
 	Actor string
 }
 
-// commitEvent records the audit event in the supplied transaction, commits
-// the business mutation and only then broadcasts it to connected clients.
-func (s *Service) commitEvent(ctx context.Context, tx *sql.Tx, q *gen.Queries, e Event) error {
-	if err := s.recordEvent(ctx, q, e); err != nil {
-		return err
+// commitEvents records a group of related events in one transaction. The
+// business mutation and its audit trail commit together; broadcasts happen
+// only after the shared commit succeeds.
+func (s *Service) commitEvents(ctx context.Context, tx *sql.Tx, q *gen.Queries, events ...Event) error {
+	for _, e := range events {
+		if err := s.recordEvent(ctx, q, e); err != nil {
+			return err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("提交事务失败: %w", err)
 	}
-	s.broadcastEvent(e)
+	for _, e := range events {
+		s.broadcastEvent(e)
+	}
 	return nil
 }
 
@@ -85,6 +93,11 @@ func (s *Service) commitEvent(ctx context.Context, tx *sql.Tx, q *gen.Queries, e
 // Actor 为空时从 ctx 解析（与 dispatch 一致，ADR-0013 决策 5）——
 // 事务内直接调用（如评论/标签/任务）无需逐处传 actor。
 func (s *Service) recordEvent(ctx context.Context, q *gen.Queries, e Event) error {
+	if e.WorkspaceID == "" && e.ProjectID != "" {
+		if project, err := q.GetProject(ctx, e.ProjectID); err == nil {
+			e.WorkspaceID = project.WorkspaceID
+		}
+	}
 	if !e.RecordActivity {
 		return nil
 	}
@@ -96,32 +109,26 @@ func (s *Service) recordEvent(ctx context.Context, q *gen.Queries, e Event) erro
 		resourceID = e.EntityID
 	}
 	resourceType := "task"
-	if e.ActivityTaskID == "" && !isTaskEvent(e.Action) {
+	if e.ActivityTaskID == "" {
 		resourceType = resourceTypeForAction(e.Action)
 	}
 	return recordActivityWithQueries(ctx, q, resourceType, resourceID, e.ProjectID, e.WorkspaceID, e.Action, e.Data, e.Actor)
 }
 
-func isTaskEvent(action string) bool {
+func resourceTypeForAction(action string) string {
 	switch action {
 	case EventTaskCreated, EventTaskUpdated, EventTaskMoved, EventTaskDeleted,
 		EventTaskArchived, EventTaskRestored, EventLabelAttached, EventLabelDetached,
-		EventCommentCreated, EventCommentDeleted, EventMilestoneAttached, EventMilestoneDetached:
-		return true
-	default:
-		return false
-	}
-}
-
-func resourceTypeForAction(action string) string {
-	switch action {
+		EventCommentCreated, EventCommentUpdated, EventCommentDeleted, EventMilestoneAttached, EventMilestoneDetached:
+		return "task"
 	case EventColumnCreated, EventColumnUpdated, EventColumnMoved, EventColumnDeleted:
 		return "column"
 	case EventLabelCreated, EventLabelUpdated, EventLabelDeleted:
 		return "label"
 	case EventMilestoneCreated, EventMilestoneUpdated, EventMilestoneDeleted:
 		return "milestone"
-	case EventMemberCreated, EventMemberUpdated, EventMemberDeleted:
+	case EventMemberCreated, EventMemberUpdated, EventMemberDeleted,
+		EventMemberKeyRotated, EventMemberKeyRevoked:
 		return "member"
 	case EventProjectCreated, EventProjectUpdated, EventProjectDeleted,
 		EventProjectPinned, EventProjectUnpinned:
@@ -136,9 +143,22 @@ func resourceTypeForAction(action string) string {
 // broadcastEvent must run after the transaction commits. Broadcast failures
 // are intentionally non-fatal because clients re-fetch the source of truth.
 func (s *Service) broadcastEvent(e Event) {
+	e.WorkspaceID = s.eventWorkspaceID(context.Background(), e)
 	if e.ProjectID == "" {
 		s.emitAll(e.Action, e.WorkspaceID, e.EntityID)
 		return
 	}
 	s.emit(e.ProjectID, e.Action, e.EntityID)
+	s.emitWorkspace(e.WorkspaceID, e.Action, e.EntityID)
+}
+
+func (s *Service) eventWorkspaceID(ctx context.Context, e Event) string {
+	if e.WorkspaceID != "" || e.ProjectID == "" {
+		return e.WorkspaceID
+	}
+	var workspaceID string
+	if err := s.db.QueryRowContext(ctx, `SELECT workspace_id FROM project WHERE id = ?`, e.ProjectID).Scan(&workspaceID); err == nil {
+		return workspaceID
+	}
+	return ""
 }

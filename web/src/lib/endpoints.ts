@@ -1,7 +1,7 @@
 // 端点面单一来源（架构候选 4）：路径模板表。
 // 前端用 buildPath 填充 :param 得请求路径；Mock 用 mswPattern 派生路由（* + 模板）。
 // 改路由只需改这里一处；「前端已消费 vs mock 已注册」的漂移在编译/对账层面暴露。
-// settingsBackup 已由设置页消费；导入/导出均要求 owner 权限。
+// settingsBackup 已由设置页消费；导入/导出均要求管理员权限。
 export const ENDPOINT_TEMPLATES = {
 	// 认证与身份
 	authVerify: "/api/auth/verify",
@@ -11,6 +11,7 @@ export const ENDPOINT_TEMPLATES = {
 	workspace: "/api/workspaces/:id",
 	workspaceProjects: "/api/workspaces/:workspaceId/projects",
 	workspaceMembers: "/api/workspaces/:id/members",
+	workspaceMember: "/api/workspaces/:id/members/:memberId",
 	// 成员
 	members: "/api/members",
 	member: "/api/members/:id",
@@ -18,7 +19,7 @@ export const ENDPOINT_TEMPLATES = {
 	// 项目
 	project: "/api/projects/:id",
 	setProjectPinned: "/api/projects/:id/pinned",
-	pinnedProjects: "/api/pinned-projects",
+	pinnedProjects: "/api/workspaces/:workspaceId/pinned-projects",
 	projectArchivedTasks: "/api/projects/:id/archived-tasks",
 	projectColumns: "/api/projects/:projectId/columns",
 	projectLabels: "/api/projects/:projectId/labels",
@@ -38,9 +39,10 @@ export const ENDPOINT_TEMPLATES = {
 	milestone: "/api/milestones/:id",
 	milestoneTasks: "/api/milestones/:id/tasks",
 	// 汇总与检索
-	dashboard: "/api/dashboard",
-	activity: "/api/activity",
-	search: "/api/search",
+	dashboard: "/api/workspaces/:workspaceId/dashboard",
+	calendar: "/api/workspaces/:workspaceId/calendar",
+	activity: "/api/workspaces/:workspaceId/activity",
+	search: "/api/workspaces/:workspaceId/search",
 	health: "/api/health",
 	settingsBackup: "/api/settings/backup",
 	settingsConfig: "/api/settings/config",

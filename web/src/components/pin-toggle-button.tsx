@@ -7,13 +7,15 @@ import { cn } from "@/lib/cn";
 export function PinToggleButton({
 	projectId,
 	name,
+	workspaceId,
 	className,
 }: {
 	projectId: string;
 	name: string;
+	workspaceId: string;
 	className?: string;
 }) {
-	const { isPinned, toggle } = usePinnedProjects();
+	const { isPinned, toggle } = usePinnedProjects(workspaceId);
 	const pinned = isPinned(projectId);
 	return (
 		<Button

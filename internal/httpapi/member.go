@@ -1,5 +1,4 @@
-// 成员与身份端点（0006 规划 Phase 1）：me、成员 CRUD、密钥授权。
-// 形状对齐 Mock 契约（0005 §4.1-4.2）；错误沿用统一 {error} 格式。
+// 成员与身份端点：全局成员身份、工作区授权和密钥生命周期。
 package httpapi
 
 import (
@@ -10,15 +9,11 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"kanso/internal/auth"
-	"kanso/internal/config"
 	"kanso/internal/service"
 )
 
-// getMe 返回当前身份与模式（/api/me）。
-// 两种模式均按认证成员查询（personal = 单一 owner 成员）。
 func (a *API) getMe(w http.ResponseWriter, r *http.Request) {
-	memberID := auth.MemberID(r)
-	member, workspaceID, err := a.svc.GetMe(r.Context(), memberID)
+	member, err := a.svc.GetMe(r.Context(), auth.MemberID(r))
 	if err != nil {
 		if errors.Is(err, service.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "成员不存在")
@@ -27,12 +22,11 @@ func (a *API) getMe(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err, "查询当前成员失败")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"member": member, "workspaceId": workspaceID, "mode": a.cfg.Mode})
+	writeJSON(w, http.StatusOK, map[string]any{"member": member, "mode": a.cfg.Mode})
 }
 
-// listMembers 返回工作区成员列表。
 func (a *API) listMembers(w http.ResponseWriter, r *http.Request) {
-	members, err := a.svc.ListMembers(r.Context(), chi.URLParam(r, "id"))
+	members, err := a.svc.ListWorkspaceMembers(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		writeServiceError(w, err, "查询成员失败")
 		return
@@ -40,13 +34,25 @@ func (a *API) listMembers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, members)
 }
 
+func (a *API) listAllMembers(w http.ResponseWriter, r *http.Request) {
+	if !a.requireOwner(w, r) {
+		return
+	}
+	members, err := a.svc.ListAllMembers(r.Context())
+	if err != nil {
+		writeServiceError(w, err, "查询全局成员失败")
+		return
+	}
+	writeJSON(w, http.StatusOK, members)
+}
+
 func (a *API) requireOwner(w http.ResponseWriter, r *http.Request) bool {
-	err := a.svc.RequireOwner(r.Context(), auth.MemberID(r))
+	err := a.svc.RequireInstanceAdmin(r.Context(), auth.MemberID(r))
 	if err == nil {
 		return true
 	}
 	if errors.Is(err, service.ErrForbidden) {
-		writeError(w, http.StatusForbidden, "只有所有者可以管理成员")
+		writeError(w, http.StatusForbidden, "只有管理员可以执行此操作")
 		return false
 	}
 	if errors.Is(err, service.ErrNotFound) {
@@ -57,18 +63,14 @@ func (a *API) requireOwner(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-// requireOwnerInTeam 团队模式下校验 owner；个人模式恒通过（无成员表）。
-// 保护破坏性端点（删工作区/项目/列）不被普通成员级联删除数据。
+// requireOwnerInTeam 保留给现有破坏性操作调用；权限现在统一由管理员角色决定。
 func (a *API) requireOwnerInTeam(w http.ResponseWriter, r *http.Request) bool {
-	if a.cfg.Mode != config.ModeTeam {
-		return true
-	}
 	return a.requireOwner(w, r)
 }
 
-// updateMember 更新成员名称/头像底色/头像（avatar 传 null 清空）。
 func (a *API) updateMember(w http.ResponseWriter, r *http.Request) {
-	if chi.URLParam(r, "id") != auth.MemberID(r) && !a.requireOwner(w, r) {
+	targetID := chi.URLParam(r, "id")
+	if targetID != auth.MemberID(r) && !a.requireOwner(w, r) {
 		return
 	}
 	var body struct {
@@ -79,22 +81,20 @@ func (a *API) updateMember(w http.ResponseWriter, r *http.Request) {
 	if !decodeBody(w, r, &body) {
 		return
 	}
-	// avatar 语义与 Mock 一致（web/src/mocks/handlers.ts PATCH member）：
-	// 省略 → 保留现值；null → 清空；字符串 → 设置。
 	var avatar **string
 	if body.Avatar != nil {
-		var s *string
+		var value *string
 		if string(body.Avatar) != "null" {
-			var v string
-			if err := json.Unmarshal(body.Avatar, &v); err != nil {
+			var raw string
+			if err := json.Unmarshal(body.Avatar, &raw); err != nil {
 				writeError(w, http.StatusBadRequest, "头像格式无效")
 				return
 			}
-			s = &v
+			value = &raw
 		}
-		avatar = &s
+		avatar = &value
 	}
-	member, err := a.svc.UpdateMemberProfile(r.Context(), chi.URLParam(r, "id"), body.Name, body.AvatarColor, avatar)
+	member, err := a.svc.UpdateMemberProfile(r.Context(), targetID, body.Name, body.AvatarColor, avatar)
 	if err != nil {
 		if errors.Is(err, service.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "成员不存在")
@@ -110,34 +110,24 @@ func (a *API) updateMember(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, member)
 }
 
-// createMember 创建普通成员（5 人上限，owner 不受限因 owner 由种子创建）。
 func (a *API) createMember(w http.ResponseWriter, r *http.Request) {
 	if !a.requireOwner(w, r) {
 		return
 	}
 	var body struct {
-		WorkspaceID string `json:"workspaceId"`
-		Name        string `json:"name"`
+		Name string `json:"name"`
 	}
 	if !decodeBody(w, r, &body) {
-		return
-	}
-	if body.WorkspaceID == "" {
-		writeError(w, http.StatusBadRequest, "缺少工作区")
 		return
 	}
 	if body.Name == "" {
 		writeError(w, http.StatusBadRequest, "成员名称不能为空")
 		return
 	}
-	member, err := a.svc.CreateMember(r.Context(), body.WorkspaceID, body.Name)
+	member, err := a.svc.CreateMember(r.Context(), body.Name)
 	if err != nil {
-		if errors.Is(err, service.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "工作区不存在")
-			return
-		}
 		if errors.Is(err, service.ErrMemberLimit) {
-			writeError(w, http.StatusBadRequest, "成员数量已达上限（5 人）")
+			writeError(w, http.StatusConflict, "成员和管理员总数已达上限（6 人）")
 			return
 		}
 		if errors.Is(err, service.ErrReservedName) {
@@ -150,7 +140,36 @@ func (a *API) createMember(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, member)
 }
 
-// deleteMember 删除成员并清除其访问密钥；owner 受保护。
+func (a *API) updateMemberRole(w http.ResponseWriter, r *http.Request) {
+	if !a.requireOwner(w, r) {
+		return
+	}
+	var body struct {
+		Role string `json:"role"`
+	}
+	if !decodeBody(w, r, &body) {
+		return
+	}
+	member, err := a.svc.UpdateMemberRole(r.Context(), chi.URLParam(r, "id"), body.Role)
+	if err != nil {
+		if errors.Is(err, service.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "成员不存在")
+			return
+		}
+		if errors.Is(err, service.ErrOwnerProtected) {
+			writeError(w, http.StatusBadRequest, "至少保留一名管理员")
+			return
+		}
+		if errors.Is(err, service.ErrAdminLimit) {
+			writeError(w, http.StatusBadRequest, "管理员数量最多为 2 名")
+			return
+		}
+		writeServiceError(w, err, "更新成员角色失败")
+		return
+	}
+	writeJSON(w, http.StatusOK, member)
+}
+
 func (a *API) deleteMember(w http.ResponseWriter, r *http.Request) {
 	if !a.requireOwner(w, r) {
 		return
@@ -161,7 +180,7 @@ func (a *API) deleteMember(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, service.ErrOwnerProtected) {
-			writeError(w, http.StatusBadRequest, "不能删除所有者")
+			writeError(w, http.StatusBadRequest, "至少保留一名管理员")
 			return
 		}
 		writeServiceError(w, err, "删除成员失败")
@@ -170,19 +189,77 @@ func (a *API) deleteMember(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// createMemberKey 为成员生成访问密钥（授权）；已存在则原样返回（幂等）。
 func (a *API) createMemberKey(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOwner(w, r) {
-		return
-	}
-	key, err := a.svc.GetOrCreateMemberKey(r.Context(), chi.URLParam(r, "id"))
-	if err != nil {
+	targetID := chi.URLParam(r, "id")
+	if err := a.svc.RequireMemberKeyAccess(r.Context(), auth.MemberID(r), targetID, false); err != nil {
+		if errors.Is(err, service.ErrForbidden) {
+			writeError(w, http.StatusForbidden, "只能轮换自己的密钥，或由管理员管理成员密钥")
+			return
+		}
 		if errors.Is(err, service.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "成员不存在")
 			return
 		}
+		writeServiceError(w, err, "检查密钥权限失败")
+		return
+	}
+	key, err := a.svc.RotateMemberKey(r.Context(), targetID)
+	if err != nil {
 		writeServiceError(w, err, "生成成员密钥失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"key": key})
+}
+
+func (a *API) revokeMemberKey(w http.ResponseWriter, r *http.Request) {
+	targetID := chi.URLParam(r, "id")
+	if err := a.svc.RequireMemberKeyAccess(r.Context(), auth.MemberID(r), targetID, true); err != nil {
+		if errors.Is(err, service.ErrForbidden) {
+			writeError(w, http.StatusForbidden, "只有管理员可以撤销成员密钥")
+			return
+		}
+		if errors.Is(err, service.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "成员不存在")
+			return
+		}
+		writeServiceError(w, err, "检查密钥权限失败")
+		return
+	}
+	if err := a.svc.RevokeMemberKey(r.Context(), targetID); err != nil {
+		writeServiceError(w, err, "撤销成员密钥失败")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) addWorkspaceMember(w http.ResponseWriter, r *http.Request) {
+	if !a.requireOwner(w, r) {
+		return
+	}
+	var body struct {
+		MemberID string `json:"memberId"`
+	}
+	if !decodeBody(w, r, &body) {
+		return
+	}
+	if body.MemberID == "" {
+		writeError(w, http.StatusBadRequest, "缺少成员")
+		return
+	}
+	if err := a.svc.AddMemberToWorkspace(r.Context(), chi.URLParam(r, "id"), body.MemberID); err != nil {
+		writeServiceError(w, err, "授权工作区成员失败")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) removeWorkspaceMember(w http.ResponseWriter, r *http.Request) {
+	if !a.requireOwner(w, r) {
+		return
+	}
+	if err := a.svc.RemoveMemberFromWorkspace(r.Context(), chi.URLParam(r, "id"), chi.URLParam(r, "memberId")); err != nil {
+		writeServiceError(w, err, "移除工作区成员失败")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

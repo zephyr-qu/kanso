@@ -197,7 +197,7 @@ func (s *Service) DeleteTask(ctx context.Context, taskID string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
-	return s.commitEvent(ctx, tx, q, Event{
+	return s.commitEvents(ctx, tx, q, Event{
 		Action:         EventTaskDeleted,
 		ProjectID:      task.ProjectID,
 		EntityID:       taskID,

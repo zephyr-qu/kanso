@@ -62,25 +62,27 @@ func TestMemberLimitsAndProtection(t *testing.T) {
 	wsID := defaultWorkspaceID(t, env)
 
 	// 保留名拒绝。
-	if _, err := env.svc.CreateMember(ctx, wsID, "Admin"); !errors.Is(err, ErrReservedName) {
+	if _, err := env.svc.CreateMember(ctx, "Admin"); !errors.Is(err, ErrReservedName) {
 		t.Fatalf("保留名应 ErrReservedName，实际 %v", err)
 	}
 	// 创建到不存在工作区 → ErrNotFound。
-	if _, err := env.svc.CreateMember(ctx, "nope", "x"); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("创建到不存在工作区应 ErrNotFound，实际 %v", err)
-	}
+	// 工作区授权与创建身份分离，不存在工作区不会影响全局身份创建。
 
-	// 填满成员上限（owner + 4 成员 = 5）。
-	for i := 0; i < 4; i++ {
-		if _, err := env.svc.CreateMember(ctx, wsID, "成员"); err != nil {
+	// 填满成员上限（管理员 + 5 成员 = 6）；工作区授权不消耗额外身份名额。
+	for i := 0; i < 5; i++ {
+		member, err := env.svc.CreateMember(ctx, "成员")
+		if err != nil {
 			t.Fatalf("创建成员 %d 失败: %v", i, err)
 		}
+		if err := env.svc.AddMemberToWorkspace(ctx, wsID, member.ID); err != nil {
+			t.Fatalf("授权成员 %d 失败: %v", i, err)
+		}
 	}
-	if _, err := env.svc.CreateMember(ctx, wsID, "超员"); !errors.Is(err, ErrMemberLimit) {
+	if _, err := env.svc.CreateMember(ctx, "超员"); !errors.Is(err, ErrMemberLimit) {
 		t.Fatalf("超出上限应 ErrMemberLimit，实际 %v", err)
 	}
 
-	// owner 受保护：删除 owner → ErrOwnerProtected。
+	// owner 受保护：删除最后一名管理员 → ErrOwnerProtected。
 	owner, _ := env.svc.OwnerMember(ctx)
 	if err := env.svc.DeleteMember(ctx, owner.ID); !errors.Is(err, ErrOwnerProtected) {
 		t.Fatalf("删除 owner 应 ErrOwnerProtected，实际 %v", err)
@@ -90,12 +92,32 @@ func TestMemberLimitsAndProtection(t *testing.T) {
 	requireNoErr(t, err)
 	var normal string
 	for _, m := range members {
-		if m.Role != memberRoleOwner {
+		if m.Role != memberRoleAdmin {
 			normal = m.ID
 			break
 		}
 	}
 	requireNoErr(t, env.svc.DeleteMember(ctx, normal))
+}
+
+func TestAdminLimit(t *testing.T) {
+	env := newTestService(t)
+	ctx := context.Background()
+
+	second, err := env.svc.CreateMember(ctx, "第二管理员")
+	if err != nil {
+		t.Fatalf("创建第二管理员失败: %v", err)
+	}
+	if _, err := env.svc.UpdateMemberRole(ctx, second.ID, memberRoleAdmin); err != nil {
+		t.Fatalf("第二名管理员应可提升: %v", err)
+	}
+	third, err := env.svc.CreateMember(ctx, "第三管理员")
+	if err != nil {
+		t.Fatalf("创建第三候选失败: %v", err)
+	}
+	if _, err := env.svc.UpdateMemberRole(ctx, third.ID, memberRoleAdmin); !errors.Is(err, ErrAdminLimit) {
+		t.Fatalf("第三名管理员应 ErrAdminLimit，实际 %v", err)
+	}
 }
 
 func TestWorkspaceAndProjectEmpty(t *testing.T) {
@@ -122,7 +144,7 @@ func TestWorkspaceAndProjectEmpty(t *testing.T) {
 		t.Fatalf("不存在工作区 ListProjects 应返回空切片: %v", projects)
 	}
 	// 空查询搜索 → 空结果。
-	results, err := svc.SearchTasks(context.Background(), "")
+	results, err := svc.SearchTasks(context.Background(), "", "")
 	requireNoErr(t, err)
 	if results == nil || len(results) != 0 {
 		t.Fatalf("空库搜索应返回空切片: %v", results)
@@ -145,7 +167,7 @@ func TestDeleteWorkspaceCleansActivities(t *testing.T) {
 	requireNoErr(t, err)
 
 	// 活动存在。
-	activities, err := env.svc.GetActivities(ctx)
+	activities, err := env.svc.GetActivities(ctx, second.ID)
 	requireNoErr(t, err)
 	if len(activities) == 0 {
 		t.Fatal("删除前应有活动")

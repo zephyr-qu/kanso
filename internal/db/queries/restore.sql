@@ -31,4 +31,7 @@ INSERT INTO task_label (task_id, label_id) VALUES (?, ?);
 INSERT INTO task_milestone (task_id, milestone_id) VALUES (?, ?);
 
 -- name: ImportMembers :exec
-INSERT INTO member (id, workspace_id, name, role, avatar_color, avatar, access_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO member (id, name, role, avatar_color, avatar, access_key_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);
+
+-- name: ImportWorkspaceMember :exec
+INSERT INTO workspace_member (workspace_id, member_id, created_at) VALUES (?, ?, ?);

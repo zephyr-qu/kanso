@@ -5,27 +5,29 @@ import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
 import { queryKeys } from "@/hooks/query-keys";
-import type { Workspace } from "@/types/workspace";
+import { useWorkspaceContext } from "@/hooks/use-workspace-context";
+import type { MeResponse } from "@/types/me";
 
 export default function RedirectHome() {
-	const { data, isLoading, isError } = useQuery({
-		queryKey: queryKeys.workspaces(),
-		queryFn: () => api<Workspace[]>(buildPath("workspaces")),
+	const { workspaces, status, workspaceDashboardPath } = useWorkspaceContext();
+	const { data: me } = useQuery({
+		queryKey: queryKeys.me(),
+		queryFn: () => api<MeResponse>(buildPath("me")),
 	});
 
-	if (isLoading) {
+	if (status === "loading") {
 		return (
 			<div className="flex h-full items-center justify-center">
 				<Spinner />
 			</div>
 		);
 	}
-	if (isError || !data || data.length === 0) {
+	if (status === "unavailable" || status === "empty" || workspaces.length === 0) {
 		return (
 			<div className="flex h-full items-center justify-center text-sm text-destructive">
-				无法加载工作区
+				{me?.member.role === "member" ? "等待管理员授权工作区" : "无法加载工作区"}
 			</div>
 		);
 	}
-	return <Navigate to={`/w/${data[0].id}`} replace />;
+	return <Navigate to={workspaceDashboardPath(workspaces[0].id)} replace />;
 }

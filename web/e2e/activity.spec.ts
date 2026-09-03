@@ -9,7 +9,7 @@ test("活动页：侧栏入口、分组渲染、文案格式", async ({ page }) 
 	await page.goto("/login");
 	await page.fill("#access-key", key);
 	await page.getByRole("button", { name: "进入" }).click();
-	await page.waitForURL((u) => u.pathname !== "/login");
+	await page.waitForURL(/\/w\/[^/]+\/dashboard/);
 
 	// 侧栏「活动」入口可达。
 	await page.getByRole("link", { name: "活动", exact: true }).click();

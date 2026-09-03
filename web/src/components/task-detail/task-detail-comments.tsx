@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SendIcon, TrashIcon } from "lucide-react";
+import { CheckIcon, PencilIcon, SendIcon, TrashIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { SectionLabel } from "@/components/task-detail/section-label";
@@ -9,11 +9,14 @@ import type { Comment } from "@/types/task-detail";
 type TaskDetailCommentsProps = {
 	comments: Comment[];
 	onCreate: (content: string) => Promise<void>;
+	onUpdate: (id: string, content: string) => Promise<void>;
 	onDelete: (id: string) => void;
 };
 
-export function TaskDetailComments({ comments, onCreate, onDelete }: TaskDetailCommentsProps) {
+export function TaskDetailComments({ comments, onCreate, onUpdate, onDelete }: TaskDetailCommentsProps) {
 	const [draft, setDraft] = useState("");
+	const [editingId, setEditingId] = useState<string | null>(null);
+	const [editingDraft, setEditingDraft] = useState("");
 
 	return (
 		<section className="kanso-task-detail__section">
@@ -51,6 +54,18 @@ export function TaskDetailComments({ comments, onCreate, onDelete }: TaskDetailC
 								<div className="kanso-comment__head">
 									<span className="font-semibold">{comment.author || "—"}</span>
 									<span>{formatDateTime(comment.createdAt)}</span>
+									{editingId === comment.id ? (
+										<>
+											<Button variant="ghost" size="icon" aria-label="保存评论" onClick={() => { if (editingDraft.trim()) void onUpdate(comment.id, editingDraft.trim()).then(() => setEditingId(null)); }}>
+												<CheckIcon />
+											</Button>
+											<Button variant="ghost" size="icon" aria-label="取消编辑评论" onClick={() => setEditingId(null)}><XIcon /></Button>
+										</>
+									) : (
+										<Button variant="ghost" size="icon" aria-label="编辑评论" className="kanso-comment__delete" onClick={() => { setEditingId(comment.id); setEditingDraft(comment.content); }}>
+											<PencilIcon />
+										</Button>
+									)}
 									<Button
 										variant="ghost"
 										size="icon"
@@ -61,7 +76,9 @@ export function TaskDetailComments({ comments, onCreate, onDelete }: TaskDetailC
 										<TrashIcon />
 									</Button>
 								</div>
-								<div className="kanso-comment__text">{comment.content}</div>
+								{editingId === comment.id ? (
+									<Textarea value={editingDraft} onChange={(event) => setEditingDraft(event.target.value)} rows={3} autoFocus />
+								) : <div className="kanso-comment__text">{comment.content}</div>}
 							</div>
 						</li>
 					))}

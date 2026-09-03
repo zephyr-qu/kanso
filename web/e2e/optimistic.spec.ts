@@ -10,7 +10,7 @@ test("添加任务乐观插入：refetch 挂起时任务仍即时出现", async 
 	await page.goto("/login");
 	await page.fill("#access-key", key);
 	await page.getByRole("button", { name: "进入" }).click();
-	await page.waitForURL((u) => u.pathname !== "/login");
+	await page.waitForURL(/\/w\/[^/]+\/dashboard/);
 	await page.waitForSelector('a[href*="/p/"]');
 	await page.locator('a[href*="/p/"]').first().click();
 	await page.waitForSelector("text=新建列");
@@ -46,7 +46,7 @@ test("添加任务正常路径：数据最终一致", async ({ page }) => {
 	await page.goto("/login");
 	await page.fill("#access-key", key);
 	await page.getByRole("button", { name: "进入" }).click();
-	await page.waitForURL((u) => u.pathname !== "/login");
+	await page.waitForURL(/\/w\/[^/]+\/dashboard/);
 	await page.waitForSelector('a[href*="/p/"]');
 	await page.locator('a[href*="/p/"]').first().click();
 	await page.waitForSelector("text=新建列");

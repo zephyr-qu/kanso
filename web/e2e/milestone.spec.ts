@@ -11,7 +11,7 @@ async function loginAndOpenBoard(page: Page) {
 	await page.goto("/login");
 	await page.fill("#access-key", key);
 	await page.getByRole("button", { name: "进入" }).click();
-	await page.waitForURL((u) => u.pathname !== "/login");
+	await page.waitForURL(/\/w\/[^/]+\/dashboard/);
 	await page.waitForSelector('a[href*="/p/"]');
 	await page.locator('a[href*="/p/"]').first().click();
 	await page.waitForSelector("text=新建列");
@@ -43,7 +43,11 @@ test("里程碑:看板头弹层 新建→重命名→设截止→删除", async 
 
 	// 设截止:常显 DatePicker,点触发按钮直接弹日历选今天。
 	await page.getByLabel("里程碑截止日期").click();
-	await page.getByRole("button", { name: String(new Date().getDate()) }).click();
+	await page
+		.getByRole("dialog")
+		.last()
+		.getByRole("button", { name: String(new Date().getDate()), exact: true })
+		.click();
 	await expect(dialog.getByLabel("里程碑截止日期")).toContainText(
 		String(new Date().getDate()),
 		{ timeout: 5000 },

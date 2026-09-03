@@ -14,12 +14,12 @@ async function login(page: Page): Promise<void> {
 	await page.goto("/login");
 	await page.fill("#access-key", KEY);
 	await page.getByRole("button", { name: "进入" }).click();
-	await page.waitForURL((u) => u.pathname !== "/login");
-	await page.waitForSelector('a[href*="/p/"]');
+	await page.waitForURL(/\/w\/[^/]+\/dashboard/);
+	await page.waitForSelector('aside a[href*="/p/"]');
 }
 
 async function openBoard(page: Page, projectName: string): Promise<void> {
-	await page.locator('a[href*="/p/"]', { hasText: projectName }).click();
+	await page.locator('aside a[href*="/p/"]', { hasText: projectName }).click();
 	await page.waitForSelector("text=新建列");
 }
 

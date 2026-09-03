@@ -4,16 +4,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
 import {
-	invalidateBoardScope,
-	invalidateTask,
-	queryKeys,
+	invalidateMilestones,
+	invalidateProjectScope,
 } from "@/hooks/query-keys";
 import type { Milestone } from "@/types/board";
 
-export function useMilestoneMutations(projectId: string) {
+export function useMilestoneMutations(projectId: string, workspaceId = "") {
 	const queryClient = useQueryClient();
-	const invalidateMilestones = () =>
-		queryClient.invalidateQueries({ queryKey: queryKeys.milestones(projectId) });
+	const invalidateMilestoneList = () => invalidateMilestones(queryClient, projectId);
 
 	const create = useMutation({
 		meta: { feedback: { success: "里程碑已创建", errorTitle: "创建里程碑失败" } },
@@ -22,7 +20,7 @@ export function useMilestoneMutations(projectId: string) {
 				method: "POST",
 				body: JSON.stringify({ name }),
 			}),
-		onSuccess: invalidateMilestones,
+		onSuccess: invalidateMilestoneList,
 	});
 
 	const rename = useMutation({
@@ -32,7 +30,7 @@ export function useMilestoneMutations(projectId: string) {
 				method: "PATCH",
 				body: JSON.stringify({ name }),
 			}),
-		onSuccess: invalidateMilestones,
+		onSuccess: invalidateMilestoneList,
 	});
 
 	const updateDueDate = useMutation({
@@ -42,32 +40,33 @@ export function useMilestoneMutations(projectId: string) {
 				method: "PATCH",
 				body: JSON.stringify({ dueDate }),
 			}),
-		onSuccess: invalidateMilestones,
+		onSuccess: invalidateMilestoneList,
 	});
 
 	const remove = useMutation({
 		meta: { feedback: { success: "里程碑已删除", errorTitle: "删除里程碑失败" } },
 		mutationFn: (id: string) =>
 			api<void>(buildPath("milestone", { id }), { method: "DELETE" }),
-		onSuccess: invalidateMilestones,
+		onSuccess: invalidateMilestoneList,
 	});
 
 	const attach = useMutation({
-		meta: { feedback: { success: "任务已关联里程碑", errorTitle: "关联里程碑失败" } },
+		meta: { feedback: { success: "里程碑关联已更新", errorTitle: "更新里程碑关联失败" } },
 		mutationFn: ({
 			taskId,
 			milestoneId,
+			attach = true,
 		}: {
 			taskId: string;
 			milestoneId: string;
+			attach?: boolean;
 		}) =>
 			api<void>(buildPath("taskMilestones", { taskId, milestoneId }), {
-				method: "POST",
+				method: attach ? "POST" : "DELETE",
 			}),
-		onSuccess: (_data, { taskId }) => {
-			// 关联既改里程碑进度，也改该任务详情展示的里程碑 + 看板；统一失效（realtime 会收敛跨窗口）。
-			invalidateBoardScope(queryClient, projectId);
-			invalidateTask(queryClient, taskId);
+		onSuccess: () => {
+			// 关联既改里程碑进度，也改该任务详情展示的里程碑 + 看板；统一失效。
+			invalidateProjectScope(queryClient, { projectId, workspaceId });
 		},
 	});
 

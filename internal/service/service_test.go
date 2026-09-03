@@ -118,6 +118,16 @@ func TestWorkspaceLifecycle(t *testing.T) {
 	if created.Name != "第二工作区" {
 		t.Fatalf("创建工作区名不符: %q", created.Name)
 	}
+	projects, err := env.svc.ListProjects(ctx, created.ID)
+	requireNoErr(t, err)
+	if len(projects) != 1 || projects[0].Name != defaultProjectName {
+		t.Fatalf("新工作区应自动拥有默认项目，实际 %+v", projects)
+	}
+	board, err := env.svc.GetBoard(ctx, projects[0].ID)
+	requireNoErr(t, err)
+	if len(board.Columns) != len(defaultColumns) {
+		t.Fatalf("默认项目应拥有 %d 个默认列，实际 %d", len(defaultColumns), len(board.Columns))
+	}
 
 	// 重命名。
 	renamed, err := env.svc.RenameWorkspace(ctx, created.ID, "改名后")
@@ -238,20 +248,20 @@ func TestSearchTasks(t *testing.T) {
 	requireNoErr(t, err)
 
 	// 标题匹配。
-	results, err := env.svc.SearchTasks(ctx, "原型")
+	results, err := env.svc.SearchTasks(ctx, defaultWorkspaceID(t, env), "原型")
 	requireNoErr(t, err)
 	if len(results) != 1 || results[0].Title != "设计原型图" {
 		t.Fatalf("按标题搜索不符: %+v", results)
 	}
 	// 描述匹配（大小写不敏感）。
-	results, err = env.svc.SearchTasks(ctx, "DATABASE")
+	results, err = env.svc.SearchTasks(ctx, defaultWorkspaceID(t, env), "DATABASE")
 	// 描述匹配（大小写不敏感）：搜索 "api" 命中 "Fix the API endpoint"。
-	results, err = env.svc.SearchTasks(ctx, "api")
+	results, err = env.svc.SearchTasks(ctx, defaultWorkspaceID(t, env), "api")
 	if len(results) != 1 {
 		t.Fatalf("按描述搜索应命中 1 条，实际 %d", len(results))
 	}
 	// 空查询返回全部。
-	results, err = env.svc.SearchTasks(ctx, "")
+	results, err = env.svc.SearchTasks(ctx, defaultWorkspaceID(t, env), "")
 	requireNoErr(t, err)
 	if len(results) != 2 {
 		t.Fatalf("空查询应返回全部 2 条，实际 %d", len(results))
@@ -272,7 +282,7 @@ func TestGetActivities(t *testing.T) {
 	_, _, err = env.svc.CreateTask(ctx, board.Columns[0].ID, "任务乙", "", "med", nil, nil)
 	requireNoErr(t, err)
 
-	activities, err := env.svc.GetActivities(ctx)
+	activities, err := env.svc.GetActivities(ctx, wsID)
 	requireNoErr(t, err)
 	if len(activities) < 2 {
 		t.Fatalf("应有至少 2 条活动，实际 %d", len(activities))

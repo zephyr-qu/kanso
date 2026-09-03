@@ -12,6 +12,9 @@ RETURNING *;
 -- name: DeleteComment :execrows
 DELETE FROM comment WHERE id = ?;
 
+-- name: UpdateComment :one
+UPDATE comment SET content = ? WHERE id = ? RETURNING *;
+
 -- name: CountCommentsByProject :many
 -- Comment counts per task within a project (board task card meta).
 SELECT task_id, COUNT(*) AS comment_count

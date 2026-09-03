@@ -6,14 +6,13 @@ import {
 	MilestoneIcon,
 	TagIcon,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Popover, PopoverPopup, PopoverTrigger } from "@/components/ui/popover";
 import DatePicker from "@/components/date-picker";
 import { PriorityPicker } from "@/components/priority-picker";
 import { dueState } from "@/lib/due";
 import { normalizePriority, PRIORITY_LABEL, priorityColor } from "@/lib/priority";
 import type { Milestone } from "@/types/board";
+import type { Label } from "@/types/label";
 import type { Task } from "@/types/task";
 import type { TaskDetail } from "@/types/task-detail";
 
@@ -21,15 +20,19 @@ type TaskUpdate = (patch: Partial<Pick<Task, "title" | "priority" | "dueDate">>)
 
 type TaskDetailSummaryProps = {
 	data: TaskDetail;
+	labels?: Label[];
 	milestones?: Milestone[];
 	onUpdate: TaskUpdate;
+	onToggleLabel: (labelId: string, attach: boolean) => void;
 	onToggleMilestone: (milestoneId: string, attach: boolean) => void;
 };
 
 export function TaskDetailSummary({
 	data,
+	labels,
 	milestones,
 	onUpdate,
+	onToggleLabel,
 	onToggleMilestone,
 }: TaskDetailSummaryProps) {
 	const [title, setTitle] = useState(data.task.title);
@@ -48,26 +51,23 @@ export function TaskDetailSummary({
 				<div className="min-w-0 flex-1">
 					{editingTitle ? (
 						<div
-							className="flex items-start gap-2"
+							className="w-full"
 							onBlur={(event) => {
 								if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
 									setEditingTitle(false);
 								}
 							}}
 						>
-							<Input
+						<input
 								value={title}
 								onChange={(event) => setTitle(event.target.value)}
-								className="text-lg font-semibold"
+								className="kanso-task-detail__title w-full cursor-text border-0 bg-transparent p-0 outline-none focus-visible:outline-2 focus-visible:outline-primary/40 focus-visible:outline-offset-2"
 								autoFocus
 								onKeyDown={(event) => {
 									if (event.key === "Enter") saveTitle();
 									if (event.key === "Escape") setEditingTitle(false);
 								}}
 							/>
-							<Button size="sm" disabled={!title.trim()} onClick={saveTitle}>
-								保存
-							</Button>
 						</div>
 					) : (
 						<h2
@@ -137,10 +137,44 @@ export function TaskDetailSummary({
 					<MessageSquareIcon className="size-3.5 opacity-70" />
 					评论 <strong className="font-semibold text-foreground">{data.comments.length}</strong>
 				</span>
-				<span className="flex items-center gap-2 text-[13px] text-muted-foreground">
-					<TagIcon className="size-3.5 opacity-70" />
-					标签 <strong className="font-semibold text-foreground">{data.labels.length}</strong>
-				</span>
+				<Popover>
+					<PopoverTrigger
+						render={
+							<button
+								type="button"
+								className="flex items-center gap-2 text-[13px] text-muted-foreground hover:text-foreground"
+								aria-label="选择标签"
+							>
+								<TagIcon className="size-3.5 opacity-70" />
+								标签 <strong className="font-semibold text-foreground">{data.labels.length}</strong>
+							</button>
+						}
+					/>
+					<PopoverPopup className="w-56 p-2">
+						<p className="px-1 pb-1 text-xs text-muted-foreground">标签</p>
+						{labels && labels.length > 0 ? (
+							<ul className="space-y-0.5">
+								{labels.map((label) => {
+									const attached = data.labels.some((item) => item.id === label.id);
+									return (
+										<li key={label.id}>
+											<button
+												type="button"
+												className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-xs hover:bg-muted"
+												onClick={() => onToggleLabel(label.id, !attached)}
+											>
+												<span className="flex-1">{label.name}</span>
+												{attached ? <span className="text-primary">✓</span> : null}
+											</button>
+										</li>
+									);
+								})}
+							</ul>
+						) : (
+							<p className="px-1 py-2 text-xs text-muted-foreground">暂无标签，可在项目看板创建</p>
+						)}
+					</PopoverPopup>
+				</Popover>
 				<Popover>
 					<PopoverTrigger
 						render={

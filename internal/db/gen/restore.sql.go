@@ -110,29 +110,27 @@ func (q *Queries) ImportLabels(ctx context.Context, arg ImportLabelsParams) erro
 }
 
 const importMembers = `-- name: ImportMembers :exec
-INSERT INTO member (id, workspace_id, name, role, avatar_color, avatar, access_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO member (id, name, role, avatar_color, avatar, access_key_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
 `
 
 type ImportMembersParams struct {
-	ID          string  `json:"id"`
-	WorkspaceID string  `json:"workspaceId"`
-	Name        string  `json:"name"`
-	Role        string  `json:"role"`
-	AvatarColor *string `json:"avatarColor"`
-	Avatar      *string `json:"avatar"`
-	AccessKey   *string `json:"accessKey"`
-	CreatedAt   string  `json:"createdAt"`
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	Role          string  `json:"role"`
+	AvatarColor   *string `json:"avatarColor"`
+	Avatar        *string `json:"avatar"`
+	AccessKeyHash *string `json:"accessKeyHash"`
+	CreatedAt     string  `json:"createdAt"`
 }
 
 func (q *Queries) ImportMembers(ctx context.Context, arg ImportMembersParams) error {
 	_, err := q.db.ExecContext(ctx, importMembers,
 		arg.ID,
-		arg.WorkspaceID,
 		arg.Name,
 		arg.Role,
 		arg.AvatarColor,
 		arg.Avatar,
-		arg.AccessKey,
+		arg.AccessKeyHash,
 		arg.CreatedAt,
 	)
 	return err
@@ -246,6 +244,21 @@ func (q *Queries) ImportTasks(ctx context.Context, arg ImportTasksParams) error 
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
+	return err
+}
+
+const importWorkspaceMember = `-- name: ImportWorkspaceMember :exec
+INSERT INTO workspace_member (workspace_id, member_id, created_at) VALUES (?, ?, ?)
+`
+
+type ImportWorkspaceMemberParams struct {
+	WorkspaceID string `json:"workspaceId"`
+	MemberID    string `json:"memberId"`
+	CreatedAt   string `json:"createdAt"`
+}
+
+func (q *Queries) ImportWorkspaceMember(ctx context.Context, arg ImportWorkspaceMemberParams) error {
+	_, err := q.db.ExecContext(ctx, importWorkspaceMember, arg.WorkspaceID, arg.MemberID, arg.CreatedAt)
 	return err
 }
 

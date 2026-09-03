@@ -362,7 +362,8 @@ FROM task AS t
 INNER JOIN column AS c ON t.column_id = c.id
 INNER JOIN project AS p ON c.project_id = p.id
 INNER JOIN workspace AS w ON p.workspace_id = w.id
-WHERE (
+WHERE p.workspace_id = ?
+  AND (
     t.title LIKE '%' || ? || '%'
     OR COALESCE(t.description, '') LIKE '%' || ? || '%'
     OR EXISTS (
@@ -377,9 +378,10 @@ LIMIT 20
 `
 
 type SearchTasksParams struct {
-	Column1 *string `json:"column1"`
-	Column2 *string `json:"column2"`
-	Column3 *string `json:"column3"`
+	WorkspaceID string  `json:"workspaceId"`
+	Column2     *string `json:"column2"`
+	Column3     *string `json:"column3"`
+	Column4     *string `json:"column4"`
 }
 
 type SearchTasksRow struct {
@@ -396,7 +398,12 @@ type SearchTasksRow struct {
 
 // Global search (command palette): title/description/comment substring match with project info.
 func (q *Queries) SearchTasks(ctx context.Context, arg SearchTasksParams) ([]SearchTasksRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchTasks, arg.Column1, arg.Column2, arg.Column3)
+	rows, err := q.db.QueryContext(ctx, searchTasks,
+		arg.WorkspaceID,
+		arg.Column2,
+		arg.Column3,
+		arg.Column4,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -150,7 +150,7 @@ func (q *Queries) ListAllLabels(ctx context.Context) ([]Label, error) {
 }
 
 const listAllMembers = `-- name: ListAllMembers :many
-SELECT id, workspace_id, name, role, avatar_color, avatar, access_key, created_at FROM member
+SELECT id, name, role, avatar_color, avatar, access_key_hash, created_at FROM member
 ORDER BY created_at
 `
 
@@ -165,12 +165,11 @@ func (q *Queries) ListAllMembers(ctx context.Context) ([]Member, error) {
 		var i Member
 		if err := rows.Scan(
 			&i.ID,
-			&i.WorkspaceID,
 			&i.Name,
 			&i.Role,
 			&i.AvatarColor,
 			&i.Avatar,
-			&i.AccessKey,
+			&i.AccessKeyHash,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -225,15 +224,24 @@ SELECT id, workspace_id, name, position, created_at, updated_at FROM project
 ORDER BY created_at
 `
 
-func (q *Queries) ListAllProjects(ctx context.Context) ([]Project, error) {
+type ListAllProjectsRow struct {
+	ID          string `json:"id"`
+	WorkspaceID string `json:"workspaceId"`
+	Name        string `json:"name"`
+	Position    int64  `json:"position"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
+}
+
+func (q *Queries) ListAllProjects(ctx context.Context) ([]ListAllProjectsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listAllProjects)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Project
+	var items []ListAllProjectsRow
 	for rows.Next() {
-		var i Project
+		var i ListAllProjectsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,

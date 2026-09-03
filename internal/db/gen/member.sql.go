@@ -9,8 +9,31 @@ import (
 	"context"
 )
 
+const clearMemberAccessKey = `-- name: ClearMemberAccessKey :execrows
+UPDATE member SET access_key_hash = NULL WHERE id = ?
+`
+
+func (q *Queries) ClearMemberAccessKey(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, clearMemberAccessKey, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const countMembers = `-- name: CountMembers :one
+SELECT COUNT(*) FROM member
+`
+
+func (q *Queries) CountMembers(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countMembers)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countMembersByWorkspace = `-- name: CountMembersByWorkspace :one
-SELECT COUNT(*) FROM member WHERE workspace_id = ?
+SELECT COUNT(*) FROM workspace_member WHERE workspace_id = ?
 `
 
 func (q *Queries) CountMembersByWorkspace(ctx context.Context, workspaceID string) (int64, error) {
@@ -21,42 +44,39 @@ func (q *Queries) CountMembersByWorkspace(ctx context.Context, workspaceID strin
 }
 
 const createMember = `-- name: CreateMember :one
-INSERT INTO member (id, workspace_id, name, role, avatar_color, avatar, access_key, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, workspace_id, name, role, avatar_color, avatar, access_key, created_at
+INSERT INTO member (id, name, role, avatar_color, avatar, access_key_hash, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+RETURNING id, name, role, avatar_color, avatar, access_key_hash, created_at
 `
 
 type CreateMemberParams struct {
-	ID          string  `json:"id"`
-	WorkspaceID string  `json:"workspaceId"`
-	Name        string  `json:"name"`
-	Role        string  `json:"role"`
-	AvatarColor *string `json:"avatarColor"`
-	Avatar      *string `json:"avatar"`
-	AccessKey   *string `json:"accessKey"`
-	CreatedAt   string  `json:"createdAt"`
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	Role          string  `json:"role"`
+	AvatarColor   *string `json:"avatarColor"`
+	Avatar        *string `json:"avatar"`
+	AccessKeyHash *string `json:"accessKeyHash"`
+	CreatedAt     string  `json:"createdAt"`
 }
 
 func (q *Queries) CreateMember(ctx context.Context, arg CreateMemberParams) (Member, error) {
 	row := q.db.QueryRowContext(ctx, createMember,
 		arg.ID,
-		arg.WorkspaceID,
 		arg.Name,
 		arg.Role,
 		arg.AvatarColor,
 		arg.Avatar,
-		arg.AccessKey,
+		arg.AccessKeyHash,
 		arg.CreatedAt,
 	)
 	var i Member
 	err := row.Scan(
 		&i.ID,
-		&i.WorkspaceID,
 		&i.Name,
 		&i.Role,
 		&i.AvatarColor,
 		&i.Avatar,
-		&i.AccessKey,
+		&i.AccessKeyHash,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -75,7 +95,7 @@ func (q *Queries) DeleteMember(ctx context.Context, id string) (int64, error) {
 }
 
 const getMember = `-- name: GetMember :one
-SELECT id, workspace_id, name, role, avatar_color, avatar, access_key, created_at FROM member WHERE id = ?
+SELECT id, name, role, avatar_color, avatar, access_key_hash, created_at FROM member WHERE id = ?
 `
 
 func (q *Queries) GetMember(ctx context.Context, id string) (Member, error) {
@@ -83,39 +103,37 @@ func (q *Queries) GetMember(ctx context.Context, id string) (Member, error) {
 	var i Member
 	err := row.Scan(
 		&i.ID,
-		&i.WorkspaceID,
 		&i.Name,
 		&i.Role,
 		&i.AvatarColor,
 		&i.Avatar,
-		&i.AccessKey,
+		&i.AccessKeyHash,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getMemberByAccessKey = `-- name: GetMemberByAccessKey :one
-SELECT id, workspace_id, name, role, avatar_color, avatar, access_key, created_at FROM member WHERE access_key = ?
+SELECT id, name, role, avatar_color, avatar, access_key_hash, created_at FROM member WHERE access_key_hash = ?
 `
 
-func (q *Queries) GetMemberByAccessKey(ctx context.Context, accessKey *string) (Member, error) {
-	row := q.db.QueryRowContext(ctx, getMemberByAccessKey, accessKey)
+func (q *Queries) GetMemberByAccessKey(ctx context.Context, accessKeyHash *string) (Member, error) {
+	row := q.db.QueryRowContext(ctx, getMemberByAccessKey, accessKeyHash)
 	var i Member
 	err := row.Scan(
 		&i.ID,
-		&i.WorkspaceID,
 		&i.Name,
 		&i.Role,
 		&i.AvatarColor,
 		&i.Avatar,
-		&i.AccessKey,
+		&i.AccessKeyHash,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getOwnerMember = `-- name: GetOwnerMember :one
-SELECT id, workspace_id, name, role, avatar_color, avatar, access_key, created_at FROM member WHERE role = 'owner' ORDER BY created_at LIMIT 1
+SELECT id, name, role, avatar_color, avatar, access_key_hash, created_at FROM member WHERE role = 'admin' ORDER BY created_at LIMIT 1
 `
 
 func (q *Queries) GetOwnerMember(ctx context.Context) (Member, error) {
@@ -123,19 +141,22 @@ func (q *Queries) GetOwnerMember(ctx context.Context) (Member, error) {
 	var i Member
 	err := row.Scan(
 		&i.ID,
-		&i.WorkspaceID,
 		&i.Name,
 		&i.Role,
 		&i.AvatarColor,
 		&i.Avatar,
-		&i.AccessKey,
+		&i.AccessKeyHash,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const listMembersByWorkspace = `-- name: ListMembersByWorkspace :many
-SELECT id, workspace_id, name, role, avatar_color, avatar, access_key, created_at FROM member WHERE workspace_id = ? ORDER BY created_at, id
+SELECT m.id, m.name, m.role, m.avatar_color, m.avatar, m.access_key_hash, m.created_at
+FROM member m
+WHERE m.role = 'admin'
+   OR EXISTS (SELECT 1 FROM workspace_member wm WHERE wm.workspace_id = ? AND wm.member_id = m.id)
+ORDER BY m.created_at, m.id
 `
 
 func (q *Queries) ListMembersByWorkspace(ctx context.Context, workspaceID string) ([]Member, error) {
@@ -149,12 +170,11 @@ func (q *Queries) ListMembersByWorkspace(ctx context.Context, workspaceID string
 		var i Member
 		if err := rows.Scan(
 			&i.ID,
-			&i.WorkspaceID,
 			&i.Name,
 			&i.Role,
 			&i.AvatarColor,
 			&i.Avatar,
-			&i.AccessKey,
+			&i.AccessKeyHash,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -171,32 +191,31 @@ func (q *Queries) ListMembersByWorkspace(ctx context.Context, workspaceID string
 }
 
 const updateMemberAccessKey = `-- name: UpdateMemberAccessKey :one
-UPDATE member SET access_key = ? WHERE id = ? RETURNING id, workspace_id, name, role, avatar_color, avatar, access_key, created_at
+UPDATE member SET access_key_hash = ? WHERE id = ? RETURNING id, name, role, avatar_color, avatar, access_key_hash, created_at
 `
 
 type UpdateMemberAccessKeyParams struct {
-	AccessKey *string `json:"accessKey"`
-	ID        string  `json:"id"`
+	AccessKeyHash *string `json:"accessKeyHash"`
+	ID            string  `json:"id"`
 }
 
 func (q *Queries) UpdateMemberAccessKey(ctx context.Context, arg UpdateMemberAccessKeyParams) (Member, error) {
-	row := q.db.QueryRowContext(ctx, updateMemberAccessKey, arg.AccessKey, arg.ID)
+	row := q.db.QueryRowContext(ctx, updateMemberAccessKey, arg.AccessKeyHash, arg.ID)
 	var i Member
 	err := row.Scan(
 		&i.ID,
-		&i.WorkspaceID,
 		&i.Name,
 		&i.Role,
 		&i.AvatarColor,
 		&i.Avatar,
-		&i.AccessKey,
+		&i.AccessKeyHash,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const updateMemberProfile = `-- name: UpdateMemberProfile :one
-UPDATE member SET name = ?, avatar_color = ?, avatar = ? WHERE id = ? RETURNING id, workspace_id, name, role, avatar_color, avatar, access_key, created_at
+UPDATE member SET name = ?, avatar_color = ?, avatar = ? WHERE id = ? RETURNING id, name, role, avatar_color, avatar, access_key_hash, created_at
 `
 
 type UpdateMemberProfileParams struct {
@@ -216,13 +235,29 @@ func (q *Queries) UpdateMemberProfile(ctx context.Context, arg UpdateMemberProfi
 	var i Member
 	err := row.Scan(
 		&i.ID,
-		&i.WorkspaceID,
 		&i.Name,
 		&i.Role,
 		&i.AvatarColor,
 		&i.Avatar,
-		&i.AccessKey,
+		&i.AccessKeyHash,
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const updateMemberRole = `-- name: UpdateMemberRole :execrows
+UPDATE member SET role = ? WHERE id = ?
+`
+
+type UpdateMemberRoleParams struct {
+	Role string `json:"role"`
+	ID   string `json:"id"`
+}
+
+func (q *Queries) UpdateMemberRole(ctx context.Context, arg UpdateMemberRoleParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, updateMemberRole, arg.Role, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

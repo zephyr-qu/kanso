@@ -17,6 +17,7 @@ func TestClassifyError(t *testing.T) {
 		{name: "invalid backup", err: ErrInvalidBackup, want: ErrorInvalidInput},
 		{name: "cross project", err: ErrCrossProjectMove, want: ErrorInvalidInput},
 		{name: "member limit", err: ErrMemberLimit, want: ErrorConflict},
+		{name: "admin limit", err: ErrAdminLimit, want: ErrorConflict},
 		{name: "owner protected", err: ErrOwnerProtected, want: ErrorForbidden},
 		{name: "unknown", err: errors.New("database down"), want: ErrorInternal},
 	}

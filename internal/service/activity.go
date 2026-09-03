@@ -20,8 +20,12 @@ type ActivityItem struct {
 }
 
 // GetActivities 返回全部任务活动流（按时间倒序）。
-func (s *Service) GetActivities(ctx context.Context) ([]ActivityItem, error) {
-	rows, err := gen.New(s.db).ListActivitiesWithProject(ctx)
+func (s *Service) GetActivities(ctx context.Context, workspaceIDs ...string) ([]ActivityItem, error) {
+	workspaceID, err := s.aggregateWorkspaceID(ctx, workspaceIDs...)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := gen.New(s.db).ListActivitiesWithProject(ctx, &workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("查询活动失败: %w", err)
 	}

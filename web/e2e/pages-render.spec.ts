@@ -23,7 +23,7 @@ test("全部计划页面逐一渲染（无 console error）", async ({ page }) =
 	// 登录进入系统。
 	await page.fill("#access-key", KEY);
 	await page.getByRole("button", { name: "进入" }).click();
-	await page.waitForURL((u) => u.pathname !== "/login");
+	await page.waitForURL(/\/w\/[^/]+\/dashboard/);
 	await page.waitForSelector('a[href*="/p/"]');
 
 	// 取真实 ID 用于参数化路由。
@@ -35,8 +35,12 @@ test("全部计划页面逐一渲染（无 console error）", async ({ page }) =
 	const p = pHref.split("/p/")[1]?.split("/")[0] ?? "";
 
 	// 仪表盘。
-	await page.goto("/dashboard");
+	await page.goto(`/w/${ws}/dashboard`);
 	await expect(page.getByRole("heading", { name: "仪表盘" })).toBeVisible();
+	await expect(page.getByRole("link", { name: "项目", exact: true })).not.toHaveAttribute(
+		"aria-current",
+		"page",
+	);
 	await page.waitForTimeout(400); // 等查询渲染
 
 	// 工作区（项目列表）。
@@ -44,6 +48,14 @@ test("全部计划页面逐一渲染（无 console error）", async ({ page }) =
 	await expect(
 		page.getByTestId("page-header").getByRole("button", { name: "新建项目", exact: true }),
 	).toBeVisible();
+	await expect(page.getByRole("link", { name: "项目", exact: true })).toHaveAttribute(
+		"aria-current",
+		"page",
+	);
+	await expect(page.getByRole("link", { name: "项目", exact: true })).toHaveAttribute(
+		"href",
+		`/w/${ws}`,
+	);
 	await page.waitForTimeout(400);
 
 	// 看板。
@@ -65,7 +77,7 @@ test("全部计划页面逐一渲染（无 console error）", async ({ page }) =
 	await expect(page.getByRole("dialog").getByText("标签管理")).toBeVisible();
 
 	// 活动。
-	await page.goto("/activity");
+	await page.goto(`/w/${ws}/activity`);
 	await expect(page.getByRole("heading", { name: "活动" })).toBeVisible();
 
 	// 设置。
@@ -74,4 +86,18 @@ test("全部计划页面逐一渲染（无 console error）", async ({ page }) =
 
 	// 汇总断言：无 console error。
 	expect(errors, `页面渲染出现 console 错误:\n${errors.join("\n")}`).toEqual([]);
+});
+
+test("系统设置入口保持全局语义", async ({ page }) => {
+	await page.goto("/login");
+	await page.fill("#access-key", KEY);
+	await page.getByRole("button", { name: "进入" }).click();
+	await page.waitForURL(/\/w\/[^/]+\/dashboard/);
+
+	await page.goto("/settings");
+
+	const settingsLink = page.getByRole("link", { name: "系统设置", exact: true });
+	await expect(settingsLink).toHaveAttribute("href", "/settings");
+	await settingsLink.click();
+	await expect(page).toHaveURL(/\/settings$/);
 });

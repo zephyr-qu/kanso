@@ -9,15 +9,15 @@ async function loginToApp(page: import("@playwright/test").Page) {
 	await page.goto("/login");
 	await page.fill("#access-key", key);
 	await page.getByRole("button", { name: "进入" }).click();
-	await page.waitForURL((u) => u.pathname !== "/login");
+	await page.waitForURL(/\/w\/[^/]+\/dashboard/);
 }
 
 test("标签库：创建→重命名→删除全流程", async ({ page }) => {
 	await loginToApp(page);
-	await page.waitForSelector('a[href*="/p/"]');
+	await page.waitForSelector('aside a[href*="/p/"]');
 
 	// 标签库入口位于当前看板工具栏。
-	await page.locator('a[href*="/p/"]').first().click();
+	await page.locator('aside a[href*="/p/"]').first().click();
 	await page.waitForSelector("text=新建列");
 	await page.getByRole("button", { name: "标签", exact: true }).click();
 	const manager = page.getByRole("dialog");
@@ -46,9 +46,9 @@ test("标签库：创建→重命名→删除全流程", async ({ page }) => {
 
 test("看板贴/摘标签：徽章出现与消失", async ({ page }) => {
 	await loginToApp(page);
-	await page.waitForSelector('a[href*="/p/"]');
+	await page.waitForSelector('aside a[href*="/p/"]');
 	// 「标签冒烟」项目待办列有"带标签"任务，且已有"前端"等标签。
-	await page.locator('a[href*="/p/"]', { hasText: "标签冒烟" }).click();
+	await page.locator('aside a[href*="/p/"]', { hasText: "标签冒烟" }).click();
 	await page.waitForSelector("text=新建列");
 
 	const firstCol = page.locator("div[class*='w-[282px]']").first();
@@ -71,8 +71,8 @@ test("看板贴/摘标签：徽章出现与消失", async ({ page }) => {
 
 test("看板贴标签后任务详情页同步显示", async ({ page }) => {
 	await loginToApp(page);
-	await page.waitForSelector('a[href*="/p/"]');
-	await page.locator('a[href*="/p/"]', { hasText: "标签冒烟" }).click();
+	await page.waitForSelector('aside a[href*="/p/"]');
+	await page.locator('aside a[href*="/p/"]', { hasText: "标签冒烟" }).click();
 	await page.waitForSelector("text=新建列");
 
 	// 给第一个任务贴"紧急"。
@@ -100,4 +100,24 @@ test("看板贴标签后任务详情页同步显示", async ({ page }) => {
 	await expect(
 		page.locator("main span.kanso-task-detail__label-chip", { hasText: "紧急" }).first(),
 	).toBeVisible({ timeout: 5000 });
+});
+
+test("任务详情：点击标签计数打开选择器并贴标签", async ({ page }) => {
+	await loginToApp(page);
+	await page.waitForSelector('aside a[href*="/p/"]');
+	await page.locator('aside a[href*="/p/"]', { hasText: "标签冒烟" }).click();
+	await page.waitForSelector("text=新建列");
+
+	const firstTask = page.locator("div[class*='w-[282px]']").first().locator("p.break-words").first();
+	await firstTask.click();
+	await page.waitForURL(/\/t\//);
+
+	const labelTrigger = page.getByRole("button", { name: "选择标签", exact: true });
+	await expect(labelTrigger).toContainText("标签");
+	await labelTrigger.click();
+
+	const popup = page.getByRole("dialog").last();
+	await expect(popup).toBeVisible();
+	await popup.getByRole("button", { name: "紧急", exact: true }).click();
+	await expect(page.locator(".kanso-task-detail__label-chip", { hasText: "紧急" })).toBeVisible({ timeout: 5000 });
 });

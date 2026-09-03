@@ -2,6 +2,7 @@ import { delay, http as mswHttp, HttpResponse } from "msw";
 import { mswPattern } from "@/lib/endpoints";
 import type { BoardColumn } from "@/types/board";
 import type { Label } from "@/types/label";
+import type { Member } from "@/types/member";
 import type { Task } from "@/types/task";
 import type { PinnedProject } from "@/types/pinned-project";
 import {
@@ -18,6 +19,10 @@ import {
 	findTask,
 	getMockDb,
 	generateMemberKey,
+	revokeMemberKey,
+	MEMBER_LIMIT,
+	membersForWorkspace,
+	memberCanAccessWorkspace,
 	me,
 	newMockId,
 	now,
@@ -46,6 +51,34 @@ function textParam(value: string | readonly string[] | undefined): string {
 	return typeof value === "string" ? value : value?.[0] ?? "";
 }
 
+function currentMember(request: Request): Member | undefined {
+	const auth = request.headers.get("Authorization") ?? "";
+	const key = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7) : "";
+	const members = getMockDb().members;
+	if (!key) return members.find((item) => item.role === "admin");
+	const memberId = Object.entries(getMockDb().memberKeys).find(([, value]) => value === key)?.[0];
+	return members.find((item) => item.id === memberId);
+}
+
+function requireOwner(request: Request): Response | undefined {
+	const member = currentMember(request);
+	if (!member) return error("访问密钥无效", 401);
+	if (member.role !== "admin") return error("只有管理员可以管理成员", 403);
+}
+
+function requireWorkspace(request: Request, workspaceId: string): Response | undefined {
+	const member = currentMember(request);
+	if (!member) return error("访问密钥无效", 401);
+	if (!getMockDb().workspaces.some((workspace) => workspace.id === workspaceId)) return error("工作区不存在", 404);
+	if (!memberCanAccessWorkspace(member.id, workspaceId)) return error("无权访问当前工作区", 403);
+}
+
+function requireProject(request: Request, projectId: string): Response | undefined {
+	const project = findProject(projectId);
+	if (!project) return error("项目不存在", 404);
+	return requireWorkspace(request, project.workspaceId);
+}
+
 function activeTasks(column: BoardColumn): Task[] {
 	return column.tasks.filter((task) => !task.archivedAt);
 }
@@ -69,17 +102,22 @@ function findMilestone(milestoneId: string): { projectId: string; index: number 
 let pinnedProjectIds: string[] = [];
 
 export const handlers = [
-	http.get(mswPattern("pinnedProjects"), async () => {
+	http.get(mswPattern("pinnedProjects"), async ({ params, request }) => {
 		await mockDelay();
 		const all = Object.values(getMockDb().projects).flat();
+		const workspaceId = textParam(params.workspaceId);
+		const denied = requireWorkspace(request, workspaceId);
+		if (denied) return denied;
 		const items: PinnedProject[] = all
-			.filter((p) => pinnedProjectIds.includes(p.id))
+			.filter((p) => pinnedProjectIds.includes(p.id) && (!workspaceId || p.workspaceId === workspaceId))
 			.map((p) => ({ projectId: p.id, workspaceId: p.workspaceId, name: p.name }));
 		return HttpResponse.json(items);
 	}),
 
 	http.post(mswPattern("setProjectPinned"), async ({ params, request }) => {
 		const id = String(params.id);
+		const denied = requireProject(request, id);
+		if (denied) return denied;
 		const body = (await request.json()) as { pinned?: unknown };
 		const pinned = Boolean(body.pinned);
 		pinnedProjectIds = pinned
@@ -101,23 +139,56 @@ export const handlers = [
 	http.get(mswPattern("me"), async ({ request }) => {
 		await mockDelay();
 		const auth = request.headers.get("Authorization") ?? "";
-		const key = auth.startsWith("Bearer ") ? auth.slice(7) : undefined;
+		const key = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7) : undefined;
 		// 携带了密钥但未命中授权列表 → 401（前端 api() 清除登录态并回登录页）。
 		if (key && !Object.values(getMockDb().memberKeys).includes(key)) {
 			return HttpResponse.json({ error: "访问密钥无效" }, { status: 401 });
 		}
 		return HttpResponse.json(me(key));
 	}),
-	http.get(mswPattern("workspaceMembers"), async ({ params }) => {
+	http.get(mswPattern("workspaceMembers"), async ({ params, request }) => {
 		await mockDelay();
-		return HttpResponse.json(getMockDb().members[textParam(params.id)] ?? []);
+		const workspaceId = textParam(params.id);
+		const denied = requireWorkspace(request, workspaceId);
+		if (denied) return denied;
+		return HttpResponse.json(membersForWorkspace(workspaceId));
+	}),
+	http.post(mswPattern("workspaceMembers"), async ({ params, request }) => {
+		const denied = requireOwner(request);
+		if (denied) return denied;
+		const body = await request.json() as { memberId?: string };
+		const memberId = body.memberId ?? "";
+		const workspaceId = textParam(params.id);
+		const member = getMockDb().members.find((item) => item.id === memberId);
+		if (!member) return error("成员不存在", 404);
+		const list = getMockDb().workspaceMembers[workspaceId] ?? (getMockDb().workspaceMembers[workspaceId] = []);
+		if (!list.includes(memberId)) list.push(memberId);
+		persistMockDb();
+		return new HttpResponse(null, { status: 204 });
+	}),
+	http.delete(mswPattern("workspaceMember"), async ({ params, request }) => {
+		const denied = requireOwner(request);
+		if (denied) return denied;
+		const workspaceId = textParam(params.id);
+		const memberId = textParam(params.memberId);
+		const member = getMockDb().members.find((item) => item.id === memberId);
+		if (!member) return error("成员不存在", 404);
+		if (member.role === "admin") return error("管理员自动拥有全部工作区权限", 403);
+		const ids = getMockDb().workspaceMembers[workspaceId] ?? [];
+		const index = ids.indexOf(memberId);
+		if (index < 0) return error("成员不在当前工作区", 404);
+		ids.splice(index, 1);
+		persistMockDb();
+		return new HttpResponse(null, { status: 204 });
 	}),
 	http.patch(mswPattern("member"), async ({ params, request }) => {
 		const id = textParam(params.id);
+		const current = currentMember(request);
+		if (!current) return error("访问密钥无效", 401);
+		if (current.role !== "admin" && current.id !== id) return error("当前成员没有执行此操作的权限", 403);
 		const body = await request.json() as { name?: string; avatarColor?: string; avatar?: string | null };
-		for (const list of Object.values(getMockDb().members)) {
-			const member = list.find((m) => m.id === id);
-			if (member) {
+		const member = getMockDb().members.find((m) => m.id === id);
+		if (member) {
 				const previousName = member.name;
 				if (body.name?.trim()) member.name = body.name.trim();
 				if (body.avatarColor) member.avatarColor = body.avatarColor;
@@ -125,33 +196,68 @@ export const handlers = [
 				else if (body.avatar === null) delete member.avatar;
 				if (body.name?.trim() && member.name !== previousName) recordScopedActivity("member", member.id, "", "member.updated", { name: member.name });
 				return HttpResponse.json(persistAnd(member));
-			}
 		}
 		return error("成员不存在", 404);
 	}),
-	// 管理员为成员生成访问密钥（授权）：已存在则原样返回。
-	http.post(mswPattern("memberKey"), async ({ params }) => {
-		const key = generateMemberKey(textParam(params.id));
+	http.patch("*/api/members/:id/role", async ({ params, request }) => {
+		const denied = requireOwner(request);
+		if (denied) return denied;
+		const id = textParam(params.id);
+		const body = await request.json() as { role?: string };
+		const target = getMockDb().members.find((item) => item.id === id);
+		if (!target) return error("成员不存在", 404);
+		if (body.role !== "admin" && body.role !== "member") return error("角色无效", 400);
+		if (target.role === "admin" && body.role === "member" && getMockDb().members.filter((item) => item.role === "admin").length <= 1) {
+			return error("至少保留一名管理员", 400);
+		}
+		if (target.role !== "admin" && body.role === "admin" && getMockDb().members.filter((item) => item.role === "admin").length >= 2) {
+			return error("管理员数量最多为 2 名", 400);
+		}
+		target.role = body.role;
+		persistMockDb();
+		return HttpResponse.json(target);
+	}),
+	// 每次调用都轮换访问密钥；旧密钥立即失效。
+	http.post(mswPattern("memberKey"), async ({ params, request }) => {
+		const actor = currentMember(request);
+		const targetId = textParam(params.id);
+		if (!actor) return error("访问密钥无效", 401);
+		if (actor.role !== "admin" && actor.id !== targetId) return error("只能轮换自己的密钥，或由管理员管理成员密钥", 403);
+		const key = generateMemberKey(targetId);
 		if (!key) return error("成员不存在", 404);
 		await mockDelay();
 		return HttpResponse.json({ key });
 	}),
-	// 创建成员（普通成员，5 人上限）。
+	http.delete(mswPattern("memberKey"), async ({ params, request }) => {
+		const denied = requireOwner(request);
+		if (denied) return denied;
+		const memberId = textParam(params.id);
+		const member = getMockDb().members.find((item) => item.id === memberId);
+		if (!member) return error("成员不存在", 404);
+		if (member.role === "admin") return error("不能撤销管理员密钥，请改为轮换", 400);
+		if (!revokeMemberKey(memberId)) return error("撤销成员密钥失败", 500);
+		recordScopedActivity("member", memberId, "", "member.key_revoked", { name: member.name });
+		return new HttpResponse(null, { status: 204 });
+	}),
+	// 创建全局成员（实例最多 6 个身份），随后由前端授权当前工作区。
 	http.post(mswPattern("members"), async ({ request }) => {
-		const body = await request.json() as { workspaceId?: string; name?: string };
-		const workspaceId = body.workspaceId ?? "";
+		const denied = requireOwner(request);
+		if (denied) return denied;
+		const body = await request.json() as { name?: string };
 		const name = body.name?.trim() ?? "";
-		if (!workspaceId) return error("缺少工作区", 400);
 		if (!name) return error("成员名称不能为空", 400);
-		const result = createMember(workspaceId, name);
+		if (getMockDb().members.length >= MEMBER_LIMIT) return error("成员和管理员总数已达上限（6 人）", 409);
+		const result = createMember(name);
 		if (!result.ok) return error(result.error, 400);
 		recordScopedActivity("member", result.member.id, "", "member.created", { name: result.member.name });
 		return HttpResponse.json(result.member, { status: 201 });
 	}),
 	// 删除成员：所有者受保护，同时清除其访问密钥。
-	http.delete(mswPattern("member"), async ({ params }) => {
+	http.delete(mswPattern("member"), async ({ params, request }) => {
+		const denied = requireOwner(request);
+		if (denied) return denied;
 		const memberId = textParam(params.id);
-		const member = Object.values(getMockDb().members).flat().find((item) => item.id === memberId);
+		const member = getMockDb().members.find((item) => item.id === memberId);
 		const result = deleteMember(memberId);
 		if (!result.ok) return error(result.error, 400);
 		if (member) {
@@ -162,21 +268,42 @@ export const handlers = [
 	}),
 
 
-	http.get(mswPattern("workspaces"), async () => {
+	http.get(mswPattern("members"), async ({ request }) => {
+		const denied = requireOwner(request);
+		if (denied) return denied;
+		return HttpResponse.json(getMockDb().members);
+	}),
+	http.get(mswPattern("workspaces"), async ({ request }) => {
 		await mockDelay();
-		return HttpResponse.json(getMockDb().workspaces);
+		const member = currentMember(request);
+		if (!member) return error("访问密钥无效", 401);
+		const workspaces = member.role === "admin"
+			? getMockDb().workspaces
+			: getMockDb().workspaces.filter((workspace) => memberCanAccessWorkspace(member.id, workspace.id));
+		return HttpResponse.json(workspaces);
 	}),
 	http.post(mswPattern("workspaces"), async ({ request }) => {
+		const denied = requireOwner(request);
+		if (denied) return denied;
 		const body = await request.json() as { name?: string };
 		const workspace = { id: newMockId("workspace"), name: body.name?.trim() || "新工作区", createdAt: now() };
 		const db = getMockDb();
 		db.workspaces.push(workspace);
-		db.projects[workspace.id] = [];
+		const defaultProject = { id: newMockId("project"), workspaceId: workspace.id, name: "默认项目", position: 0, createdAt: now(), updatedAt: now() };
+		db.projects[workspace.id] = [defaultProject];
 		db.labels[workspace.id] = [];
+		db.workspaceMembers[workspace.id] = [];
+		const columnNames = ["待办", "进行中", "已阻塞", "已完成"];
+		const columns: BoardColumn[] = columnNames.map((name, position) => ({ id: newMockId("column"), projectId: defaultProject.id, name, position, createdAt: now(), wipLimit: null, tasks: [] }));
+		db.boards[defaultProject.id] = { project: defaultProject, columns, labels: [] };
+		db.milestones[defaultProject.id] = [];
 		recordScopedActivity("workspace", workspace.id, "", "workspace.created", { name: workspace.name }, workspace.name);
+		recordScopedActivity("project", defaultProject.id, defaultProject.id, "project.created", { name: defaultProject.name });
 		return HttpResponse.json(persistAnd(workspace), { status: 201 });
 	}),
 	http.patch(mswPattern("workspace"), async ({ params, request }) => {
+		const denied = requireOwner(request);
+		if (denied) return denied;
 		const workspace = getMockDb().workspaces.find((item) => item.id === textParam(params.id));
 		if (!workspace) return error("工作区不存在", 404);
 		const body = await request.json() as { name?: string };
@@ -184,7 +311,9 @@ export const handlers = [
 		if (body.name?.trim()) recordScopedActivity("workspace", workspace.id, "", "workspace.updated", { name: workspace.name }, workspace.name);
 		return HttpResponse.json(persistAnd(workspace));
 	}),
-	http.delete(mswPattern("workspace"), async ({ params }) => {
+	http.delete(mswPattern("workspace"), async ({ params, request }) => {
+		const denied = requireOwner(request);
+		if (denied) return denied;
 		const workspaceId = textParam(params.id);
 		const db = getMockDb();
 		const workspace = db.workspaces.find((item) => item.id === workspaceId);
@@ -203,11 +332,15 @@ export const handlers = [
 		return new HttpResponse(null, { status: 204 });
 	}),
 
-	http.get(mswPattern("workspaceProjects"), async ({ params }) => {
+	http.get(mswPattern("workspaceProjects"), async ({ params, request }) => {
 		await mockDelay();
+		const denied = requireWorkspace(request, textParam(params.workspaceId));
+		if (denied) return denied;
 		return HttpResponse.json(projectSummaries(textParam(params.workspaceId)));
 	}),
 	http.post(mswPattern("workspaceProjects"), async ({ params, request }) => {
+		const denied = requireOwner(request);
+		if (denied) return denied;
 		const workspaceId = textParam(params.workspaceId);
 		if (!getMockDb().workspaces.some((item) => item.id === workspaceId)) return error("工作区不存在", 404);
 		const body = await request.json() as { name?: string };
@@ -223,8 +356,10 @@ export const handlers = [
 		return HttpResponse.json(persistAnd(project), { status: 201 });
 	}),
 	http.patch(mswPattern("project"), async ({ params, request }) => {
-		const project = findProject(textParam(params.id));
-		if (!project) return error("项目不存在", 404);
+		const projectId = textParam(params.id);
+		const denied = requireOwner(request) ?? requireProject(request, projectId);
+		if (denied) return denied;
+		const project = findProject(projectId)!;
 		const body = await request.json() as { name?: string };
 		if (body.name?.trim()) project.name = body.name.trim();
 		project.updatedAt = now();
@@ -234,10 +369,11 @@ export const handlers = [
 		if (body.name?.trim()) recordScopedActivity("project", project.id, project.id, "project.updated", { name: project.name });
 		return HttpResponse.json(persistAnd(project));
 	}),
-	http.delete(mswPattern("project"), async ({ params }) => {
+	http.delete(mswPattern("project"), async ({ params, request }) => {
 		const projectId = textParam(params.id);
-		const project = findProject(projectId);
-		if (!project) return error("项目不存在", 404);
+		const denied = requireOwner(request) ?? requireProject(request, projectId);
+		if (denied) return denied;
+		const project = findProject(projectId)!;
 		const db = getMockDb();
 		db.projects[project.workspaceId] = (db.projects[project.workspaceId] ?? []).filter((item) => item.id !== projectId);
 		delete db.boards[projectId];
@@ -249,18 +385,32 @@ export const handlers = [
 		persistMockDb();
 		return new HttpResponse(null, { status: 204 });
 	}),
-	http.get(mswPattern("project"), async ({ params }) => {
+	http.get(mswPattern("project"), async ({ params, request }) => {
 		await mockDelay();
+		const denied = requireProject(request, textParam(params.id));
+		if (denied) return denied;
 		const value = board(textParam(params.id));
 		if (!value) return error("项目不存在", 404);
 		return HttpResponse.json({ ...value, columns: value.columns.map((column) => ({ ...column, tasks: activeTasks(column) })) });
 	}),
 
-	http.get(mswPattern("dashboard"), async () => { await mockDelay(); return HttpResponse.json(dashboard()); }),
-	http.get(mswPattern("activity"), async () => { await mockDelay(); return HttpResponse.json(activities()); }),
-	http.get(mswPattern("search"), async ({ request }) => { await mockDelay(); return HttpResponse.json(search(new URL(request.url).searchParams.get("q") ?? "")); }),
-	http.get(mswPattern("settingsBackup"), async () => { await mockDelay(); return HttpResponse.json(backup()); }),
+	http.get(mswPattern("dashboard"), async ({ params, request }) => { await mockDelay(); const denied = requireWorkspace(request, textParam(params.workspaceId)); if (denied) return denied; return HttpResponse.json(dashboard(textParam(params.workspaceId))); }),
+	http.get(mswPattern("activity"), async ({ params, request }) => { await mockDelay(); const denied = requireWorkspace(request, textParam(params.workspaceId)); if (denied) return denied; return HttpResponse.json(activities(textParam(params.workspaceId))); }),
+	http.get(mswPattern("calendar"), async ({ params, request }) => {
+		await mockDelay();
+		const workspaceId = textParam(params.workspaceId);
+		const denied = requireWorkspace(request, workspaceId);
+		if (denied) return denied;
+		const tasks = Object.values(getMockDb().boards)
+			.filter((item) => !workspaceId || item.project.workspaceId === workspaceId)
+			.flatMap((item) => item.columns.flatMap((column) => column.tasks.filter((task) => !task.archivedAt && task.dueDate).map((task) => ({ ...task, projectName: item.project.name, workspaceId: item.project.workspaceId }))));
+		return HttpResponse.json({ tasks });
+	}),
+	http.get(mswPattern("search"), async ({ request, params }) => { await mockDelay(); const denied = requireWorkspace(request, textParam(params.workspaceId)); if (denied) return denied; return HttpResponse.json(search(new URL(request.url).searchParams.get("q") ?? "", textParam(params.workspaceId))); }),
+	http.get(mswPattern("settingsBackup"), async ({ request }) => { const denied = requireOwner(request); if (denied) return denied; await mockDelay(); return HttpResponse.json(backup()); }),
 	http.post(mswPattern("settingsBackup"), async ({ request }) => {
+		const denied = requireOwner(request);
+		if (denied) return denied;
 		await mockDelay();
 		const body = await request.json().catch(() => null);
 		if (!body || typeof body !== "object" || !("workspaces" in body)) {
@@ -269,7 +419,9 @@ export const handlers = [
 		return HttpResponse.json({ ok: true });
 	}),
 
-	http.get(mswPattern("settingsConfig"), async () => {
+	http.get(mswPattern("settingsConfig"), async ({ request }) => {
+		const denied = requireOwner(request);
+		if (denied) return denied;
 		await mockDelay();
 		return HttpResponse.json({
 			addr: ":8080",
@@ -281,13 +433,15 @@ export const handlers = [
 			configFile: "kanso-config.json",
 		});
 	}),
-	http.put(mswPattern("settingsConfig"), async () => {
+	http.put(mswPattern("settingsConfig"), async ({ request }) => {
+		const denied = requireOwner(request);
+		if (denied) return denied;
 		await mockDelay();
 		return HttpResponse.json({ ok: true, configFile: "kanso-config.json" });
 	}),
 	http.get(mswPattern("health"), async () => {
 		await mockDelay();
-		return HttpResponse.json({ ok: true, name: "kanso", version: "mock" });
+		return HttpResponse.json({ ok: true, name: "kanso", version: "mock", mode: "personal" });
 	}),
 
 	http.post(mswPattern("projectColumns"), async ({ params, request }) => {
@@ -421,6 +575,22 @@ export const handlers = [
 		getMockDb().activities.unshift({ ...activity, projectId: detail.task.projectId });
 		persistMockDb();
 		return HttpResponse.json(comment, { status: 201 });
+	}),
+	http.patch(mswPattern("comment"), async ({ params, request }) => {
+		const commentId = textParam(params.id);
+		const body = await request.json() as { content?: unknown };
+		const content = typeof body.content === "string" ? body.content.trim() : "";
+		if (!content) return error("评论内容不能为空", 400);
+		for (const detail of Object.values(getMockDb().details)) {
+			const comment = detail.comments.find((item) => item.id === commentId);
+			if (!comment) continue;
+			comment.content = content;
+			const activity = { id: newMockId("activity"), resourceType: "task", resourceId: detail.task.id, action: "comment.updated", actor: "Admin", projectName: detail.projectName, data: JSON.stringify({ content }), createdAt: now() };
+			getMockDb().activities.unshift({ ...activity, projectId: detail.task.projectId });
+			persistMockDb();
+			return HttpResponse.json(comment);
+		}
+		return error("评论不存在", 404);
 	}),
 	http.delete(mswPattern("comment"), async ({ params }) => {
 		const commentId = textParam(params.id);

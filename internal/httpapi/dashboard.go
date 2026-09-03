@@ -5,12 +5,14 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+
 	"kanso/internal/service"
 )
 
 // getDashboard 返回仪表盘聚合（统计卡 / 分布 / 项目速览 / 需要关注 / 最近活动）。
 func (a *API) getDashboard(w http.ResponseWriter, r *http.Request) {
-	data, err := a.svc.GetDashboard(r.Context())
+	data, err := a.svc.GetDashboard(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		writeServiceError(w, err, "查询仪表盘失败")
 		return
@@ -18,9 +20,18 @@ func (a *API) getDashboard(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, data)
 }
 
+func (a *API) getCalendar(w http.ResponseWriter, r *http.Request) {
+	tasks, err := a.svc.ListCalendarTasks(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeServiceError(w, err, "查询日历失败")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tasks": tasks})
+}
+
 // getBackup 导出全量数据快照。
 func (a *API) getBackup(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOwnerInTeam(w, r) {
+	if !a.requireCapability(w, r, service.CapabilityManageSettings) {
 		return
 	}
 	data, err := a.svc.GetBackup(r.Context())
@@ -33,7 +44,7 @@ func (a *API) getBackup(w http.ResponseWriter, r *http.Request) {
 
 // importBackup 导入备份快照（恢复还原）：JSON 全量替换当前数据。
 func (a *API) importBackup(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOwnerInTeam(w, r) {
+	if !a.requireCapability(w, r, service.CapabilityManageSettings) {
 		return
 	}
 	var body service.BackupData
@@ -58,7 +69,7 @@ func (a *API) importBackup(w http.ResponseWriter, r *http.Request) {
 
 // getActivity 返回全局活动流（活动页数据源）。
 func (a *API) getActivity(w http.ResponseWriter, r *http.Request) {
-	data, err := a.svc.GetActivities(r.Context())
+	data, err := a.svc.GetActivities(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		writeServiceError(w, err, "查询活动失败")
 		return

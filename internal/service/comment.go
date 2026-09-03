@@ -104,6 +104,44 @@ func (s *Service) CreateComment(ctx context.Context, taskID, content string) (Ta
 	}, nil
 }
 
+// UpdateComment edits a comment's content; comment editing is ordinary team
+// content work, while deletion remains an owner-only data operation.
+func (s *Service) UpdateComment(ctx context.Context, commentID, content string) (TaskComment, error) {
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return TaskComment{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	comment, err := q.GetComment(ctx, commentID)
+	if err != nil {
+		return TaskComment{}, mapNoRows(err)
+	}
+	task, err := q.GetTask(ctx, comment.TaskID)
+	if err != nil {
+		return TaskComment{}, mapNoRows(err)
+	}
+	updated, err := q.UpdateComment(ctx, gen.UpdateCommentParams{Content: content, ID: commentID})
+	if err != nil {
+		return TaskComment{}, fmt.Errorf("更新评论失败: %w", err)
+	}
+	event := Event{
+		Action:         EventCommentUpdated,
+		ProjectID:      task.ProjectID,
+		EntityID:       commentID,
+		ActivityTaskID: task.ID,
+		Data:           map[string]string{"content": updated.Content},
+		RecordActivity: true,
+	}
+	if err := s.recordEvent(ctx, q, event); err != nil {
+		return TaskComment{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return TaskComment{}, fmt.Errorf("提交事务失败: %w", err)
+	}
+	s.broadcastEvent(event)
+	return TaskComment{ID: updated.ID, TaskID: updated.TaskID, Author: updated.Author, Content: updated.Content, CreatedAt: updated.CreatedAt}, nil
+}
+
 // DeleteComment 删除评论；不存在时返回 ErrNotFound。
 func (s *Service) DeleteComment(ctx context.Context, commentID string) error {
 	tx, q, err := beginTx(ctx, s.db)

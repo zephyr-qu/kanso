@@ -142,6 +142,7 @@ describe("API response contract", () => {
 	it("keeps task detail, milestone and activity aggregates structurally stable", async () => {
 		const board = await json<unknown>("/api/projects/mock-project");
 		const { taskId, projectId } = assertBoard(board.body);
+		const workspaceId = ((object(board.body, "board").project as JsonObject).workspaceId as string);
 
 		const detail = await json<unknown>(`/api/tasks/${taskId}`);
 		responseIsJson(detail.response, 200);
@@ -177,7 +178,7 @@ describe("API response contract", () => {
 			}
 		}
 
-		const activities = await json<unknown>("/api/activity");
+		const activities = await json<unknown>(`/api/workspaces/${workspaceId}/activity`);
 		responseIsJson(activities.response, 200);
 		for (const [index, activity] of array(activities.body, "activities").entries()) {
 			assertActivity(activity, `activities[${index}]`);
@@ -185,7 +186,9 @@ describe("API response contract", () => {
 	});
 
 	it("keeps dashboard, search, backup and health response envelopes stable", async () => {
-		const dashboard = await json<unknown>("/api/dashboard");
+		const workspaces = await json<Array<{ id: string }>>("/api/workspaces");
+		const workspaceId = workspaces.body[0].id;
+		const dashboard = await json<unknown>(`/api/workspaces/${workspaceId}/dashboard`);
 		responseIsJson(dashboard.response, 200);
 		const dashboardValue = object(dashboard.body, "dashboard");
 		for (const field of ["totalTasks", "urgent", "newThisWeek", "doneTasks", "completionPercent"]) {
@@ -203,7 +206,7 @@ describe("API response contract", () => {
 			number(value.completed, `dashboard.trend[${index}].completed`);
 		}
 
-		const search = await json<unknown>("/api/search?q=任务");
+		const search = await json<unknown>(`/api/workspaces/${workspaceId}/search?q=任务`);
 		responseIsJson(search.response, 200);
 		for (const [index, value] of array(search.body, "search").entries()) {
 			const hit = object(value, `search[${index}]`);

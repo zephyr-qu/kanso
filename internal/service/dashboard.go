@@ -66,42 +66,46 @@ const dashboardTrendDays = 14
 // GetDashboard 返回仪表盘聚合数据（统计卡 / 分布 / 趋势 / 项目速览 / 需要关注 / 最近活动）。
 // 状态口径（2026-08 调整）：任务状态由列位置决定——"已完成"= 位于项目末列（position 最大列），
 // 不依赖列名，用户重命名列不影响统计。
-func (s *Service) GetDashboard(ctx context.Context) (DashboardData, error) {
+func (s *Service) GetDashboard(ctx context.Context, workspaceIDs ...string) (DashboardData, error) {
+	workspaceID, err := s.aggregateWorkspaceID(ctx, workspaceIDs...)
+	if err != nil {
+		return DashboardData{}, err
+	}
 	q := gen.New(s.db)
 
-	columns, err := q.ListColumnDistributions(ctx)
+	columns, err := q.ListColumnDistributions(ctx, workspaceID)
 	if err != nil {
 		return DashboardData{}, fmt.Errorf("查询列分布失败: %w", err)
 	}
-	priorities, err := q.ListPriorityDistributions(ctx)
+	priorities, err := q.ListPriorityDistributions(ctx, workspaceID)
 	if err != nil {
 		return DashboardData{}, fmt.Errorf("查询优先级分布失败: %w", err)
 	}
-	progress, err := q.ListProjectColumnCounts(ctx)
+	progress, err := q.ListProjectColumnCounts(ctx, workspaceID)
 	if err != nil {
 		return DashboardData{}, fmt.Errorf("查询项目进展失败: %w", err)
 	}
-	tasks, err := q.ListAllTasks(ctx)
+	tasks, err := q.ListAllTasks(ctx, workspaceID)
 	if err != nil {
 		return DashboardData{}, fmt.Errorf("查询任务失败: %w", err)
 	}
-	focusRows, err := q.ListFocusCandidates(ctx)
+	focusRows, err := q.ListFocusCandidates(ctx, workspaceID)
 	if err != nil {
 		return DashboardData{}, fmt.Errorf("查询需要关注任务失败: %w", err)
 	}
-	activities, err := q.ListActivitiesWithProject(ctx)
+	activities, err := q.ListActivitiesWithProject(ctx, &workspaceID)
 	if err != nil {
 		return DashboardData{}, fmt.Errorf("查询活动失败: %w", err)
 	}
-	createdTrend, err := q.ListTaskCreationTrend(ctx)
+	createdTrend, err := q.ListTaskCreationTrend(ctx, &workspaceID)
 	if err != nil {
 		return DashboardData{}, fmt.Errorf("查询新增趋势失败: %w", err)
 	}
-	completionTrend, err := q.ListTaskCompletionTrend(ctx)
+	completionTrend, err := q.ListTaskCompletionTrend(ctx, workspaceID)
 	if err != nil {
 		return DashboardData{}, fmt.Errorf("查询完成趋势失败: %w", err)
 	}
-	createdInFinalColumnTrend, err := q.ListTaskCreatedInFinalColumnTrend(ctx)
+	createdInFinalColumnTrend, err := q.ListTaskCreatedInFinalColumnTrend(ctx, workspaceID)
 	if err != nil {
 		return DashboardData{}, fmt.Errorf("查询末列直建完成趋势失败: %w", err)
 	}

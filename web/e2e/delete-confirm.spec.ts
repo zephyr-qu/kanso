@@ -9,12 +9,13 @@ async function loginToApp(page: import("@playwright/test").Page) {
 	await page.goto("/login");
 	await page.fill("#access-key", key);
 	await page.getByRole("button", { name: "进入" }).click();
-	await page.waitForURL((u) => u.pathname !== "/login");
+	await page.waitForURL(/\/w\/[^/]+\/dashboard/);
 }
 
 test("工作区删除：弹确认框，取消不删", async ({ page }) => {
 	await loginToApp(page);
 	await page.waitForSelector('a[href*="/p/"]');
+	await page.getByRole("link", { name: "项目", exact: true }).click();
 
 	await page.getByRole("button", { name: "删除工作区", exact: true }).click();
 	const dialog = page.getByRole("dialog", { name: "删除工作区" });
@@ -30,8 +31,9 @@ test("工作区删除：弹确认框，取消不删", async ({ page }) => {
 test("项目删除：取消不删、确认后删除", async ({ page }) => {
 	await loginToApp(page);
 	await page.waitForSelector('a[href*="/p/"]');
+	await page.getByRole("link", { name: "项目", exact: true }).click();
 
-	const projectCard = page.locator('a[href*="/p/"]', { hasText: "看板冒烟" });
+	const projectCard = page.locator('a.kanso-project-card[href*="/p/"]', { hasText: "看板冒烟" });
 	const deleteBtn = projectCard.getByRole("button", { name: "删除 看板冒烟", exact: true });
 
 	// 取消路径。
@@ -50,14 +52,15 @@ test("项目删除：取消不删、确认后删除", async ({ page }) => {
 test("列删除：取消不删、确认后删除（含其下任务）", async ({ page }) => {
 	await loginToApp(page);
 	await page.waitForSelector('a[href*="/p/"]');
-	await page.locator('a[href*="/p/"]', { hasText: "看板冒烟" }).click();
+	await page.locator('aside a[href*="/p/"]', { hasText: "看板冒烟" }).click();
 	await page.waitForSelector("text=新建列");
 
 	const firstCol = page.locator("div[class*='w-[282px]']").first();
 	const colName = await firstCol
-		.locator(".kanso-board-column__title span.truncate")
+		.locator(".kanso-board-column__name-trigger")
 		.textContent();
 	// 取消路径。
+	await firstCol.hover();
 	await firstCol.getByRole("button", { name: `删除列 ${colName}`, exact: true }).click();
 	const dialog = page.getByRole("dialog", { name: "删除列" });
 	await expect(dialog).toBeVisible();
@@ -75,7 +78,7 @@ test("列删除：取消不删、确认后删除（含其下任务）", async ({
 test("任务删除：确认后任务消失", async ({ page }) => {
 	await loginToApp(page);
 	await page.waitForSelector('a[href*="/p/"]');
-	await page.locator('a[href*="/p/"]', { hasText: "看板冒烟" }).click();
+	await page.locator('aside a[href*="/p/"]', { hasText: "看板冒烟" }).click();
 	await page.waitForSelector("text=新建列");
 
 	const firstCol = page.locator("div[class*='w-[282px]']").first();

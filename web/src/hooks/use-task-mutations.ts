@@ -3,12 +3,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
 import {
-	invalidateBoard,
-	invalidateBoardScope,
+	invalidateTaskScope,
 	queryKeys,
 } from "@/hooks/query-keys";
 import type { Board } from "@/types/board";
 import type { Task } from "@/types/task";
+
+export type TaskPatch = Partial<Pick<Task, "title" | "description" | "priority" | "dueDate">>;
+export type UpdateTaskInput = { id: string } & TaskPatch;
 
 // moveTaskInBoard 纯函数：把任务从源列移除、插入目标列的目标位置（越界收敛）。
 export function moveTaskInBoard(
@@ -53,7 +55,7 @@ export function addTaskToBoard(board: Board | undefined, task: Task): Board | un
 		),
 	};
 }
-export function useTaskMutations(projectId: string) {
+export function useTaskMutations(projectId: string, workspaceId = "") {
 	const queryClient = useQueryClient();
 
 	const createTask = useMutation({
@@ -69,23 +71,19 @@ export function useTaskMutations(projectId: string) {
 				queryKeys.board(projectId),
 				(old) => addTaskToBoard(old, task),
 			);
-			invalidateBoard(queryClient, projectId);
-			// 新任务可能带截止日期，日历视图需同步失效。
-			queryClient.invalidateQueries({ queryKey: queryKeys.calendar() });
+			invalidateTaskScope(queryClient, { projectId, workspaceId, taskId: task.id });
 		},
 	});
 
 	const updateTask = useMutation({
 		meta: { feedback: { success: "任务已更新", errorTitle: "更新任务失败" } },
-		mutationFn: ({ id, title }: { id: string; title: string }) =>
+		mutationFn: ({ id, ...patch }: UpdateTaskInput) =>
 			api<Task>(buildPath("task", { id }), {
 				method: "PATCH",
-				body: JSON.stringify({ title }),
+				body: JSON.stringify(patch),
 			}),
-		onSuccess: () => {
-			invalidateBoard(queryClient, projectId);
-			// 标题/描述/优先级/截止日期都可能被改（含日历相关字段），日历视图同步失效。
-			queryClient.invalidateQueries({ queryKey: queryKeys.calendar() });
+		onSuccess: (_data, { id }) => {
+			invalidateTaskScope(queryClient, { projectId, workspaceId, taskId: id });
 		},
 	});
 
@@ -93,20 +91,15 @@ export function useTaskMutations(projectId: string) {
 		meta: { feedback: { success: "任务已删除", errorTitle: "删除任务失败" } },
 		mutationFn: (id: string) =>
 			api<void>(buildPath("task", { id }), { method: "DELETE" }),
-		onSuccess: () => {
-			invalidateBoard(queryClient, projectId);
-			queryClient.invalidateQueries({ queryKey: queryKeys.archivedTasks(projectId) });
-		},
+		onSuccess: () => invalidateTaskScope(queryClient, { projectId, workspaceId }),
 	});
 
 	const setArchived = useMutation({
 		meta: { feedback: { success: "任务状态已更新", errorTitle: "更新任务状态失败" } },
 		mutationFn: ({ id, archived }: { id: string; archived: boolean }) =>
 			api<Task>(buildPath(archived ? "taskArchive" : "taskRestore", { id }), { method: "POST" }),
-		onSuccess: () => {
-			invalidateBoardScope(queryClient, projectId);
-			// 归档/恢复改变日历可见性（归档任务按 dueDate 不再展示），日历同步失效。
-			queryClient.invalidateQueries({ queryKey: queryKeys.calendar() });
+		onSuccess: (_data, { id }) => {
+			invalidateTaskScope(queryClient, { projectId, workspaceId, taskId: id });
 		},
 	});
 
@@ -144,7 +137,7 @@ export function useTaskMutations(projectId: string) {
 				queryClient.setQueryData(queryKeys.board(projectId), ctx.previous);
 			}
 		},
-		onSuccess: () => invalidateBoardScope(queryClient, projectId),
+		onSuccess: () => invalidateTaskScope(queryClient, { projectId, workspaceId }),
 	});
 
 	return { createTask, updateTask, deleteTask, setArchived, moveTask };

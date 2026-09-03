@@ -21,6 +21,9 @@ func (a *API) listProjects(w http.ResponseWriter, r *http.Request) {
 
 // createProject 创建项目（自动种子固定看板默认列；0008：模板已移除，忽略请求中的 template 字段）。
 func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityManageStructure) {
+		return
+	}
 	var body struct {
 		Name string `json:"name"`
 	}
@@ -41,6 +44,9 @@ func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
 
 // renameProject 重命名项目。
 func (a *API) renameProject(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityManageStructure) {
+		return
+	}
 	name, ok := decodeNameBody(w, r, "项目名称")
 	if !ok {
 		return
@@ -59,7 +65,7 @@ func (a *API) renameProject(w http.ResponseWriter, r *http.Request) {
 
 // deleteProject 删除项目（其下列/任务等级联删除）。
 func (a *API) deleteProject(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOwnerInTeam(w, r) {
+	if !a.requireCapability(w, r, service.CapabilityDeleteData) {
 		return
 	}
 	if err := a.svc.DeleteProject(r.Context(), chi.URLParam(r, "id")); err != nil {
@@ -75,7 +81,7 @@ func (a *API) deleteProject(w http.ResponseWriter, r *http.Request) {
 
 // listPinnedProjects 返回跨工作区置顶项目列表。
 func (a *API) listPinnedProjects(w http.ResponseWriter, r *http.Request) {
-	projects, err := a.svc.ListPinnedProjects(r.Context())
+	projects, err := a.svc.ListPinnedProjects(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		writeServiceError(w, err, "查询置顶项目失败")
 		return

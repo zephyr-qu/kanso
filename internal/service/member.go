@@ -1,10 +1,11 @@
-// 成员领域服务（0006 规划 Phase 1）：多密钥认证、me、成员 CRUD、密钥授权。
-// 返回给前端的 Member 一律经 toMemberDTO 剥离 access_key，避免密钥泄露。
+// 成员领域服务：全局身份、角色和访问密钥。
+// 工作区授权由 workspace_access.go 负责；成员身份本身不携带 workspace_id。
 package service
 
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -16,117 +17,130 @@ import (
 	"kanso/internal/id"
 )
 
-// Member 是返回给前端的成员 DTO（不含 access_key）。
+// Member 是返回给前端的成员 DTO，不含访问密钥或其哈希。
 type Member struct {
 	ID          string  `json:"id"`
-	WorkspaceID string  `json:"workspaceId"`
 	Name        string  `json:"name"`
 	Role        string  `json:"role"`
 	AvatarColor *string `json:"avatarColor"`
 	Avatar      *string `json:"avatar"`
 	CreatedAt   string  `json:"createdAt"`
+	HasKey      bool    `json:"hasKey"`
 }
 
 const (
-	// MemberLimit 工作区成员数量上限（个人版 5 人；前端 profile 页与 Mock 同步）。
-	MemberLimit = 5
-
-	memberRoleOwner  = "owner"
+	memberRoleAdmin  = "admin"
 	memberRoleMember = "member"
-
-	// defaultOwnerName 与 Mock 种子 owner 显示名一致（前端视觉/文案对齐）。
 	defaultOwnerName = "Ad"
 )
 
-// ErrMemberLimit 表示成员数量已达上限（HTTP 层映射为 400）。
-var ErrMemberLimit = errors.New("member limit reached")
+var (
+	// ErrMemberLimit 表示实例身份数量已达上限。
+	ErrMemberLimit = errors.New("member limit reached")
+	// ErrAdminLimit 表示实例管理员数量已达上限。
+	ErrAdminLimit = errors.New("admin limit reached")
+	// ErrOwnerProtected 保留错误名以减少领域层调用方改动；语义已经变为不能删除或降级最后一名管理员。
+	ErrOwnerProtected = errors.New("last admin cannot be removed or demoted")
+	// ErrReservedName 表示初始化管理员名称不能被普通成员占用。
+	ErrReservedName = errors.New("name 'Admin' is reserved")
+)
 
-// ErrOwnerProtected 表示尝试删除所有者（HTTP 层映射为 400）。
-var ErrOwnerProtected = errors.New("owner cannot be deleted")
-
-// ErrReservedName 表示使用了保留名 "Admin"（HTTP 层映射为 400）。
-// W-1：个人→团队切换时 ReownLegacyAdmin 会把历史 'Admin' 归属重写为 owner 名；
-// 若成员可自改名 "Admin"，其历史会被静默归入 owner 名下，故创建/改名均拒绝该名字。
-var ErrReservedName = errors.New("name 'Admin' is reserved")
-
-// MemberIDByKey 按访问密钥反查成员 ID；未命中返回 false。
-// 认证中间件（auth.Middleware）与 WebSocket 端点共用。
+// MemberIDByKey 按访问密钥反查全局成员身份。
 func (s *Service) MemberIDByKey(ctx context.Context, key string) (string, bool) {
 	if key == "" {
 		return "", false
 	}
-	member, err := gen.New(s.db).GetMemberByAccessKey(ctx, &key)
+	hash := hashAccessKey(key)
+	member, err := gen.New(s.db).GetMemberByAccessKey(ctx, &hash)
 	if err != nil {
 		return "", false
 	}
 	return member.ID, true
 }
 
-// VerifyKey 校验密钥命中任一成员（/api/auth/verify）。
-// team 模式按成员表反查；personal 模式由 httpapi 层直接比对 KANSO_ACCESS_KEY（无成员表）。
+// VerifyKey 校验密钥是否命中仍然有效的全局成员身份。
 func (s *Service) VerifyKey(ctx context.Context, key string) bool {
 	_, ok := s.MemberIDByKey(ctx, key)
 	return ok
 }
 
-// SeedOwnerMember 确保存在 owner 成员，并把当前进程访问密钥写入其 access_key。
-// 登录体验与单密钥时代一致：KANSO_ACCESS_KEY（或未设置时随机生成并打印的密钥）即可登录。
-// 每次启动同步 owner 密钥；环境变量未设置时密钥每次启动轮换（沿用既有行为）。
+// SeedOwnerMember 保持历史方法名以避免启动链路扩大改动；实际创建的是实例管理员。
+// 管理员是全局身份，不需要为默认工作区写入关系表。
 func (s *Service) SeedOwnerMember(ctx context.Context, accessKey string) error {
 	q := gen.New(s.db)
-	owner, err := q.GetOwnerMember(ctx)
+	admin, err := q.GetOwnerMember(ctx)
 	if errors.Is(err, sql.ErrNoRows) {
-		workspaces, err := q.ListWorkspaces(ctx)
-		if err != nil {
-			return fmt.Errorf("查询工作区失败: %w", err)
+		members, listErr := listAllMembers(ctx, s.db)
+		if listErr != nil {
+			return fmt.Errorf("查询成员失败: %w", listErr)
 		}
-		if len(workspaces) == 0 {
-			return nil // 无工作区（SeedDefaultWorkspace 未跑）时跳过，避免孤儿 owner
+		if len(members) > 0 {
+			if _, err := q.UpdateMemberRole(ctx, gen.UpdateMemberRoleParams{ID: members[0].ID, Role: memberRoleAdmin}); err != nil {
+				return fmt.Errorf("恢复管理员角色失败: %w", err)
+			}
+			admin = members[0]
+		} else {
+			workspaces, err := q.ListWorkspaces(ctx)
+			if err != nil {
+				return fmt.Errorf("查询工作区失败: %w", err)
+			}
+			if len(workspaces) == 0 {
+				return nil
+			}
+			memberID, err := id.New()
+			if err != nil {
+				return err
+			}
+			now := time.Now().UTC().Format(time.RFC3339)
+			name := defaultOwnerName
+			if s.mode == config.ModePersonal {
+				name = "Admin"
+			}
+			hash := hashAccessKey(accessKey)
+			admin, err = q.CreateMember(ctx, gen.CreateMemberParams{ID: memberID, Name: name, Role: memberRoleAdmin, AccessKeyHash: &hash, CreatedAt: now})
+			if err != nil {
+				return fmt.Errorf("创建管理员失败: %w", err)
+			}
 		}
-		memberID, err := id.New()
-		if err != nil {
-			return err
-		}
-		now := time.Now().UTC().Format(time.RFC3339)
-		// 初始显示名按模式：personal 保持历史固定身份 "Admin"（活动归属一致），team 用默认名。
-		ownerName := defaultOwnerName
-		if s.mode == config.ModePersonal {
-			ownerName = "Admin"
-		}
-		if _, err := q.CreateMember(ctx, gen.CreateMemberParams{
-			ID:          memberID,
-			WorkspaceID: workspaces[0].ID,
-			Name:        ownerName,
-			Role:        memberRoleOwner,
-			AccessKey:   &accessKey,
-			CreatedAt:   now,
-		}); err != nil {
-			return fmt.Errorf("创建 owner 成员失败: %w", err)
-		}
-		return nil
+	} else if err != nil {
+		return fmt.Errorf("查询管理员失败: %w", err)
 	}
-	if err != nil {
-		return fmt.Errorf("查询 owner 成员失败: %w", err)
-	}
-	if owner.AccessKey == nil || *owner.AccessKey != accessKey {
-		if _, err := q.UpdateMemberAccessKey(ctx, gen.UpdateMemberAccessKeyParams{ID: owner.ID, AccessKey: &accessKey}); err != nil {
-			return fmt.Errorf("同步 owner 访问密钥失败: %w", err)
+
+	hash := hashAccessKey(accessKey)
+	if admin.AccessKeyHash == nil || *admin.AccessKeyHash != hash {
+		if _, err := q.UpdateMemberAccessKey(ctx, gen.UpdateMemberAccessKeyParams{ID: admin.ID, AccessKeyHash: &hash}); err != nil {
+			return fmt.Errorf("同步管理员访问密钥失败: %w", err)
 		}
 	}
 	return nil
 }
 
-// GetMe 返回认证成员及其所属工作区（/api/me）。
-func (s *Service) GetMe(ctx context.Context, memberID string) (Member, string, error) {
-	member, err := gen.New(s.db).GetMember(ctx, memberID)
+func listAllMembers(ctx context.Context, db *sql.DB) ([]gen.Member, error) {
+	rows, err := db.QueryContext(ctx, `SELECT id, name, role, avatar_color, avatar, access_key_hash, created_at FROM member ORDER BY created_at, id`)
 	if err != nil {
-		return Member{}, "", mapNoRows(err)
+		return nil, err
 	}
-	return toMemberDTO(member), member.WorkspaceID, nil
+	defer rows.Close()
+	var result []gen.Member
+	for rows.Next() {
+		var item gen.Member
+		if err := rows.Scan(&item.ID, &item.Name, &item.Role, &item.AvatarColor, &item.Avatar, &item.AccessKeyHash, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	return result, rows.Err()
 }
 
-// MemberNameByID 返回成员名（dispatch 记录 actor 用）；不存在返回 false。
-// 两种模式成员均入库（personal = 单一 owner），不再有模式分支。
+// GetMe 返回当前全局身份。可访问工作区由 /api/workspaces 单独返回。
+func (s *Service) GetMe(ctx context.Context, memberID string) (Member, error) {
+	member, err := gen.New(s.db).GetMember(ctx, memberID)
+	if err != nil {
+		return Member{}, mapNoRows(err)
+	}
+	return toMemberDTO(member), nil
+}
+
 func (s *Service) MemberNameByID(ctx context.Context, memberID string) (string, bool) {
 	member, err := gen.New(s.db).GetMember(ctx, memberID)
 	if err != nil {
@@ -135,45 +149,61 @@ func (s *Service) MemberNameByID(ctx context.Context, memberID string) (string, 
 	return member.Name, true
 }
 
-// RequireOwner protects member administration endpoints. Profile edits remain
-// available to the member themselves, while inviting/revoking credentials is
-// an owner-only operation.
-func (s *Service) RequireOwner(ctx context.Context, memberID string) error {
+func (s *Service) MemberIdentityByID(ctx context.Context, memberID string) (gen.Member, bool) {
 	member, err := gen.New(s.db).GetMember(ctx, memberID)
+	if err != nil {
+		return gen.Member{}, false
+	}
+	return member, true
+}
+
+// RequireOwner is the compatibility name for the instance-admin capability.
+func (s *Service) RequireOwner(ctx context.Context, memberID string) error {
+	return s.RequireInstanceAdmin(ctx, memberID)
+}
+
+func (s *Service) ListMembers(ctx context.Context, workspaceID string) ([]Member, error) {
+	return s.ListWorkspaceMembers(ctx, workspaceID)
+}
+
+// ListAllMembers returns the global identity directory for administrators.
+// Workspace membership is intentionally not folded into this identity list.
+func (s *Service) ListAllMembers(ctx context.Context) ([]Member, error) {
+	rows, err := gen.New(s.db).ListAllMembers(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("查询全局成员失败: %w", err)
+	}
+	result := make([]Member, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, toMemberDTO(row))
+	}
+	return result, nil
+}
+
+// RequireMemberKeyAccess allows members to rotate their own key and admins to manage any identity.
+func (s *Service) RequireMemberKeyAccess(ctx context.Context, actorID, targetID string, revoke bool) error {
+	actor, err := gen.New(s.db).GetMember(ctx, actorID)
 	if err != nil {
 		return mapNoRows(err)
 	}
-	if member.Role != memberRoleOwner {
+	if _, err := gen.New(s.db).GetMember(ctx, targetID); err != nil {
+		return mapNoRows(err)
+	}
+	if actor.ID == targetID && !revoke {
+		return nil
+	}
+	if actor.Role != memberRoleAdmin {
 		return ErrForbidden
 	}
 	return nil
 }
 
-// ListMembers 返回工作区成员列表（按创建时间排序）。
-func (s *Service) ListMembers(ctx context.Context, workspaceID string) ([]Member, error) {
-	rows, err := gen.New(s.db).ListMembersByWorkspace(ctx, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("查询成员失败: %w", err)
-	}
-	if rows == nil {
-		return []Member{}, nil
-	}
-	out := make([]Member, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, toMemberDTO(row))
-	}
-	return out, nil
-}
-
-// UpdateMemberProfile 更新成员名称/头像底色/头像。
-// name 为空串忽略（保持现状）；avatar 传 null（*body.Avatar == nil）清空头像。
 func (s *Service) UpdateMemberProfile(ctx context.Context, memberID string, name, avatarColor *string, avatar **string) (Member, error) {
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
 		return Member{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
-
 	current, err := q.GetMember(ctx, memberID)
 	if err != nil {
 		return Member{}, mapNoRows(err)
@@ -193,168 +223,188 @@ func (s *Service) UpdateMemberProfile(ctx context.Context, memberID string, name
 	if avatar != nil {
 		newAvatar = *avatar
 	}
-	updated, err := q.UpdateMemberProfile(ctx, gen.UpdateMemberProfileParams{
-		ID:          memberID,
-		Name:        newName,
-		AvatarColor: newColor,
-		Avatar:      newAvatar,
-	})
+	updated, err := q.UpdateMemberProfile(ctx, gen.UpdateMemberProfileParams{ID: memberID, Name: newName, AvatarColor: newColor, Avatar: newAvatar})
 	if err != nil {
 		return Member{}, fmt.Errorf("更新成员失败: %w", err)
 	}
-	// 仅改名触发活动与广播；纯头像/配色变更不扰流。
-	if newName != current.Name {
-		if err := s.commitEvent(ctx, tx, q, Event{
-			Action:         EventMemberUpdated,
-			WorkspaceID:    current.WorkspaceID,
-			EntityID:       memberID,
-			Data:           map[string]string{"name": newName},
-			RecordActivity: true,
-		}); err != nil {
-			return Member{}, err
-		}
-	} else if err := tx.Commit(); err != nil {
+	if err := tx.Commit(); err != nil {
 		return Member{}, fmt.Errorf("提交事务失败: %w", err)
 	}
+	s.emitAll(EventMemberUpdated, "", memberID)
 	return toMemberDTO(updated), nil
 }
 
-// CreateMember 创建工作区普通成员；成员数量达上限时返回 ErrMemberLimit。
-func (s *Service) CreateMember(ctx context.Context, workspaceID, name string) (Member, error) {
+// CreateMember creates a global identity. Workspace authorization is a separate operation.
+func (s *Service) CreateMember(ctx context.Context, name string) (Member, error) {
+	if name == "" {
+		return Member{}, ErrInvalidInput
+	}
+	if name == "Admin" {
+		return Member{}, ErrReservedName
+	}
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
 		return Member{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
-
-	if _, err := q.GetWorkspace(ctx, workspaceID); err != nil {
-		return Member{}, mapNoRows(err)
-	}
-	// W-1："Admin" 是保留名（personal 模式固定身份），拒绝作为成员名，避免 ReownLegacyAdmin 误归属。
-	if name == "Admin" {
-		return Member{}, ErrReservedName
-	}
-	count, err := q.CountMembersByWorkspace(ctx, workspaceID)
+	count, err := q.CountMembers(ctx)
 	if err != nil {
 		return Member{}, fmt.Errorf("统计成员失败: %w", err)
 	}
-	if count >= MemberLimit {
+	if count >= int64(MaxMembers) {
 		return Member{}, ErrMemberLimit
 	}
 	memberID, err := id.New()
 	if err != nil {
 		return Member{}, err
 	}
-	member, err := q.CreateMember(ctx, gen.CreateMemberParams{
-		ID:          memberID,
-		WorkspaceID: workspaceID,
-		Name:        name,
-		Role:        memberRoleMember,
-		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
-	})
+	member, err := q.CreateMember(ctx, gen.CreateMemberParams{ID: memberID, Name: name, Role: memberRoleMember, CreatedAt: time.Now().UTC().Format(time.RFC3339)})
 	if err != nil {
 		return Member{}, fmt.Errorf("创建成员失败: %w", err)
 	}
-	// 工作区级事件同时写入全局活动流。
-	if err := s.commitEvent(ctx, tx, q, Event{
-		Action:         EventMemberCreated,
-		WorkspaceID:    workspaceID,
-		EntityID:       member.ID,
-		Data:           map[string]string{"name": name},
-		RecordActivity: true,
-	}); err != nil {
-		return Member{}, err
+	if err := tx.Commit(); err != nil {
+		return Member{}, fmt.Errorf("提交事务失败: %w", err)
 	}
+	s.emitAll(EventMemberCreated, "", member.ID)
 	return toMemberDTO(member), nil
 }
 
-// DeleteMember 删除成员（同时清除其访问密钥）；owner 受保护。
+func (s *Service) UpdateMemberRole(ctx context.Context, targetID, role string) (Member, error) {
+	if role != memberRoleAdmin && role != memberRoleMember {
+		return Member{}, ErrInvalidInput
+	}
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return Member{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	target, err := q.GetMember(ctx, targetID)
+	if err != nil {
+		return Member{}, mapNoRows(err)
+	}
+	if target.Role == role {
+		return toMemberDTO(target), nil
+	}
+	if target.Role == memberRoleAdmin && role == memberRoleMember {
+		var admins int64
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM member WHERE role = 'admin'`).Scan(&admins); err != nil {
+			return Member{}, err
+		}
+		if admins <= 1 {
+			return Member{}, ErrOwnerProtected
+		}
+	}
+	if target.Role != memberRoleAdmin && role == memberRoleAdmin {
+		var admins int64
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM member WHERE role = 'admin'`).Scan(&admins); err != nil {
+			return Member{}, err
+		}
+		if admins >= int64(MaxAdmins) {
+			return Member{}, ErrAdminLimit
+		}
+	}
+	if _, err := q.UpdateMemberRole(ctx, gen.UpdateMemberRoleParams{ID: targetID, Role: role}); err != nil {
+		return Member{}, fmt.Errorf("更新成员角色失败: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return Member{}, fmt.Errorf("提交事务失败: %w", err)
+	}
+	target.Role = role
+	s.emitAll(EventMemberUpdated, "", targetID)
+	return toMemberDTO(target), nil
+}
+
 func (s *Service) DeleteMember(ctx context.Context, memberID string) error {
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-
 	member, err := q.GetMember(ctx, memberID)
 	if err != nil {
 		return mapNoRows(err)
 	}
-	if member.Role == memberRoleOwner {
-		return ErrOwnerProtected
+	if member.Role == memberRoleAdmin {
+		var admins int64
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM member WHERE role = 'admin'`).Scan(&admins); err != nil {
+			return err
+		}
+		if admins <= 1 {
+			return ErrOwnerProtected
+		}
 	}
 	if _, err := q.DeleteMember(ctx, memberID); err != nil {
 		return fmt.Errorf("删除成员失败: %w", err)
 	}
-	// 工作区级事件与成员删除在同一事务内提交。
-	return s.commitEvent(ctx, tx, q, Event{
-		Action:         EventMemberDeleted,
-		WorkspaceID:    member.WorkspaceID,
-		EntityID:       memberID,
-		Data:           map[string]string{"name": member.Name},
-		RecordActivity: true,
-	})
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	s.emitAll(EventMemberDeleted, "", memberID)
+	return nil
 }
 
-// GetOrCreateMemberKey 为成员生成访问密钥（授权）；已存在则原样返回（幂等）。
-func (s *Service) GetOrCreateMemberKey(ctx context.Context, memberID string) (string, error) {
-	q := gen.New(s.db)
-	member, err := q.GetMember(ctx, memberID)
+func (s *Service) RotateMemberKey(ctx context.Context, memberID string) (string, error) {
+	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
-		return "", mapNoRows(err)
+		return "", err
 	}
-	if member.AccessKey != nil && *member.AccessKey != "" {
-		return *member.AccessKey, nil
+	defer func() { _ = tx.Rollback() }()
+	if _, err := q.GetMember(ctx, memberID); err != nil {
+		return "", mapNoRows(err)
 	}
 	key, err := randomKey()
 	if err != nil {
 		return "", fmt.Errorf("生成成员密钥失败: %w", err)
 	}
 	key = "kanso-" + key
-	if _, err := q.UpdateMemberAccessKey(ctx, gen.UpdateMemberAccessKeyParams{ID: memberID, AccessKey: &key}); err != nil {
+	hash := hashAccessKey(key)
+	if _, err := q.UpdateMemberAccessKey(ctx, gen.UpdateMemberAccessKeyParams{ID: memberID, AccessKeyHash: &hash}); err != nil {
 		return "", fmt.Errorf("写入成员密钥失败: %w", err)
 	}
+	if err := tx.Commit(); err != nil {
+		return "", fmt.Errorf("提交事务失败: %w", err)
+	}
+	s.emitAll(EventMemberKeyRotated, "", memberID)
 	return key, nil
 }
 
-// toMemberDTO 剥离 access_key 的内部字段，仅暴露前端契约字段。
-func toMemberDTO(member gen.Member) Member {
-	return Member{
-		ID:          member.ID,
-		WorkspaceID: member.WorkspaceID,
-		Name:        member.Name,
-		Role:        member.Role,
-		AvatarColor: member.AvatarColor,
-		Avatar:      member.Avatar,
-		CreatedAt:   member.CreatedAt,
-	}
-}
-
-// OwnerMember 返回 owner 成员（main 启动时用于 ReownLegacyAdmin 取重写目标名）。
-func (s *Service) OwnerMember(ctx context.Context) (Member, bool) {
-	owner, err := gen.New(s.db).GetOwnerMember(ctx)
+func (s *Service) RevokeMemberKey(ctx context.Context, memberID string) error {
+	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
-		return Member{}, false
+		return err
 	}
-	return toMemberDTO(owner), true
-}
-
-// ReownLegacyAdmin 把历史 'Admin' 归属重写为 owner 成员名（ADR-0013 决策 2）。
-// personal → team 单向切换时调用一次：既有 activity.actor / comment.author 的
-// 'Admin' 统一改为 owner 名，避免活动流出现「Admin 与成员混杂」。
-func (s *Service) ReownLegacyAdmin(ctx context.Context, ownerName string) error {
-	q := gen.New(s.db)
-	if _, err := q.ReownLegacyComments(ctx, ownerName); err != nil {
-		return fmt.Errorf("重写历史评论作者失败: %w", err)
+	defer func() { _ = tx.Rollback() }()
+	if _, err := q.GetMember(ctx, memberID); err != nil {
+		return mapNoRows(err)
 	}
-	if _, err := q.ReownLegacyActivities(ctx, ownerName); err != nil {
-		return fmt.Errorf("重写历史活动作者失败: %w", err)
+	if _, err := q.ClearMemberAccessKey(ctx, memberID); err != nil {
+		return fmt.Errorf("撤销成员密钥失败: %w", err)
 	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	s.emitAll(EventMemberKeyRevoked, "", memberID)
 	return nil
 }
 
-// randomKey 生成 16 字节随机十六进制（128 位熵；成员密钥为长期凭证，与个人密钥 256 位对齐取 16 字节）。
-// 随机源失败时返回错误（与 main.generateAccessKey 一致，拒绝退化为可预测值）。
+// OwnerMember returns the first admin for startup callers; the returned role is admin.
+func (s *Service) OwnerMember(ctx context.Context) (Member, bool) {
+	admin, err := gen.New(s.db).GetOwnerMember(ctx)
+	if err != nil {
+		return Member{}, false
+	}
+	return toMemberDTO(admin), true
+}
+
+func toMemberDTO(member gen.Member) Member {
+	return Member{ID: member.ID, Name: member.Name, Role: member.Role, AvatarColor: member.AvatarColor, Avatar: member.Avatar, CreatedAt: member.CreatedAt, HasKey: member.AccessKeyHash != nil && *member.AccessKeyHash != ""}
+}
+
+func hashAccessKey(key string) string {
+	digest := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(digest[:])
+}
+
 func randomKey() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {

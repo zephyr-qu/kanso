@@ -13,6 +13,8 @@ import (
 // 已完成列置于末列，与仪表盘"完成 = 末列（position 最大）"口径一致（2026-08 调整）。
 var defaultColumns = []string{"待办", "进行中", "已阻塞", "已完成"}
 
+const defaultProjectName = "默认项目"
+
 // ListProjects 返回工作区下的项目（按 position、创建时间排序）。
 // ProjectSummary 是项目列表条目 + 看板统计（列数 / 任务数 / 进行中列任务数）。
 // 内嵌 gen.Project 使 JSON 展平为平铺字段（前端 Project 类型加可选字段即可兼容）。
@@ -21,6 +23,29 @@ type ProjectSummary struct {
 	ColumnCount     int64 `json:"columnCount"`
 	TaskCount       int64 `json:"taskCount"`
 	InProgressCount int64 `json:"inProgressCount"`
+}
+
+// sqlc emits distinct row types for projections that intentionally omit the
+// storage-only pinned field. Keep that persistence detail out of the service
+// API by normalizing those rows at the boundary.
+func projectFromListRow(row gen.ListProjectsByWorkspaceRow) gen.Project {
+	return gen.Project{ID: row.ID, WorkspaceID: row.WorkspaceID, Name: row.Name, Position: row.Position, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+}
+
+func projectFromCreateRow(row gen.CreateProjectRow) gen.Project {
+	return gen.Project{ID: row.ID, WorkspaceID: row.WorkspaceID, Name: row.Name, Position: row.Position, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+}
+
+func projectFromUpdateRow(row gen.UpdateProjectNameRow) gen.Project {
+	return gen.Project{ID: row.ID, WorkspaceID: row.WorkspaceID, Name: row.Name, Position: row.Position, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+}
+
+func projectFromGetRow(row gen.GetProjectRow) gen.Project {
+	return gen.Project{ID: row.ID, WorkspaceID: row.WorkspaceID, Name: row.Name, Position: row.Position, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+}
+
+func projectFromBackupRow(row gen.ListAllProjectsRow) gen.Project {
+	return gen.Project{ID: row.ID, WorkspaceID: row.WorkspaceID, Name: row.Name, Position: row.Position, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
 }
 
 // listProjectStatsSQL 一次聚合工作区下全部项目的统计（避免 N+1）。
@@ -77,7 +102,7 @@ func (s *Service) ListProjects(ctx context.Context, workspaceID string) ([]Proje
 	for _, p := range projects {
 		st := stats[p.ID]
 		summaries = append(summaries, ProjectSummary{
-			Project:         p,
+			Project:         projectFromListRow(p),
 			ColumnCount:     st[0],
 			TaskCount:       st[1],
 			InProgressCount: st[2],
@@ -86,18 +111,18 @@ func (s *Service) ListProjects(ctx context.Context, workspaceID string) ([]Proje
 	return summaries, nil
 }
 
-// PinnedProject 是侧边栏"置顶"分组的跨工作区项目条目。
+// PinnedProject 是当前工作区侧边栏"置顶"分组的项目条目。
 type PinnedProject struct {
 	ProjectID   string `json:"projectId"`
 	WorkspaceID string `json:"workspaceId"`
 	Name        string `json:"name"`
 }
 
-// listPinnedProjectsSQL 列出全部置顶项目（跨工作区），最近创建的在前。
+// listPinnedProjectsSQL 列出当前工作区置顶项目，最近创建的在前。
 const listPinnedProjectsSQL = `
 SELECT p.id, p.workspace_id, p.name
 FROM project p
-WHERE p.pinned = 1
+WHERE p.pinned = 1 AND p.workspace_id = ?
 ORDER BY p.created_at DESC
 `
 
@@ -105,8 +130,8 @@ ORDER BY p.created_at DESC
 const setProjectPinnedSQL = `UPDATE project SET pinned = ? WHERE id = ?`
 
 // ListPinnedProjects 返回全部置顶项目（跨工作区）。
-func (s *Service) ListPinnedProjects(ctx context.Context) ([]PinnedProject, error) {
-	rows, err := s.db.QueryContext(ctx, listPinnedProjectsSQL)
+func (s *Service) ListPinnedProjects(ctx context.Context, workspaceID string) ([]PinnedProject, error) {
+	rows, err := s.db.QueryContext(ctx, listPinnedProjectsSQL, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("查询置顶项目失败: %w", err)
 	}
@@ -152,23 +177,18 @@ func (s *Service) SetProjectPinned(ctx context.Context, projectID string, pinned
 	if pinned {
 		action = EventProjectPinned
 	}
-	return s.commitEvent(ctx, tx, q, Event{Action: action, ProjectID: project.ID, WorkspaceID: project.WorkspaceID, EntityID: project.ID, Data: map[string]string{"name": project.Name}, RecordActivity: true})
+	return s.commitEvents(ctx, tx, q, Event{Action: action, ProjectID: project.ID, WorkspaceID: project.WorkspaceID, EntityID: project.ID, Data: map[string]string{"name": project.Name}, RecordActivity: true})
 }
 
-// CreateProject 创建项目并在同一事务内种子固定看板默认列（0008：模板已移除）。
-func (s *Service) CreateProject(ctx context.Context, workspaceID, name string) (gen.Project, error) {
-	tx, q, err := beginTx(ctx, s.db)
-	if err != nil {
-		return gen.Project{}, err
-	}
-	defer func() { _ = tx.Rollback() }()
+// createProjectInTx 创建项目并种子固定看板默认列；调用方负责事务和事件提交。
+func createProjectInTx(ctx context.Context, q *gen.Queries, workspaceID, name string) (gen.Project, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	projectID, err := id.New()
 	if err != nil {
 		return gen.Project{}, err
 	}
-	project, err := q.CreateProject(ctx, gen.CreateProjectParams{
+	projectRow, err := q.CreateProject(ctx, gen.CreateProjectParams{
 		ID:          projectID,
 		WorkspaceID: workspaceID,
 		Name:        name,
@@ -179,6 +199,7 @@ func (s *Service) CreateProject(ctx context.Context, workspaceID, name string) (
 	if err != nil {
 		return gen.Project{}, fmt.Errorf("创建项目失败: %w", err)
 	}
+	project := projectFromCreateRow(projectRow)
 	for i, columnName := range defaultColumns {
 		columnID, err := id.New()
 		if err != nil {
@@ -194,8 +215,23 @@ func (s *Service) CreateProject(ctx context.Context, workspaceID, name string) (
 			return gen.Project{}, fmt.Errorf("种子默认列 %q 失败: %w", columnName, err)
 		}
 	}
+	return project, nil
+}
 
-	if err := s.commitEvent(ctx, tx, q, Event{Action: EventProjectCreated, ProjectID: project.ID, WorkspaceID: project.WorkspaceID, EntityID: project.ID, Data: map[string]string{"name": project.Name}, RecordActivity: true}); err != nil {
+// CreateProject 创建项目并在同一事务内种子固定看板默认列（0008：模板已移除）。
+func (s *Service) CreateProject(ctx context.Context, workspaceID, name string) (gen.Project, error) {
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return gen.Project{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	project, err := createProjectInTx(ctx, q, workspaceID, name)
+	if err != nil {
+		return gen.Project{}, err
+	}
+
+	if err := s.commitEvents(ctx, tx, q, Event{Action: EventProjectCreated, ProjectID: project.ID, WorkspaceID: project.WorkspaceID, EntityID: project.ID, Data: map[string]string{"name": project.Name}, RecordActivity: true}); err != nil {
 		return gen.Project{}, err
 	}
 	return project, nil
@@ -209,7 +245,7 @@ func (s *Service) RenameProject(ctx context.Context, projectID, name string) (ge
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	project, err := q.UpdateProjectName(ctx, gen.UpdateProjectNameParams{
+	projectRow, err := q.UpdateProjectName(ctx, gen.UpdateProjectNameParams{
 		ID:        projectID,
 		Name:      name,
 		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
@@ -217,7 +253,8 @@ func (s *Service) RenameProject(ctx context.Context, projectID, name string) (ge
 	if err != nil {
 		return gen.Project{}, mapNoRows(err)
 	}
-	if err := s.commitEvent(ctx, tx, q, Event{Action: EventProjectUpdated, ProjectID: project.ID, WorkspaceID: project.WorkspaceID, EntityID: project.ID, Data: map[string]string{"name": project.Name}, RecordActivity: true}); err != nil {
+	project := projectFromUpdateRow(projectRow)
+	if err := s.commitEvents(ctx, tx, q, Event{Action: EventProjectUpdated, ProjectID: project.ID, WorkspaceID: project.WorkspaceID, EntityID: project.ID, Data: map[string]string{"name": project.Name}, RecordActivity: true}); err != nil {
 		return gen.Project{}, err
 	}
 	return project, nil
@@ -245,5 +282,5 @@ func (s *Service) DeleteProject(ctx context.Context, projectID string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
-	return s.commitEvent(ctx, tx, q, Event{Action: EventProjectDeleted, ProjectID: projectID, WorkspaceID: project.WorkspaceID, EntityID: projectID, Data: map[string]string{"name": project.Name}, RecordActivity: true})
+	return s.commitEvents(ctx, tx, q, Event{Action: EventProjectDeleted, ProjectID: projectID, WorkspaceID: project.WorkspaceID, EntityID: projectID, Data: map[string]string{"name": project.Name}, RecordActivity: true})
 }

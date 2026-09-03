@@ -31,6 +31,7 @@ type API struct {
 	// configFile 是配置持久化路径（设置页保存目标，config.ConfigFilePath）。
 	configFile string
 	svc        *service.Service
+	admission  *service.WorkspaceAdmission
 }
 
 func NewRouter(cfg config.Config, svc *service.Service, hub *realtime.Hub) http.Handler {
@@ -40,7 +41,12 @@ func NewRouter(cfg config.Config, svc *service.Service, hub *realtime.Hub) http.
 // NewRouterWithAssets builds the application router and optionally serves the
 // embedded production frontend for non-API paths.
 func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.Hub, assets fs.FS) http.Handler {
-	a := &API{cfg: cfg, configFile: config.ConfigFilePath(), svc: svc}
+	a := &API{
+		cfg:        cfg,
+		configFile: config.ConfigFilePath(),
+		svc:        svc,
+		admission:  service.NewWorkspaceAdmission(svc),
+	}
 	svc.SetBroadcaster(hub)
 	r := chi.NewRouter()
 	r.Use(requestIDMiddleware)
@@ -48,7 +54,12 @@ func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.
 	r.Use(middleware.Recoverer)
 
 	r.Get("/api/health", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "name": "kanso", "version": Version})
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":      true,
+			"name":    "kanso",
+			"version": Version,
+			"mode":    string(cfg.Mode),
+		})
 	})
 	r.Get("/api/ready", a.ready)
 	r.Post("/api/auth/verify", a.verify)
@@ -57,37 +68,42 @@ func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.
 	r.Get("/api/ws", a.handleWS(hub))
 
 	// 其余 /api 路由全部要求密钥。认证按成员表反查密钥（personal = 单一 owner，
-	// owner 的 access_key 由启动时 SeedOwnerMember 写入 KANSO_ACCESS_KEY，ADR-0013 修订）。
+	// owner 的凭证哈希由启动时 SeedOwnerMember 根据 KANSO_ACCESS_KEY 写入，ADR-0013 修订）。
 	memberLookup := svc.MemberIDByKey
 	r.Group(func(pr chi.Router) {
 		pr.Use(auth.Middleware(memberLookup))
-		// actor 中间件：把执行者名写入 ctx（dispatch 记录活动/广播用，ADR-0013 决策 5）。
+		// actor 中间件：把执行者名与角色写入 ctx（dispatch/能力判断共用）。
 		pr.Use(a.actorMiddleware)
+		// 所有工作区及资源路由在进入 handler 前统一解析并校验工作区访问权。
+		pr.Use(a.resourceAccessMiddleware)
 		pr.Get("/api/workspaces", a.listWorkspaces)
 		pr.Get("/api/me", a.getMe)
-		// 成员管理（邀请/删除/密钥授权）仅团队模式注册（personal 成员禁用，ADR-0013 修订）；
-		// PATCH /api/members/{id} 双模式注册——个人模式 owner 自我改名/头像也走成员表。
+		// 成员身份是实例级模型；personal 只在界面隐藏团队管理入口。
 		pr.Patch("/api/members/{id}", a.updateMember)
-		if cfg.Mode == config.ModeTeam {
-			pr.Get("/api/workspaces/{id}/members", a.listMembers)
-			pr.Post("/api/members", a.createMember)
-			pr.Delete("/api/members/{id}", a.deleteMember)
-			pr.Post("/api/members/{id}/key", a.createMemberKey)
-		}
+		pr.Get("/api/workspaces/{id}/members", a.listMembers)
+		pr.Post("/api/workspaces/{id}/members", a.addWorkspaceMember)
+		pr.Delete("/api/workspaces/{id}/members/{memberId}", a.removeWorkspaceMember)
+		pr.Get("/api/members", a.listAllMembers)
+		pr.Post("/api/members", a.createMember)
+		pr.Patch("/api/members/{id}/role", a.updateMemberRole)
+		pr.Delete("/api/members/{id}", a.deleteMember)
+		pr.Post("/api/members/{id}/key", a.createMemberKey)
+		pr.Delete("/api/members/{id}/key", a.revokeMemberKey)
 		pr.Post("/api/workspaces", a.createWorkspace)
-		pr.Get("/api/dashboard", a.getDashboard)
-		pr.Get("/api/search", a.searchTasks)
 		pr.Get("/api/settings/backup", a.getBackup)
 		pr.Post("/api/settings/backup", a.importBackup)
 		pr.Get("/api/settings/config", a.getSettingsConfig)
 		pr.Put("/api/settings/config", a.updateSettingsConfig)
-		pr.Get("/api/activity", a.getActivity)
+		pr.Get("/api/workspaces/{id}/dashboard", a.getDashboard)
+		pr.Get("/api/workspaces/{id}/calendar", a.getCalendar)
+		pr.Get("/api/workspaces/{id}/activity", a.getActivity)
+		pr.Get("/api/workspaces/{id}/search", a.searchTasks)
+		pr.Get("/api/workspaces/{id}/pinned-projects", a.listPinnedProjects)
 		pr.Patch("/api/workspaces/{id}", a.renameWorkspace)
 		pr.Delete("/api/workspaces/{id}", a.deleteWorkspace)
 		pr.Get("/api/workspaces/{id}/projects", a.listProjects)
 		pr.Post("/api/workspaces/{id}/projects", a.createProject)
 		pr.Patch("/api/projects/{id}", a.renameProject)
-		pr.Get("/api/pinned-projects", a.listPinnedProjects)
 		pr.Post("/api/projects/{id}/pinned", a.setProjectPinned)
 		pr.Delete("/api/projects/{id}", a.deleteProject)
 		pr.Get("/api/projects/{id}", a.getBoard)
@@ -114,6 +130,7 @@ func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.
 		pr.Delete("/api/tasks/{taskId}/labels/{labelId}", a.detachLabel)
 		pr.Get("/api/tasks/{id}", a.getTaskDetail)
 		pr.Post("/api/tasks/{id}/comments", a.createComment)
+		pr.Patch("/api/comments/{id}", a.updateComment)
 		pr.Delete("/api/comments/{id}", a.deleteComment)
 	})
 	r.NotFound(staticHandler(assets).ServeHTTP)
@@ -143,14 +160,16 @@ func (a *API) ready(w http.ResponseWriter, r *http.Request) {
 func (a *API) actorMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		actor := "Admin"
-		if name, ok := a.svc.MemberNameByID(r.Context(), auth.MemberID(r)); ok {
-			actor = name
+		ctx := r.Context()
+		if member, ok := a.svc.MemberIdentityByID(ctx, auth.MemberID(r)); ok {
+			actor = member.Name
+			ctx = service.WithMemberRole(ctx, member.Role)
 		}
-		next.ServeHTTP(w, r.WithContext(service.WithActor(r.Context(), actor)))
+		next.ServeHTTP(w, r.WithContext(service.WithActor(ctx, actor)))
 	})
 }
 
-// redactingLogger keeps access keys out of request logs while preserving the
+// redactingLogger keeps credentials out of request logs while preserving the
 // original query string for the handler (WebSocket clients cannot set headers).
 func redactingLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -216,7 +235,7 @@ func (a *API) verify(w http.ResponseWriter, r *http.Request) {
 	if !decodeBody(w, r, &body) {
 		return
 	}
-	// 按成员表校验密钥（personal = 单一 owner，owner.access_key = KANSO_ACCESS_KEY）。
+	// 按成员表校验密钥（personal = 单一 owner，owner credential = KANSO_ACCESS_KEY）。
 	if !a.svc.VerifyKey(r.Context(), body.Key) {
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "invalid key"})
 		return
@@ -256,6 +275,9 @@ func statusForServiceError(err error) int {
 }
 
 func writeServiceError(w http.ResponseWriter, err error, fallback string) {
+	if id := w.Header().Get("X-Request-ID"); id != "" {
+		log.Printf("request_id=%s service_error=%v", id, err)
+	}
 	writeError(w, statusForServiceError(err), fallback)
 }
 

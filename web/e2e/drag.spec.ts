@@ -10,13 +10,13 @@ async function loginToApp(page: Page) {
 	await page.goto("/login");
 	await page.fill("#access-key", key);
 	await page.getByRole("button", { name: "进入" }).click();
-	await page.waitForURL((u) => u.pathname !== "/login");
+	await page.waitForURL(/\/w\/[^/]+\/dashboard/);
 }
 
 async function openPrototypeBoard(page: Page) {
 	await loginToApp(page);
-	await page.waitForSelector('a[href*="/p/"]');
-	await page.locator('a[href*="/p/"]', { hasText: "原型演示" }).click();
+	await page.waitForSelector('aside a[href*="/p/"]');
+	await page.locator('aside a[href*="/p/"]', { hasText: "原型演示" }).click();
 	await page.waitForSelector("text=新建列");
 	await page.waitForSelector("p.break-words");
 }
@@ -266,7 +266,7 @@ test("列拖拽排序：把第一列拖到末尾", async ({ page }) => {
 
 	const colNames = () =>
 		page
-			.locator("div[class*='w-[282px]'] .kanso-board-column__title > span.min-w-0")
+			.locator("div[class*='w-[282px]'] .kanso-board-column__name-trigger")
 			.allTextContents();
 	await expect.poll(() => colNames(), { timeout: 5000 }).toHaveLength(4);
 	expect(await colNames()).toEqual(["待办", "进行中", "已阻塞", "已完成"]);

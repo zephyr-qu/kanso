@@ -2,7 +2,7 @@
 // 仪表盘最近活动面板与活动页（/activity）共用，避免重复实现（ticket 04）。
 import { ACTION_LABELS, type ActivityDataByAction } from "@/lib/events";
 
-// 拍平后的活动流条目（mock /api/activity 与未来后端契约的形状）。
+// 拍平后的活动流条目（当前工作区活动接口的响应形状）。
 export type FlatActivity = {
 	id: string;
 	resourceType?: string;

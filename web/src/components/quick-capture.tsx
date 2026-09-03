@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
-import { queryKeys } from "@/hooks/query-keys";
+import { invalidateTaskScope, queryKeys } from "@/hooks/query-keys";
 import DatePicker from "@/components/date-picker";
 import { Popover, PopoverPopup, PopoverTrigger } from "@/components/ui/popover";
 import { normalizePriority, PRIORITIES, PRIORITY_LABEL } from "@/lib/priority";
@@ -28,7 +28,6 @@ import type { Board } from "@/types/board";
 import type { Label } from "@/types/label";
 import type { Project } from "@/types/project";
 import type { Task } from "@/types/task";
-import type { Workspace } from "@/types/workspace";
 
 /** 右下角悬浮按钮（AppShell 挂载），title 提示 Q 快捷键。 */
 export function QuickCaptureFab({ onClick }: { onClick: () => void }) {
@@ -49,32 +48,30 @@ export function QuickCapture({
 	open,
 	onClose,
 	defaultProjectId,
+	workspaceId: currentWorkspaceId,
+	workspaceName,
 }: {
 	open: boolean;
 	onClose: () => void;
 	/** 从当前看板带入默认项目。 */
 	defaultProjectId?: string | null;
+	workspaceId: string;
+	workspaceName?: string;
 }) {
 	const [title, setTitle] = useState("");
 	const [priority, setPriority] = useState("med");
-	const [workspaceId, setWorkspaceId] = useState<string | "">("");
+	const workspaceId = currentWorkspaceId;
 	const [projectId, setProjectId] = useState<string | "">("");
 	const [dueDate, setDueDate] = useState("");
 	const [labelIds, setLabelIds] = useState<string[]>([]);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const queryClient = useQueryClient();
 
-	const { data: workspaces } = useQuery({
-		queryKey: queryKeys.workspaces(),
-		queryFn: () => api<Workspace[]>(buildPath("workspaces")),
-	});
-
 	// 打开时重置；有默认项目则优先用它（并定位其工作区）。
 	useEffect(() => {
 		if (!open) return;
 		setTitle("");
 		setPriority("med");
-		setWorkspaceId("");
 		setProjectId("");
 		setDueDate("");
 		setLabelIds([]);
@@ -110,42 +107,21 @@ export function QuickCapture({
 					labels: labelIds,
 				}),
 			}),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: queryKeys.dashboard() });
-			queryClient.invalidateQueries({ queryKey: queryKeys.board(projectId) });
-			// 任务带截止日期，日历视图需同步失效（否则日历页停留时数据陈旧）。
-			queryClient.invalidateQueries({ queryKey: queryKeys.calendar() });
+		onSuccess: (task) => {
+			invalidateTaskScope(queryClient, {
+				projectId,
+				workspaceId,
+				taskId: task.id,
+			});
 			onClose();
 		},
 	});
 
-	// 打开即自动级联选择：第一个工作区 → 第一个项目。
-	const effectiveWs = workspaceId || workspaces?.[0]?.id || "";
-	const effectiveProj =
-		projectId || (projects?.length ? projects[0].id : "") || "";
-	const wsChanged = effectiveWs !== workspaceId;
-	const projChanged = effectiveProj !== projectId;
-
-	useEffect(() => {
-		if (open && effectiveWs && wsChanged && !defaultProjectId) setWorkspaceId(effectiveWs);
-	}, [open, effectiveWs, wsChanged, defaultProjectId]);
-	useEffect(() => {
-		if (open && effectiveProj && projChanged && !defaultProjectId) setProjectId(effectiveProj);
-	}, [open, effectiveProj, projChanged, defaultProjectId]);
-
-	// defaultProjectId 优先：锁定该项目首列（默认项目属于非首个工作区时，
-	// 级联仍会选中首个工作区——见下方看板回填，避免两个下拉错位，S-13）。
+	// 看板上下文可预填当前项目；从仪表盘打开时必须由用户选择项目。
 	useEffect(() => {
 		if (!open || !defaultProjectId) return;
 		setProjectId(defaultProjectId);
 	}, [open, defaultProjectId]);
-	// 项目所属工作区由看板数据回填：默认项目锁定后，工作区下拉跟随其真实归属。
-	useEffect(() => {
-		if (!open || !defaultProjectId || !board?.project) return;
-		if (board.project.id === defaultProjectId) {
-			setWorkspaceId(board.project.workspaceId);
-		}
-	}, [open, defaultProjectId, board]);
 
 	const canCreate = title.trim().length > 0 && targetColumn !== undefined;
 
@@ -181,57 +157,24 @@ export function QuickCapture({
 							className="h-10 w-full rounded-lg border bg-background px-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground/60 focus:border-primary focus:ring-2 focus:ring-primary/20"
 						/>
 
-						{/* 项目选择：工作区 → 项目 */}
-						{/* 项目选择：工作区 → 项目（必填，级联） */}
-						<div className="space-y-1.5">
-							<div className="grid grid-cols-[1fr_1.2fr] gap-2 px-0.5">
-								<span className="text-[11px] font-medium text-muted-foreground">
-									工作区<span className="ml-0.5 text-destructive">*</span>
-								</span>
-								<span className="text-[11px] font-medium text-muted-foreground">
-									项目<span className="ml-0.5 text-destructive">*</span>
-								</span>
-							</div>
-							<div className="grid grid-cols-[1fr_1.2fr] gap-2">
+						{/* 项目选择：仅当前工作区 */}
+			<div className="space-y-1.5">
+				<span className="text-[11px] font-medium text-muted-foreground">当前工作区</span>
+				<div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+					{workspaceName || "未选择工作区"}
+				</div>
+							<div className="space-y-1.5">
+								<span className="text-[11px] font-medium text-muted-foreground">项目<span className="ml-0.5 text-destructive">*</span></span>
 								<Select
-									value={effectiveWs}
-									onValueChange={(value) => {
-										if (value) {
-											setWorkspaceId(value);
-											setProjectId("");
-										}
-									}}
-								>
-									<SelectTrigger
-										className="kanso-quick-capture-select-trigger"
-										aria-label="工作区"
-									>
-										<SelectValue>
-											{workspaces?.find((w) => w.id === effectiveWs)?.name ?? "选择工作区"}
-										</SelectValue>
-									</SelectTrigger>
-									<SelectPopup className="kanso-quick-capture-select-popup">
-										{(workspaces ?? []).map((w) => (
-											<SelectItem
-												key={w.id}
-												value={w.id}
-												className="kanso-quick-capture-select-item"
-											>
-												{w.name}
-											</SelectItem>
-										))}
-									</SelectPopup>
-								</Select>
-								<Select
-									value={effectiveProj}
+									value={projectId}
 									onValueChange={(value) => value && setProjectId(value)}
 								>
 									<SelectTrigger
 										className="kanso-quick-capture-select-trigger"
 										aria-label="项目"
 									>
-										<SelectValue>
-											{projects?.find((p) => p.id === effectiveProj)?.name ?? "选择项目"}
+									<SelectValue>
+										{projects?.find((p) => p.id === projectId)?.name ?? "选择项目"}
 										</SelectValue>
 									</SelectTrigger>
 									<SelectPopup className="kanso-quick-capture-select-popup">

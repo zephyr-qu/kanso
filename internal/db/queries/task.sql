@@ -86,7 +86,7 @@ UPDATE task SET column_id = ?, position = ?, updated_at = ? WHERE id = ?;
 DELETE FROM task WHERE id = ?;
 
 -- name: SearchTasks :many
--- Global search (command palette): title/description/comment substring match with project info.
+-- Workspace search (command palette): title/description/comment substring match with project info.
 SELECT
     t.id,
     t.title,
@@ -101,7 +101,8 @@ FROM task AS t
 INNER JOIN column AS c ON t.column_id = c.id
 INNER JOIN project AS p ON c.project_id = p.id
 INNER JOIN workspace AS w ON p.workspace_id = w.id
-WHERE (
+WHERE p.workspace_id = ?
+  AND (
     t.title LIKE '%' || ? || '%'
     OR COALESCE(t.description, '') LIKE '%' || ? || '%'
     OR EXISTS (

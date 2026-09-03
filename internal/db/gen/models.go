@@ -41,14 +41,13 @@ type Label struct {
 }
 
 type Member struct {
-	ID          string  `json:"id"`
-	WorkspaceID string  `json:"workspaceId"`
-	Name        string  `json:"name"`
-	Role        string  `json:"role"`
-	AvatarColor *string `json:"avatarColor"`
-	Avatar      *string `json:"avatar"`
-	AccessKey   *string `json:"accessKey"`
-	CreatedAt   string  `json:"createdAt"`
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	Role          string  `json:"role"`
+	AvatarColor   *string `json:"avatarColor"`
+	Avatar        *string `json:"avatar"`
+	AccessKeyHash *string `json:"accessKeyHash"`
+	CreatedAt     string  `json:"createdAt"`
 }
 
 type Milestone struct {
@@ -97,4 +96,10 @@ type Workspace struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	CreatedAt string `json:"createdAt"`
+}
+
+type WorkspaceMember struct {
+	WorkspaceID string `json:"workspaceId"`
+	MemberID    string `json:"memberId"`
+	CreatedAt   string `json:"createdAt"`
 }

@@ -6,12 +6,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"kanso/internal/auth"
 	"kanso/internal/service"
 )
 
 // listWorkspaces 返回全部工作区。
 func (a *API) listWorkspaces(w http.ResponseWriter, r *http.Request) {
-	workspaces, err := a.svc.ListWorkspaces(r.Context())
+	workspaces, err := a.svc.ListWorkspaces(r.Context(), auth.MemberID(r))
 	if err != nil {
 		writeServiceError(w, err, "查询工作区失败")
 		return
@@ -21,6 +22,9 @@ func (a *API) listWorkspaces(w http.ResponseWriter, r *http.Request) {
 
 // createWorkspace 创建新工作区。
 func (a *API) createWorkspace(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityManageStructure) {
+		return
+	}
 	name, ok := decodeNameBody(w, r, "工作区名称")
 	if !ok {
 		return
@@ -35,6 +39,9 @@ func (a *API) createWorkspace(w http.ResponseWriter, r *http.Request) {
 
 // renameWorkspace 重命名工作区。
 func (a *API) renameWorkspace(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityManageStructure) {
+		return
+	}
 	name, ok := decodeNameBody(w, r, "工作区名称")
 	if !ok {
 		return
@@ -53,7 +60,7 @@ func (a *API) renameWorkspace(w http.ResponseWriter, r *http.Request) {
 
 // deleteWorkspace 删除工作区（其下项目级联删除）。
 func (a *API) deleteWorkspace(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOwnerInTeam(w, r) {
+	if !a.requireCapability(w, r, service.CapabilityDeleteData) {
 		return
 	}
 	if err := a.svc.DeleteWorkspace(r.Context(), chi.URLParam(r, "id")); err != nil {

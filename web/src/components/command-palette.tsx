@@ -25,25 +25,32 @@ type PageItem = {
 	icon: React.ReactNode;
 };
 
-const PAGES: PageItem[] = [
-	{ name: "仪表盘", to: "/dashboard", icon: <GaugeIcon /> },
-	{ name: "日历", to: "/calendar", icon: <CalendarDaysIcon /> },
-	{ name: "活动记录", to: "/activity", icon: <HistoryIcon /> },
-	{ name: "设置", to: "/settings", icon: <SettingsIcon /> },
-];
-
 export function CommandPalette({
 	open,
 	onClose,
+	workspaceId,
+	canManage,
 }: {
 	open: boolean;
 	onClose: () => void;
+	workspaceId: string;
+	canManage: boolean;
 }) {
 	const [q, setQ] = useState("");
 	const [debounced, setDebounced] = useState("");
 	const [sel, setSel] = useState(0);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const navigate = useNavigate();
+	const pages: PageItem[] = [
+		...(workspaceId
+			? [
+					{ name: "仪表盘", to: `/w/${workspaceId}/dashboard`, icon: <GaugeIcon /> },
+					{ name: "日历", to: `/w/${workspaceId}/calendar`, icon: <CalendarDaysIcon /> },
+					{ name: "活动记录", to: `/w/${workspaceId}/activity`, icon: <HistoryIcon /> },
+				]
+			: []),
+		...(canManage ? [{ name: "系统设置", to: "/settings", icon: <SettingsIcon /> }] : []),
+	];
 
 	// 输入防抖（250ms），避免每键一次请求。
 	useEffect(() => {
@@ -68,10 +75,10 @@ export function CommandPalette({
 	}, [open]);
 
 	const { data: results } = useQuery({
-		queryKey: [...queryKeys.tasks(), "search", debounced],
+		queryKey: queryKeys.taskSearch(debounced),
 		queryFn: () =>
-			api<SearchHit[]>(`${buildPath("search")}?q=${encodeURIComponent(debounced)}`),
-		enabled: open,
+			api<SearchHit[]>(`${buildPath("search", { workspaceId })}?q=${encodeURIComponent(debounced)}`),
+		enabled: open && workspaceId !== "",
 	});
 
 	// 防抖期间（q !== debounced）不渲染旧结果：否则输入后立即回车会打开
@@ -85,7 +92,7 @@ export function CommandPalette({
 			onClose();
 			return;
 		}
-		const total = hits.length + PAGES.length;
+		const total = hits.length + pages.length;
 		if (total === 0) return;
 		if (e.key === "ArrowDown") {
 			e.preventDefault();
@@ -98,7 +105,7 @@ export function CommandPalette({
 			if (sel < hits.length) {
 				openTask(hits[sel]);
 			} else {
-				const page = PAGES[sel - hits.length];
+								const page = pages[sel - hits.length];
 				if (page) {
 					navigate(page.to);
 					onClose();
@@ -212,7 +219,7 @@ export function CommandPalette({
 							<p className="px-2.5 pb-1 pt-2 font-mono text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
 								页面
 							</p>
-							{PAGES.map((p, i) => {
+							{pages.map((p, i) => {
 								const idx = hits.length + i;
 								return (
 									<button

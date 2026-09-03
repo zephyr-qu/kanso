@@ -9,12 +9,13 @@ async function loginToApp(page: Page) {
 	await page.goto("/login");
 	await page.fill("#access-key", key);
 	await page.getByRole("button", { name: "进入" }).click();
-	await page.waitForURL((u) => u.pathname !== "/login");
+	await page.waitForURL(/\/w\/[^/]+\/dashboard/);
 }
 
 test("项目：创建 → 重命名 → 删除（确认框）", async ({ page }) => {
 	await loginToApp(page);
 	await page.waitForSelector('a[href*="/p/"]');
+	await page.getByRole("link", { name: "项目", exact: true }).click();
 
 	// 创建。
 	const projName = `验收项目${Date.now() % 100000}`;
@@ -25,7 +26,7 @@ test("项目：创建 → 重命名 → 删除（确认框）", async ({ page })
 	await expect(dialog.getByText("重要四象限")).toHaveCount(0);
 	await dialog.getByPlaceholder(/名称|项目/).fill(projName);
 	await dialog.getByRole("button", { name: "创建" }).click();
-	const card = page.locator('a[href*="/p/"]', { hasText: projName });
+	const card = page.locator('a.kanso-project-card[href*="/p/"]', { hasText: projName });
 	await expect(card).toBeVisible({ timeout: 5000 });
 
 	// 重命名。
@@ -37,11 +38,11 @@ test("项目：创建 → 重命名 → 删除（确认框）", async ({ page })
 	await renameDialog.getByPlaceholder(/名称|项目/).fill(renamed);
 	await renameDialog.getByRole("button", { name: "保存" }).click();
 	await expect(
-		page.locator('a[href*="/p/"]', { hasText: renamed }),
+		page.locator('a.kanso-project-card[href*="/p/"]', { hasText: renamed }),
 	).toBeVisible({ timeout: 5000 });
 
 	// 删除（经确认框）。
-	const card2 = page.locator('a[href*="/p/"]', { hasText: renamed });
+	const card2 = page.locator('a.kanso-project-card[href*="/p/"]', { hasText: renamed });
 	await card2
 		.getByRole("button", { name: `删除 ${renamed}`, exact: true })
 		.click();
@@ -58,13 +59,16 @@ test("工作区：侧栏新建 → 跳转 → 重命名 → 删除（确认框�
 
 	// 侧栏新建工作区。
 	const wsName = `验收工作区${Date.now() % 100000}`;
-	await page.getByRole("button", { name: "新建工作区" }).click();
+	await page.getByRole("button", { name: /当前工作区：/ }).click();
+	await page.getByTestId("sidebar").getByRole("button", { name: "新建工作区" }).click();
 	const dialog = page.getByRole("dialog");
 	await dialog.getByPlaceholder(/名称|工作区/).fill(wsName);
 	await dialog.getByRole("button", { name: "创建" }).click();
 
-	// 创建后跳转到新工作区（项目列表空态），侧栏出现该项。
-	await expect(page.getByText("还没有项目")).toBeVisible({ timeout: 5000 });
+	// 创建后进入新工作区仪表盘，并自动拥有默认项目。
+	await expect(page.getByRole("heading", { name: "仪表盘" })).toBeVisible({ timeout: 5000 });
+	await page.goto(new URL(page.url()).pathname.replace(/\/dashboard$/, ""));
+	await expect(page.locator("main").getByText("默认项目", { exact: true })).toBeVisible({ timeout: 5000 });
 	const sidebarItem = page.locator("aside").getByText(wsName);
 	await expect(sidebarItem).toBeVisible({ timeout: 5000 });
 

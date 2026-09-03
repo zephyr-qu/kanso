@@ -16,8 +16,8 @@ export default defineConfig({
 		proxy: { "/api": { target: apiTarget, ws: true } },
 	},
 	test: {
-		// 纯函数单测，node 环境即可（无需 jsdom）。
+		// 纯函数与 SSR Context 单测，node 环境即可（无需 jsdom）。
 		environment: "node",
-		include: ["src/**/*.test.ts"],
+		include: ["src/**/*.test.{ts,tsx}"],
 	},
 });

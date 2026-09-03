@@ -173,7 +173,7 @@ export async function loginToApp(page: Page): Promise<void> {
 	await page.goto("/login");
 	await page.fill("#access-key", key);
 	await page.getByRole("button", { name: "进入" }).click();
-	await page.waitForURL((u) => u.pathname !== "/login");
+	await page.waitForURL(/\/w\/[^/]+\/dashboard/);
 }
 
 // 每测试重置：spec 顶部 `test.beforeEach(async () => { await resetAndSeed(); });`

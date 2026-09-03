@@ -23,10 +23,13 @@ export const EVENT_TYPES = {
 	labelAttached: "label.attached",
 	labelDetached: "label.detached",
 	commentCreated: "comment.created",
+	commentUpdated: "comment.updated",
 	commentDeleted: "comment.deleted",
 	memberCreated: "member.created",
 	memberUpdated: "member.updated",
 	memberDeleted: "member.deleted",
+	memberKeyRotated: "member.key_rotated",
+	memberKeyRevoked: "member.key_revoked",
 	workspaceCreated: "workspace.created",
 	workspaceUpdated: "workspace.updated",
 	workspaceDeleted: "workspace.deleted",
@@ -62,6 +65,7 @@ export type ActivityDataByAction = {
 		milestoneName?: string;
 	};
 	[EVENT_TYPES.commentCreated]: { content: string };
+	[EVENT_TYPES.commentUpdated]: { content: string };
 	[EVENT_TYPES.commentDeleted]: { content: string };
 	[EVENT_TYPES.columnCreated]: { name: string };
 	[EVENT_TYPES.columnUpdated]: { name: string; wipLimit?: number | null };
@@ -76,6 +80,8 @@ export type ActivityDataByAction = {
 	[EVENT_TYPES.memberCreated]: { name: string };
 	[EVENT_TYPES.memberUpdated]: { name: string };
 	[EVENT_TYPES.memberDeleted]: { name: string };
+	[EVENT_TYPES.memberKeyRotated]: { name: string };
+	[EVENT_TYPES.memberKeyRevoked]: { name: string };
 	[EVENT_TYPES.workspaceCreated]: { name: string };
 	[EVENT_TYPES.workspaceUpdated]: { name: string };
 	[EVENT_TYPES.workspaceDeleted]: { name: string };
@@ -111,10 +117,13 @@ export const ACTION_LABELS: Record<string, string> = {
 	[EVENT_TYPES.labelAttached]: "贴了标签",
 	[EVENT_TYPES.labelDetached]: "移除了标签",
 	[EVENT_TYPES.commentCreated]: "发表了评论",
+	[EVENT_TYPES.commentUpdated]: "编辑了评论",
 	[EVENT_TYPES.commentDeleted]: "删除了评论",
 	[EVENT_TYPES.memberCreated]: "添加了成员",
 	[EVENT_TYPES.memberUpdated]: "更新了成员",
 	[EVENT_TYPES.memberDeleted]: "移除了成员",
+	[EVENT_TYPES.memberKeyRotated]: "轮换了成员密钥",
+	[EVENT_TYPES.memberKeyRevoked]: "撤销了成员密钥",
 	[EVENT_TYPES.workspaceCreated]: "创建了工作区",
 	[EVENT_TYPES.workspaceUpdated]: "重命名了工作区",
 	[EVENT_TYPES.workspaceDeleted]: "删除了工作区",

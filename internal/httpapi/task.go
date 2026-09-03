@@ -11,6 +11,9 @@ import (
 
 // createTask 在列末尾创建任务（标题必填；labels 为项目内标签 ID，创建时贴好）。
 func (a *API) createTask(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityEditContent) {
+		return
+	}
 	var body struct {
 		Title       string   `json:"title"`
 		Description *string  `json:"description"`
@@ -51,6 +54,9 @@ func (a *API) createTask(w http.ResponseWriter, r *http.Request) {
 
 // updateTask 更新任务标题/描述（body 中缺失的字段保持不变）；含 columnId/position 时执行移动。
 func (a *API) updateTask(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityEditContent) {
+		return
+	}
 	var body struct {
 		Title       *string `json:"title"`
 		Description *string `json:"description"`
@@ -106,6 +112,9 @@ func (a *API) updateTask(w http.ResponseWriter, r *http.Request) {
 
 // deleteTask 删除任务。
 func (a *API) deleteTask(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityDeleteData) {
+		return
+	}
 	if err := a.svc.DeleteTask(r.Context(), chi.URLParam(r, "id")); err != nil {
 		if errors.Is(err, service.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "任务不存在")
@@ -118,6 +127,9 @@ func (a *API) deleteTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) archiveTask(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityEditContent) {
+		return
+	}
 	task, err := a.svc.SetTaskArchived(r.Context(), chi.URLParam(r, "id"), true)
 	if err != nil {
 		if errors.Is(err, service.ErrNotFound) {
@@ -131,6 +143,9 @@ func (a *API) archiveTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) restoreTask(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityEditContent) {
+		return
+	}
 	task, err := a.svc.SetTaskArchived(r.Context(), chi.URLParam(r, "id"), false)
 	if err != nil {
 		if errors.Is(err, service.ErrNotFound) {

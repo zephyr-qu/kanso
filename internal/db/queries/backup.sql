@@ -1,5 +1,5 @@
 -- name: ListAllProjects :many
-SELECT * FROM project
+SELECT id, workspace_id, name, position, created_at, updated_at FROM project
 ORDER BY created_at;
 
 -- name: ListAllColumns :many
@@ -34,10 +34,9 @@ SELECT * FROM activity
 ORDER BY created_at;
 
 -- name: ListAllMembers :many
-SELECT * FROM member
+SELECT id, name, role, avatar_color, avatar, access_key_hash, created_at FROM member
 ORDER BY created_at;
 
 -- name: ListAllMilestones :many
 SELECT * FROM milestone
 ORDER BY created_at;
-

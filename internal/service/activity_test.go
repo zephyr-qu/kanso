@@ -34,8 +34,9 @@ func TestActivityCoverage(t *testing.T) {
 	_, err = env.svc.UpdateMilestone(ctx, milestone.ID, ptr("活动里程碑改名"), nil)
 	requireNoErr(t, err)
 
-	member, err := env.svc.CreateMember(ctx, workspaceID, "活动成员")
+	member, err := env.svc.CreateMember(ctx, "活动成员")
 	requireNoErr(t, err)
+	requireNoErr(t, env.svc.AddMemberToWorkspace(ctx, workspaceID, member.ID))
 	_, err = env.svc.UpdateMemberProfile(ctx, member.ID, ptr("活动成员改名"), nil, nil)
 	requireNoErr(t, err)
 	requireNoErr(t, env.svc.DeleteMember(ctx, member.ID))
@@ -44,13 +45,12 @@ func TestActivityCoverage(t *testing.T) {
 	requireNoErr(t, err)
 	requireNoErr(t, env.svc.DeleteTask(ctx, task.ID))
 
-	activities, err := env.svc.GetActivities(ctx)
+	activities, err := env.svc.GetActivities(ctx, workspaceID)
 	requireNoErr(t, err)
 	want := map[string]bool{
 		EventColumnCreated: false, EventColumnUpdated: false, EventColumnMoved: false,
 		EventLabelCreated: false, EventLabelUpdated: false,
 		EventMilestoneCreated: false, EventMilestoneUpdated: false,
-		EventMemberCreated: false, EventMemberUpdated: false, EventMemberDeleted: false,
 		EventTaskDeleted: false,
 	}
 	for _, item := range activities {

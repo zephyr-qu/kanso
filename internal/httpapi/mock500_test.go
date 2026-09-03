@@ -20,20 +20,26 @@ import (
 	"kanso/internal/service"
 )
 
-var memberRowCols = []string{"id", "workspace_id", "name", "role", "avatar_color", "avatar", "access_key", "created_at"}
+var memberRowCols = []string{"id", "name", "role", "avatar_color", "avatar", "access_key_hash", "created_at"}
 
 func memberRow(id string) []driver.Value {
-	return []driver.Value{id, "w1", "Admin", "owner", nil, nil, "mock-key", "2026-01-01"}
+	return []driver.Value{id, "Admin", "admin", nil, nil, "hash", "2026-01-01"}
 }
 
 // expectAuth mocks 认证查询（GetMemberByAccessKey）+ actor 查询（GetMember）成功。
 func expectAuth(mock sqlmock.Sqlmock, memberID string) {
-	mock.ExpectQuery("FROM member WHERE access_key").
+	mock.ExpectQuery("FROM member WHERE access_key_hash").
 		WillReturnRows(sqlmock.NewRows(memberRowCols).
 			AddRow(memberRow(memberID)...))
 	mock.ExpectQuery("FROM member WHERE id").
 		WillReturnRows(sqlmock.NewRows(memberRowCols).
 			AddRow(memberRow(memberID)...))
+}
+
+func expectWorkspaceExists(mock sqlmock.Sqlmock, workspaceID string) {
+	mock.ExpectQuery("SELECT EXISTS\\(SELECT 1 FROM workspace WHERE id").
+		WithArgs(workspaceID).
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(1))
 }
 
 // newMockRouter 构造注入 sqlmock 的完整 router（含认证中间件）。
@@ -65,13 +71,13 @@ func TestHandler500Paths(t *testing.T) {
 		failSQL func(mock sqlmock.Sqlmock)
 	}{
 		{
-			name: "dashboard", method: http.MethodGet, path: "/api/dashboard",
+			name: "dashboard", method: http.MethodGet, path: "/api/workspaces/w1/dashboard",
 			failSQL: func(m sqlmock.Sqlmock) {
 				m.ExpectQuery("ListColumnDistributions").WillReturnError(errors.New("db down"))
 			},
 		},
 		{
-			name: "activity", method: http.MethodGet, path: "/api/activity",
+			name: "activity", method: http.MethodGet, path: "/api/workspaces/w1/activity",
 			failSQL: func(m sqlmock.Sqlmock) {
 				m.ExpectQuery("ListActivitiesWithProject").WillReturnError(errors.New("db down"))
 			},
@@ -79,8 +85,6 @@ func TestHandler500Paths(t *testing.T) {
 		{
 			name: "backup", method: http.MethodGet, path: "/api/settings/backup",
 			failSQL: func(m sqlmock.Sqlmock) {
-				m.ExpectQuery("FROM member WHERE id").
-					WillReturnRows(sqlmock.NewRows(memberRowCols).AddRow(memberRow("m1")...))
 				m.ExpectBegin().WillReturnError(errors.New("db down"))
 			},
 		},
@@ -96,6 +100,9 @@ func TestHandler500Paths(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv, mock := newMockRouter(t)
 			expectAuth(mock, "m1")
+			if strings.HasPrefix(tc.path, "/api/workspaces/w1/") {
+				expectWorkspaceExists(mock, "w1")
+			}
 			tc.failSQL(mock)
 
 			req, err := http.NewRequest(tc.method, srv.URL+tc.path, strings.NewReader(tc.body))
@@ -146,18 +153,11 @@ func TestHandler500WriteOps(t *testing.T) {
 		},
 		{
 			name: "createMember", method: http.MethodPost, path: "/api/members",
-			body: `{"workspaceId":"w1","name":"成员"}`,
+			body: `{"name":"成员"}`,
 			failSQL: func(m sqlmock.Sqlmock) {
-				// requireOwner 的 GetMember（第三次）。
-				m.ExpectQuery("FROM member WHERE id").
-					WillReturnRows(sqlmock.NewRows(memberRowCols).
-						AddRow(memberRow("m1")...))
 				m.ExpectBegin()
-				// GetWorkspace 成功，成员统计失败 → 500。
-				m.ExpectQuery("FROM workspace WHERE id").
-					WillReturnRows(sqlmock.NewRows([]string{"id", "name", "created_at"}).
-						AddRow("w1", "工作区", "2026-01-01"))
-				m.ExpectQuery("FROM member WHERE workspace_id").WillReturnError(errors.New("db down"))
+				// 全局成员创建先统计实例身份数量，统计失败 → 500。
+				m.ExpectQuery("CountMembers").WillReturnError(errors.New("db down"))
 			},
 		},
 		{
@@ -216,7 +216,7 @@ func TestHandler500More(t *testing.T) {
 		{
 			name: "listMembers", method: http.MethodGet, path: "/api/workspaces/w1/members",
 			failSQL: func(m sqlmock.Sqlmock) {
-				m.ExpectQuery("ListMembersByWorkspace").WillReturnError(errors.New("db down"))
+				m.ExpectQuery("FROM member m").WillReturnError(errors.New("db down"))
 			},
 		},
 		{
@@ -244,6 +244,9 @@ func TestHandler500More(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv, mock := newMockRouter(t)
 			expectAuth(mock, "m1")
+			if strings.HasPrefix(tc.path, "/api/workspaces/w1/") {
+				expectWorkspaceExists(mock, "w1")
+			}
 			tc.failSQL(mock)
 
 			req, err := http.NewRequest(tc.method, srv.URL+tc.path, strings.NewReader(tc.body))
@@ -287,7 +290,7 @@ func TestHandler500ReadOps(t *testing.T) {
 			},
 		},
 		{
-			name: "searchTasks", method: http.MethodGet, path: "/api/search?q=abc",
+			name: "searchTasks", method: http.MethodGet, path: "/api/workspaces/w1/search?q=abc",
 			failSQL: func(m sqlmock.Sqlmock) {
 				m.ExpectQuery("SearchTasks").WillReturnError(errors.New("db down"))
 			},
@@ -303,6 +306,9 @@ func TestHandler500ReadOps(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv, mock := newMockRouter(t)
 			expectAuth(mock, "m1")
+			if strings.HasPrefix(tc.path, "/api/workspaces/w1/") {
+				expectWorkspaceExists(mock, "w1")
+			}
 			tc.failSQL(mock)
 
 			req, err := http.NewRequest(tc.method, srv.URL+tc.path, strings.NewReader(tc.body))
@@ -322,12 +328,13 @@ func TestHandler500ReadOps(t *testing.T) {
 	}
 }
 
-// TestRequireOwnerServerError 覆盖 requireOwner 的 DB 故障 → 500 分支。
+// TestRequireOwnerServerError 覆盖成员删除服务层 DB 故障 → 500 分支。
 func TestRequireOwnerServerError(t *testing.T) {
 	srv, mock := newMockRouter(t)
 	expectAuth(mock, "m1")
-	// requireOwner 的 GetMember 失败（非 ErrNoRows）→ 500。
+	mock.ExpectBegin()
 	mock.ExpectQuery("FROM member WHERE id").WillReturnError(errors.New("db down"))
+	mock.ExpectRollback()
 
 	req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/members/other", nil)
 	req.Header.Set("Authorization", "Bearer mock-key")
@@ -337,7 +344,7 @@ func TestRequireOwnerServerError(t *testing.T) {
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusInternalServerError {
-		t.Fatalf("requireOwner DB 故障应 500，实际 %d", res.StatusCode)
+		t.Fatalf("成员删除 DB 故障应 500，实际 %d", res.StatusCode)
 	}
 }
 

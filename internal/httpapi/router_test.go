@@ -267,13 +267,20 @@ func TestWorkspaceDeleteCascadesProjects(t *testing.T) {
 	e := newTestEnv(t)
 
 	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
-	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
+	workspaces := decode[[]map[string]any](t, body)
+	workspaceID := workspaces[0]["id"].(string)
 
-	// 新建一个临时工作区，使默认工作区不再是「最后一个」（最后一个不可删除，防 owner 级联）。
-	e.do(t, http.MethodPost, "/api/workspaces", `{"name":"临时"}`)
+	// 新建一个临时工作区；它会自动带默认项目，使默认工作区不再是「最后一个」。
+	_, body = e.do(t, http.MethodPost, "/api/workspaces", `{"name":"临时"}`)
+	createdWorkspace := decode[map[string]any](t, body)
+	workspaceID = createdWorkspace["id"].(string)
 
 	// 建项目 + 任务 + 评论 + 贴标签（产生 task.created/comment.created/label.attached 活动）。
-	projectID := createProject(t, e, "将被级联")
+	res, body := e.do(t, http.MethodPost, "/api/workspaces/"+workspaceID+"/projects", `{"name":"将被级联"}`)
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("创建待级联项目应 201，实际 %d", res.StatusCode)
+	}
+	projectID := decode[map[string]any](t, body)["id"].(string)
 	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
 	columnID := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["id"].(string)
 	_, body = e.do(t, http.MethodPost, "/api/columns/"+columnID+"/tasks", `{"title":"级联任务"}`)
@@ -1153,7 +1160,8 @@ func TestColumnPositionClamping(t *testing.T) {
 	e := newTestEnv(t)
 	projectID := createProject(t, e, "列位置收敛")
 	_, body := e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
-	cols := decode[map[string]any](t, body)["columns"].([]any)
+	board := decode[map[string]any](t, body)
+	cols := board["columns"].([]any)
 	doingID := cols[1].(map[string]any)["id"].(string) // 进行中
 
 	// position -1 → 收敛到 0（列首）。
@@ -1188,6 +1196,11 @@ func TestRealtimeQueryErrors(t *testing.T) {
 	project := createProject(t, e, "查询鉴权")
 	if res, _ := e.doAuth(t, "", http.MethodGet, "/api/ws?project="+project+"&key=wrong", ""); res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("错误密钥应 401，实际 %d", res.StatusCode)
+	}
+
+	// 同时指定 project 和 workspace → 400，不能用 workspace 授权掩盖 project 订阅范围。
+	if res, _ := e.doAuth(t, "", http.MethodGet, "/api/ws?project="+project+"&workspace=other&key="+testKey, ""); res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("同时指定 project/workspace 应 400，实际 %d", res.StatusCode)
 	}
 }
 
@@ -1443,11 +1456,13 @@ func TestDashboardContract(t *testing.T) {
 
 	// 建任务：待办列 1 个 priority=urgent（0006 Phase 3 任务 3.4：focus/urgent 按 priority，非标签）。
 	_, body := e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
-	cols := decode[map[string]any](t, body)["columns"].([]any)
+	board := decode[map[string]any](t, body)
+	workspaceID := board["project"].(map[string]any)["workspaceId"].(string)
+	cols := board["columns"].([]any)
 	todoCol := cols[0].(map[string]any)["id"].(string)
 	_, body = e.do(t, http.MethodPost, "/api/columns/"+todoCol+"/tasks", `{"title":"待办任务","priority":"urgent"}`)
 
-	res, body := e.do(t, http.MethodGet, "/api/dashboard", "")
+	res, body := e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/dashboard", "")
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("dashboard 应 200，实际 %d", res.StatusCode)
 	}
@@ -1620,10 +1635,12 @@ func TestActivityContract(t *testing.T) {
 	e := newTestEnv(t)
 	projectID := createProject(t, e, "活动项目")
 	_, body := e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
-	col := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["id"].(string)
+	project := decode[map[string]any](t, body)
+	workspaceID := project["project"].(map[string]any)["workspaceId"].(string)
+	col := project["columns"].([]any)[0].(map[string]any)["id"].(string)
 	e.do(t, http.MethodPost, "/api/columns/"+col+"/tasks", `{"title":"活动任务"}`)
 
-	res, body := e.do(t, http.MethodGet, "/api/activity", "")
+	res, body := e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/activity", "")
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("activity 应 200，实际 %d", res.StatusCode)
 	}
@@ -1646,32 +1663,30 @@ func TestActivityContract(t *testing.T) {
 	}
 }
 
-// TestMemberLifecycle 校验成员体系（0006 Phase 1）：me、创建、密钥授权幂等、
-// 成员密钥登录、owner 保护、删除后密钥失效。
+// TestMemberLifecycle 校验成员体系：me、创建、显式轮换、成员密钥登录、
+// owner 保护、删除后密钥失效。
 func TestMemberLifecycle(t *testing.T) {
 	e := newTestEnv(t)
 
-	// me：owner 身份 + workspaceId（壳层/个人中心数据源）。
+	// me：全局管理员身份；工作区上下文由 /api/workspaces 单独返回。
 	res, body := e.do(t, http.MethodGet, "/api/me", "")
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("me 应 200，实际 %d", res.StatusCode)
 	}
 	me := decode[map[string]any](t, body)
 	member := me["member"].(map[string]any)
-	workspaceID := me["workspaceId"].(string)
-	if member["name"] != "Ad" || member["role"] != "owner" {
-		t.Fatalf("owner 应为 Ad/owner，实际 %v", member)
+	if member["name"] != "Ad" || member["role"] != "admin" {
+		t.Fatalf("管理员应为 Ad/admin，实际 %v", member)
 	}
-	if workspaceID == "" {
-		t.Fatalf("me 应返回 workspaceId")
-	}
+	_, workspaceBody := e.do(t, http.MethodGet, "/api/workspaces", "")
+	workspaceID := decode[[]map[string]any](t, workspaceBody)[0]["id"].(string)
 	// me 响应不得泄露 accessKey。
 	if _, ok := member["accessKey"]; ok {
 		t.Fatalf("me 不应返回 accessKey，实际键: %v", jsonKeys(member))
 	}
 
 	// 创建成员（默认角色 member）。
-	res, body = e.do(t, http.MethodPost, "/api/members", fmt.Sprintf(`{"workspaceId":%q,"name":"Kim"}`, workspaceID))
+	res, body = e.do(t, http.MethodPost, "/api/members", `{"name":"Kim"}`)
 	if res.StatusCode != http.StatusCreated {
 		t.Fatalf("创建成员应 201，实际 %d", res.StatusCode)
 	}
@@ -1680,6 +1695,9 @@ func TestMemberLifecycle(t *testing.T) {
 		t.Fatalf("新成员角色应为 member，实际 %v", created["role"])
 	}
 	createdID := created["id"].(string)
+	if res, _ := e.do(t, http.MethodPost, "/api/workspaces/"+workspaceID+"/members", fmt.Sprintf(`{"memberId":%q}`, createdID)); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("成员授权工作区应 204，实际 %d", res.StatusCode)
+	}
 
 	// 列表含 2 人（owner + Kim）。
 	res, body = e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/members", "")
@@ -1689,7 +1707,7 @@ func TestMemberLifecycle(t *testing.T) {
 	if members := decode[[]map[string]any](t, body); len(members) != 2 {
 		t.Fatalf("成员应 2 人，实际 %d", len(members))
 	}
-	// 生成密钥 → 幂等：再次生成返回同一密钥。
+	// 生成密钥 → 显式轮换：再次生成返回新密钥，旧密钥立即失效。
 	res, body = e.do(t, http.MethodPost, "/api/members/"+createdID+"/key", "")
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("生成密钥应 200，实际 %d", res.StatusCode)
@@ -1699,12 +1717,16 @@ func TestMemberLifecycle(t *testing.T) {
 		t.Fatalf("密钥应带 kanso- 前缀，实际 %q", key1)
 	}
 	_, body = e.do(t, http.MethodPost, "/api/members/"+createdID+"/key", "")
-	if key2 := decode[map[string]any](t, body)["key"].(string); key2 != key1 {
-		t.Fatalf("重复生成应幂等返回同一密钥，实际 %q vs %q", key2, key1)
+	key2 := decode[map[string]any](t, body)["key"].(string)
+	if key2 == key1 {
+		t.Fatalf("轮换应生成新密钥，实际仍为 %q", key2)
+	}
+	if res, _ := e.doAuth(t, key1, http.MethodGet, "/api/me", ""); res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("轮换后旧密钥应失效 401，实际 %d", res.StatusCode)
 	}
 
 	// 用成员密钥访问 /api/me → 命中该成员（非 owner）。
-	res, body = e.doAuth(t, key1, http.MethodGet, "/api/me", "")
+	res, body = e.doAuth(t, key2, http.MethodGet, "/api/me", "")
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("成员密钥应可访问 me，实际 %d", res.StatusCode)
 	}
@@ -1722,7 +1744,7 @@ func TestMemberLifecycle(t *testing.T) {
 	if res, _ := e.do(t, http.MethodDelete, "/api/members/"+createdID, ""); res.StatusCode != http.StatusNoContent {
 		t.Fatalf("删除成员应 204，实际 %d", res.StatusCode)
 	}
-	if res, _ := e.doAuth(t, key1, http.MethodGet, "/api/me", ""); res.StatusCode != http.StatusUnauthorized {
+	if res, _ := e.doAuth(t, key2, http.MethodGet, "/api/me", ""); res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("删除后密钥应失效 401，实际 %d", res.StatusCode)
 	}
 }
@@ -1735,7 +1757,7 @@ func TestMemberReservedAdminName(t *testing.T) {
 	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
 
 	// 创建名为 Admin 的成员 → 400，错误信息说明保留名。
-	res, body := e.do(t, http.MethodPost, "/api/members", fmt.Sprintf(`{"workspaceId":%q,"name":"Admin"}`, workspaceID))
+	res, body := e.do(t, http.MethodPost, "/api/members", `{"name":"Admin"}`)
 	if res.StatusCode != http.StatusBadRequest {
 		t.Fatalf("创建 Admin 名成员应 400，实际 %d", res.StatusCode)
 	}
@@ -1744,11 +1766,14 @@ func TestMemberReservedAdminName(t *testing.T) {
 	}
 
 	// 正常创建成员后改名为 Admin → 400，且原名保持不变。
-	res, body = e.do(t, http.MethodPost, "/api/members", fmt.Sprintf(`{"workspaceId":%q,"name":"Kim"}`, workspaceID))
+	res, body = e.do(t, http.MethodPost, "/api/members", `{"name":"Kim"}`)
 	if res.StatusCode != http.StatusCreated {
 		t.Fatalf("创建成员应 201，实际 %d", res.StatusCode)
 	}
 	memberID := decode[map[string]any](t, body)["id"].(string)
+	if res, _ := e.do(t, http.MethodPost, "/api/workspaces/"+workspaceID+"/members", fmt.Sprintf(`{"memberId":%q}`, memberID)); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("成员授权应 204，实际 %d", res.StatusCode)
+	}
 	if res, _ := e.do(t, http.MethodPatch, "/api/members/"+memberID, `{"name":"Admin"}`); res.StatusCode != http.StatusBadRequest {
 		t.Fatalf("改名为 Admin 应 400，实际 %d", res.StatusCode)
 	}
@@ -1770,23 +1795,21 @@ func TestMemberReservedAdminName(t *testing.T) {
 	}
 }
 
-// TestMemberLimit 校验 5 人上限（与前端 profile 页 / Mock 同步）。
+// TestMemberLimit 校验 6 个全局身份上限（工作区授权不额外消耗名额）。
 func TestMemberLimit(t *testing.T) {
 	e := newTestEnv(t)
-	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
-	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
 
-	// 已 1 人（owner），再建 4 人到达上限。
-	for i := 1; i <= 4; i++ {
-		res, _ := e.do(t, http.MethodPost, "/api/members", fmt.Sprintf(`{"workspaceId":%q,"name":"成员%d"}`, workspaceID, i))
+	// 已 1 人（admin），再建 5 人到达上限。
+	for i := 1; i <= 5; i++ {
+		res, _ := e.do(t, http.MethodPost, "/api/members", fmt.Sprintf(`{"name":"成员%d"}`, i))
 		if res.StatusCode != http.StatusCreated {
 			t.Fatalf("第 %d 个成员应 201，实际 %d", i, res.StatusCode)
 		}
 	}
-	// 第 5 个普通成员被拒。
-	res, body := e.do(t, http.MethodPost, "/api/members", fmt.Sprintf(`{"workspaceId":%q,"name":"超员"}`, workspaceID))
-	if res.StatusCode != http.StatusBadRequest {
-		t.Fatalf("超员创建应 400，实际 %d", res.StatusCode)
+	// 第 6 个普通成员被拒。
+	res, body := e.do(t, http.MethodPost, "/api/members", `{"name":"超员"}`)
+	if res.StatusCode != http.StatusConflict {
+		t.Fatalf("超员创建应 409，实际 %d", res.StatusCode)
 	}
 	if !strings.Contains(decode[map[string]any](t, body)["error"].(string), "上限") {
 		t.Fatalf("超员错误应含「上限」，实际 %s", body)
@@ -1804,8 +1827,10 @@ func TestVerifyMultiKey(t *testing.T) {
 
 	// 新成员密钥 → ok:true。
 	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
-	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
-	_, body = e.do(t, http.MethodPost, "/api/members", fmt.Sprintf(`{"workspaceId":%q,"name":"成员A"}`, workspaceID))
+	if len(decode[[]map[string]any](t, body)) == 0 {
+		t.Fatal("至少应存在一个可访问工作区")
+	}
+	_, body = e.do(t, http.MethodPost, "/api/members", `{"name":"成员A"}`)
 	memberID := decode[map[string]any](t, body)["id"].(string)
 	_, body = e.do(t, http.MethodPost, "/api/members/"+memberID+"/key", "")
 	memberKey := decode[map[string]any](t, body)["key"].(string)
@@ -1845,12 +1870,14 @@ func TestSearchIncludesComment(t *testing.T) {
 	e := newTestEnv(t)
 	projectID := createProject(t, e, "评论搜索项目")
 	_, body := e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
-	columnID := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["id"].(string)
+	board := decode[map[string]any](t, body)
+	workspaceID := board["project"].(map[string]any)["workspaceId"].(string)
+	columnID := board["columns"].([]any)[0].(map[string]any)["id"].(string)
 	_, body = e.do(t, http.MethodPost, "/api/columns/"+columnID+"/tasks", `{"title":"普通标题"}`)
 	taskID := decode[map[string]any](t, body)["id"].(string)
 	e.do(t, http.MethodPost, "/api/tasks/"+taskID+"/comments", `{"content":"独特评论检索词"}`)
 
-	res, body := e.do(t, http.MethodGet, "/api/search?q=独特评论检索词", "")
+	res, body := e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/search?q=独特评论检索词", "")
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("搜索应 200，实际 %d: %s", res.StatusCode, body)
 	}
@@ -1868,12 +1895,22 @@ func TestMemberAdministrationRequiresOwner(t *testing.T) {
 	memberID := decode[map[string]any](t, body)["id"].(string)
 	_, body = e.do(t, http.MethodPost, "/api/members/"+memberID+"/key", "")
 	memberKey := decode[map[string]any](t, body)["key"].(string)
+	_, body = e.do(t, http.MethodPost, "/api/members", fmt.Sprintf(`{"workspaceId":%q,"name":"另一个成员"}`, workspaceID))
+	otherMemberID := decode[map[string]any](t, body)["id"].(string)
 
 	if res, _ := e.doAuth(t, memberKey, http.MethodPost, "/api/members", fmt.Sprintf(`{"workspaceId":%q,"name":"越权成员"}`, workspaceID)); res.StatusCode != http.StatusForbidden {
 		t.Fatalf("普通成员创建成员应 403，实际 %d", res.StatusCode)
 	}
-	if res, _ := e.doAuth(t, memberKey, http.MethodPost, "/api/members/"+memberID+"/key", ""); res.StatusCode != http.StatusForbidden {
-		t.Fatalf("普通成员授权密钥应 403，实际 %d", res.StatusCode)
+	res, body := e.doAuth(t, memberKey, http.MethodPost, "/api/members/"+memberID+"/key", "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("普通成员轮换自己的密钥应 200，实际 %d", res.StatusCode)
+	}
+	memberKey = decode[map[string]any](t, body)["key"].(string)
+	if res, _ := e.doAuth(t, memberKey, http.MethodPost, "/api/members/"+otherMemberID+"/key", ""); res.StatusCode != http.StatusForbidden {
+		t.Fatalf("普通成员轮换他人密钥应 403，实际 %d", res.StatusCode)
+	}
+	if res, _ := e.doAuth(t, memberKey, http.MethodDelete, "/api/members/"+otherMemberID+"/key", ""); res.StatusCode != http.StatusForbidden {
+		t.Fatalf("普通成员撤销他人密钥应 403，实际 %d", res.StatusCode)
 	}
 	if res, _ := e.doAuth(t, memberKey, http.MethodDelete, "/api/members/"+memberID, ""); res.StatusCode != http.StatusForbidden {
 		t.Fatalf("普通成员删除成员应 403，实际 %d", res.StatusCode)
@@ -1891,6 +1928,45 @@ func TestMemberAdministrationRequiresOwner(t *testing.T) {
 	}
 	if res, _ := e.doAuth(t, memberKey, http.MethodPost, "/api/settings/backup", `{"workspaces":[{"id":"w1","name":"x"}]}`); res.StatusCode != http.StatusForbidden {
 		t.Fatalf("普通成员导入备份应 403，实际 %d", res.StatusCode)
+	}
+}
+
+func TestMemberCredentialGovernanceAndAdminPromotion(t *testing.T) {
+	e := newTestEnv(t)
+	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
+	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
+	_, body = e.do(t, http.MethodPost, "/api/members", `{"name":"可撤销成员"}`)
+	targetID := decode[map[string]any](t, body)["id"].(string)
+	if res, _ := e.do(t, http.MethodPost, "/api/workspaces/"+workspaceID+"/members", fmt.Sprintf(`{"memberId":%q}`, targetID)); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("授权成员应 204，实际 %d", res.StatusCode)
+	}
+	_, body = e.do(t, http.MethodPost, "/api/members/"+targetID+"/key", "")
+	targetKey := decode[map[string]any](t, body)["key"].(string)
+
+	if res, _ := e.do(t, http.MethodDelete, "/api/members/"+targetID+"/key", ""); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("撤销普通成员密钥应 204，实际 %d", res.StatusCode)
+	}
+	if res, _ := e.doAuth(t, targetKey, http.MethodGet, "/api/me", ""); res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("撤销后旧成员密钥应 401，实际 %d", res.StatusCode)
+	}
+	_, body = e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/members", "")
+	for _, item := range decode[[]map[string]any](t, body) {
+		if item["id"] == targetID && item["hasKey"] != false {
+			t.Fatalf("撤销后成员记录应保留且 hasKey=false: %v", item)
+		}
+	}
+
+	if res, _ := e.do(t, http.MethodPatch, "/api/members/"+targetID+"/role", `{"role":"admin"}`); res.StatusCode != http.StatusOK {
+		t.Fatalf("提升管理员应 200，实际 %d", res.StatusCode)
+	}
+	_, body = e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/members", "")
+	for _, item := range decode[[]map[string]any](t, body) {
+		if item["id"] == targetID && item["role"] != "admin" {
+			t.Fatalf("目标成员应成为 admin: %v", item)
+		}
+	}
+	if res, _ := e.do(t, http.MethodPost, "/api/workspaces", `{"name":"管理员仍可建"}`); res.StatusCode != http.StatusCreated {
+		t.Fatalf("多个管理员都应可创建工作区，实际 %d", res.StatusCode)
 	}
 }
 
@@ -2060,7 +2136,9 @@ func TestDashboardFocusExcludesDone(t *testing.T) {
 	e := newTestEnv(t)
 	projectID := createProject(t, e, "关注项目")
 	_, body := e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
-	cols := decode[map[string]any](t, body)["columns"].([]any)
+	board := decode[map[string]any](t, body)
+	workspaceID := board["project"].(map[string]any)["workspaceId"].(string)
+	cols := board["columns"].([]any)
 	firstCol := cols[0].(map[string]any)["id"].(string)
 	lastCol := cols[len(cols)-1].(map[string]any)["id"].(string)
 
@@ -2068,7 +2146,7 @@ func TestDashboardFocusExcludesDone(t *testing.T) {
 	e.do(t, http.MethodPost, "/api/columns/"+lastCol+"/tasks", `{"title":"已完成紧急","priority":"urgent"}`)
 	e.do(t, http.MethodPost, "/api/columns/"+firstCol+"/tasks", `{"title":"临期任务","dueDate":"2026-12-31"}`)
 
-	_, body = e.do(t, http.MethodGet, "/api/dashboard", "")
+	_, body = e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/dashboard", "")
 	d := decode[map[string]any](t, body)
 	focus := d["focus"].([]any)
 	if len(focus) != 1 || focus[0].(map[string]any)["title"] != "临期任务" {
@@ -2120,28 +2198,26 @@ func newTestEnvModeOrigins(t *testing.T, mode config.Mode, wsOrigins []string) *
 	return &testEnv{srv: srv, db: database}
 }
 
-// TestPersonalModeContract 覆盖默认部署（personal 模式，KANSO_MODE 缺省）：
-// me 返回 owner 成员身份（初始名 Admin）+ 所属工作区、共享密钥鉴权、
-// 成员管理端点未注册（404）、PATCH /api/members/{id} 自我改名可用、
-// 评论/活动 actor 归属 "Admin"、member 表存在（personal = 单一 owner，ADR-0013 修订）。
+// TestPersonalModeContract 覆盖 personal 模式的界面简化：核心身份、工作区
+// 隔离和管理员设置权限仍使用同一套数据模型。
 func TestPersonalModeContract(t *testing.T) {
 	e := newTestEnvMode(t, config.ModePersonal)
 
-	// me：owner 成员身份（初始名 Admin）+ workspaceId 非空 + mode personal（web/src/types/me.ts 契约）。
+	// me：真实全局管理员身份；工作区上下文由 /api/workspaces 单独返回。
 	res, body := e.do(t, http.MethodGet, "/api/me", "")
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("me 应 200，实际 %d", res.StatusCode)
 	}
 	me := decode[map[string]any](t, body)
 	member := me["member"].(map[string]any)
-	if member["name"] != "Admin" || member["role"] != "owner" {
-		t.Fatalf("personal 模式应返回初始名 Admin 的 owner 成员，实际 %v", member)
+	if member["name"] != "Admin" || member["role"] != "admin" {
+		t.Fatalf("personal 模式应返回初始名 Admin 的 admin 成员，实际 %v", member)
 	}
 	if member["id"] == "" || member["id"] == "admin" {
 		t.Fatalf("personal 模式 owner 应是真实成员行（非固定 admin 常量），实际 %v", member["id"])
 	}
-	if ws, ok := me["workspaceId"].(string); !ok || ws == "" {
-		t.Fatalf("personal 模式 me 应返回所属工作区，实际 %v", me["workspaceId"])
+	if _, ok := me["workspaceId"]; ok {
+		t.Fatalf("me 不应混入工作区归属字段，实际 %v", me["workspaceId"])
 	}
 	if me["mode"] != "personal" {
 		t.Fatalf("mode 应为 personal，实际 %v", me["mode"])
@@ -2158,25 +2234,14 @@ func TestPersonalModeContract(t *testing.T) {
 		t.Fatalf("错误密钥应 401，实际 %d", res.StatusCode)
 	}
 
-	// 成员管理端点未注册：personal 模式 404（路由未挂载，成员禁用）。
+	// personal 只隐藏团队入口，但后端仍使用统一的成员/授权模型。
 	_, body = e.do(t, http.MethodGet, "/api/workspaces", "")
 	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
-	for _, tc := range []struct {
-		name   string
-		method string
-		path   string
-	}{
-		{"成员列表", http.MethodGet, "/api/workspaces/" + workspaceID + "/members"},
-		{"创建成员", http.MethodPost, "/api/members"},
-		{"生成密钥", http.MethodPost, "/api/members/x/key"},
-	} {
-		if res, _ := e.do(t, tc.method, tc.path, ""); res.StatusCode != http.StatusNotFound {
-			t.Fatalf("personal 模式 %s 应 404（路由未注册），实际 %d", tc.name, res.StatusCode)
-		}
+	if res, _ := e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/members", ""); res.StatusCode != http.StatusOK {
+		t.Fatalf("personal 模式成员列表应使用统一接口，实际 %d", res.StatusCode)
 	}
-	// PATCH 使 /api/members/{id} 路径已注册：DELETE 未注册 → 405（成员删除禁用）。
-	if res, _ := e.do(t, http.MethodDelete, "/api/members/x", ""); res.StatusCode != http.StatusMethodNotAllowed {
-		t.Fatalf("personal 模式删除成员应 405（方法未注册），实际 %d", res.StatusCode)
+	if res, _ := e.do(t, http.MethodGet, "/api/settings/config", ""); res.StatusCode != http.StatusOK {
+		t.Fatalf("personal 模式管理员仍应可访问设置，实际 %d", res.StatusCode)
 	}
 
 	// 自我改名：PATCH /api/members/{id}（personal = 单独管理员，与 team 一致）。
@@ -2207,7 +2272,7 @@ func TestPersonalModeContract(t *testing.T) {
 		}
 	}
 
-	// member 表存在（两种模式均建表），且仅一个 owner 成员。
+	// member 表存在（两种模式均建表），且只种子一个管理员身份。
 	var n int
 	if err := e.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='member'`).Scan(&n); err != nil {
 		t.Fatalf("查询 member 表失败: %v", err)
@@ -2219,7 +2284,7 @@ func TestPersonalModeContract(t *testing.T) {
 		t.Fatalf("查询成员数失败: %v", err)
 	}
 	if n != 1 {
-		t.Fatalf("personal 模式应只有 1 个 owner 成员，实际 %d", n)
+		t.Fatalf("personal 模式应只有 1 个 admin 成员，实际 %d", n)
 	}
 }
 
@@ -2230,7 +2295,9 @@ func TestSearchContract(t *testing.T) {
 	e := newTestEnv(t)
 	projectID := createProject(t, e, "搜索项目")
 	_, body := e.do(t, http.MethodGet, "/api/projects/"+projectID, "")
-	columnID := decode[map[string]any](t, body)["columns"].([]any)[0].(map[string]any)["id"].(string)
+	board := decode[map[string]any](t, body)
+	workspaceID := board["project"].(map[string]any)["workspaceId"].(string)
+	columnID := board["columns"].([]any)[0].(map[string]any)["id"].(string)
 
 	res, body := e.do(t, http.MethodPost, "/api/columns/"+columnID+"/tasks", `{"title":"独特标题词","description":"独特描述词","priority":"high","dueDate":"2026-12-01"}`)
 	if res.StatusCode != http.StatusCreated {
@@ -2239,7 +2306,7 @@ func TestSearchContract(t *testing.T) {
 	taskID := decode[map[string]any](t, body)["id"].(string)
 
 	// 标题命中 + SearchHit 形状。
-	res, body = e.do(t, http.MethodGet, "/api/search?q=独特标题词", "")
+	res, body = e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/search?q=独特标题词", "")
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("搜索应 200，实际 %d", res.StatusCode)
 	}
@@ -2261,20 +2328,20 @@ func TestSearchContract(t *testing.T) {
 	}
 
 	// 描述命中。
-	res, body = e.do(t, http.MethodGet, "/api/search?q=独特描述词", "")
+	res, body = e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/search?q=独特描述词", "")
 	if res.StatusCode != http.StatusOK || len(decode[[]map[string]any](t, body)) != 1 {
 		t.Fatalf("描述搜索应命中任务，实际 %d: %s", res.StatusCode, body)
 	}
 
 	// 归档任务仍可搜索（归档不参与看板，但保留在全局搜索）。
 	e.do(t, http.MethodPost, "/api/tasks/"+taskID+"/archive", "")
-	res, body = e.do(t, http.MethodGet, "/api/search?q=独特标题词", "")
+	res, body = e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/search?q=独特标题词", "")
 	if res.StatusCode != http.StatusOK || len(decode[[]map[string]any](t, body)) != 1 {
 		t.Fatalf("归档任务应仍可搜索，实际 %d: %s", res.StatusCode, body)
 	}
 
 	// 空 q：返回最近更新列表（命令面板未输入时的快捷入口），且含刚创建任务。
-	res, body = e.do(t, http.MethodGet, "/api/search?q=", "")
+	res, body = e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/search?q=", "")
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("空 q 搜索应 200，实际 %d", res.StatusCode)
 	}
@@ -2426,8 +2493,10 @@ func TestCrossProjectMilestoneDetachRejected(t *testing.T) {
 func TestProjectPinned(t *testing.T) {
 	e := newTestEnv(t)
 	projectID := createProject(t, e, "置顶测试项目")
+	_, workspaceBody := e.do(t, http.MethodGet, "/api/workspaces", "")
+	workspaceID := decode[[]map[string]any](t, workspaceBody)[0]["id"].(string)
 
-	_, body := e.do(t, http.MethodGet, "/api/pinned-projects", "")
+	_, body := e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/pinned-projects", "")
 	if items := decode[[]map[string]any](t, body); len(items) != 0 {
 		t.Fatalf("初始置顶应为空，实际 %d", len(items))
 	}
@@ -2436,7 +2505,7 @@ func TestProjectPinned(t *testing.T) {
 	if res.StatusCode != http.StatusNoContent {
 		t.Fatalf("置顶应 204，实际 %d", res.StatusCode)
 	}
-	_, body = e.do(t, http.MethodGet, "/api/pinned-projects", "")
+	_, body = e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/pinned-projects", "")
 	items := decode[[]map[string]any](t, body)
 	if len(items) != 1 || items[0]["projectId"] != projectID {
 		t.Fatalf("置顶后应含该项目，实际 %v", items)
@@ -2446,7 +2515,7 @@ func TestProjectPinned(t *testing.T) {
 	if res.StatusCode != http.StatusNoContent {
 		t.Fatalf("取消置顶应 204，实际 %d", res.StatusCode)
 	}
-	_, body = e.do(t, http.MethodGet, "/api/pinned-projects", "")
+	_, body = e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/pinned-projects", "")
 	if items := decode[[]map[string]any](t, body); len(items) != 0 {
 		t.Fatalf("取消后应为空，实际 %v", items)
 	}
