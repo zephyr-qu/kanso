@@ -396,7 +396,7 @@ type SearchTasksRow struct {
 	WorkspaceName string  `json:"workspaceName"`
 }
 
-// Global search (command palette): title/description/comment substring match with project info.
+// Workspace search (command palette): title/description/comment substring match with project info.
 func (q *Queries) SearchTasks(ctx context.Context, arg SearchTasksParams) ([]SearchTasksRow, error) {
 	rows, err := q.db.QueryContext(ctx, searchTasks,
 		arg.WorkspaceID,

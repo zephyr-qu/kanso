@@ -31,7 +31,11 @@ export type WorkspaceContextValue = {
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
-export function WorkspaceContextProvider({ children }: { children: ReactNode }) {
+export function WorkspaceContextProvider({
+	children,
+}: {
+	children: ReactNode;
+}) {
 	const location = useLocation();
 	const isHomeRedirect = location.pathname === "/app";
 	const workspacesQuery = useQuery({
@@ -42,9 +46,11 @@ export function WorkspaceContextProvider({ children }: { children: ReactNode }) 
 	const resolution = resolveWorkspace(
 		location.pathname,
 		workspacesQuery.data,
+		// 有缓存数据时拉取失败不判死：换页/WS 重连都会触发 refetch，偶发失败若判死会把
+		// 整个主区域换成「工作区不可用」死屏（实测复现）。缓存继续渲染，等待自愈。
 		workspacesQuery.isPending
 			? "loading"
-			: workspacesQuery.isError
+			: workspacesQuery.isError && !workspacesQuery.data
 				? "error"
 				: "success",
 	);
@@ -58,7 +64,8 @@ export function WorkspaceContextProvider({ children }: { children: ReactNode }) 
 						: "empty"
 					: "not-required"
 			: resolution.status;
-	const workspaceId = resolution.status === "ready" ? resolution.workspace.id : "";
+	const workspaceId =
+		resolution.status === "ready" ? resolution.workspace.id : "";
 
 	const value = useMemo<WorkspaceContextValue>(
 		() => ({
@@ -86,13 +93,19 @@ export function WorkspaceContextProvider({ children }: { children: ReactNode }) 
 		],
 	);
 
-	return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
+	return (
+		<WorkspaceContext.Provider value={value}>
+			{children}
+		</WorkspaceContext.Provider>
+	);
 }
 
 export function useWorkspaceContext(): WorkspaceContextValue {
 	const context = useContext(WorkspaceContext);
 	if (!context) {
-		throw new Error("useWorkspaceContext must be used within WorkspaceContextProvider");
+		throw new Error(
+			"useWorkspaceContext must be used within WorkspaceContextProvider",
+		);
 	}
 	return context;
 }

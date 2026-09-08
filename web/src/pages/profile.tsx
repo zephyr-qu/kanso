@@ -103,7 +103,7 @@ function ActivityHeatmap({ activities }: { activities: Activity[] }) {
 				{monthLabels.map((label, index) => (
 					<span
 						key={index}
-className="min-w-0 flex-1 overflow-visible whitespace-nowrap text-[9px] leading-none text-muted-foreground/70"
+						className="min-w-0 flex-1 overflow-visible whitespace-nowrap text-[9px] leading-none text-muted-foreground/70"
 					>
 						{label ?? ""}
 					</span>
@@ -189,12 +189,15 @@ export default function ProfilePage() {
 	});
 	const { data: teamMembers } = useQuery({
 		queryKey: queryKeys.members(workspaceId),
-		queryFn: () => api<Member[]>(buildPath("workspaceMembers", { id: workspaceId })),
+		queryFn: () =>
+			api<Member[]>(buildPath("workspaceMembers", { id: workspaceId })),
 		enabled: mode === "team" && Boolean(workspaceId),
 	});
 
 	const updateMember = useMutation({
-		meta: { feedback: { success: "个人资料已更新", errorTitle: "更新个人资料失败" } },
+		meta: {
+			feedback: { success: "个人资料已更新", errorTitle: "更新个人资料失败" },
+		},
 		mutationFn: (patch: {
 			name?: string;
 			avatarColor?: string;
@@ -204,8 +207,8 @@ export default function ProfilePage() {
 				method: "PATCH",
 				body: JSON.stringify(patch),
 			}),
-			onSuccess: () => {
-				invalidateMe(queryClient);
+		onSuccess: () => {
+			invalidateMe(queryClient);
 		},
 	});
 	const fileRef = useRef<HTMLInputElement>(null);
@@ -245,7 +248,8 @@ export default function ProfilePage() {
 	);
 	const recentActivities = myActivities.slice(0, 5);
 	const recentActivityCount = myActivities.filter(
-		(activity) => Date.now() - new Date(activity.createdAt).getTime() <= 7 * 86_400_000,
+		(activity) =>
+			Date.now() - new Date(activity.createdAt).getTime() <= 7 * 86_400_000,
 	).length;
 	const inProgressTasks = dashboard
 		? Math.max(0, dashboard.totalTasks - dashboard.doneTasks)
@@ -328,8 +332,7 @@ export default function ProfilePage() {
 									className="size-14 text-lg font-semibold text-white"
 								/>
 							)}
-							<div
-								className="min-w-0 flex-1">
+							<div className="min-w-0 flex-1">
 								<div className="flex items-center gap-2">
 									{editing ? (
 										<input
@@ -339,7 +342,11 @@ export default function ProfilePage() {
 											onFocus={(e) => e.target.select()}
 											onKeyDown={(e) => {
 												// 未改名直接退出编辑（避免对保留名 Admin 的无谓 PATCH）。
-												if (e.key === "Enter" && draft.trim() && draft.trim() !== member.name) {
+												if (
+													e.key === "Enter" &&
+													draft.trim() &&
+													draft.trim() !== member.name
+												) {
 													updateMember.mutate({ name: draft.trim() });
 													setEditing(false);
 												} else if (e.key === "Enter") {
@@ -384,18 +391,18 @@ export default function ProfilePage() {
 									</div>
 								) : null}
 							</div>
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() => {
-								if (editing) {
-									setEditing(false);
-								} else {
-									// 两种模式均可编辑：personal = 单独管理员（成员表），改名走 PATCH /api/members/{id}。
-									setDraft(member.name);
-									setEditing(true);
-								}
-							}}
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => {
+									if (editing) {
+										setEditing(false);
+									} else {
+										// 两种模式均可编辑：personal = 单独管理员（成员表），改名走 PATCH /api/members/{id}。
+										setDraft(member.name);
+										setEditing(true);
+									}
+								}}
 							>
 								{editing ? (
 									"取消"
@@ -414,20 +421,40 @@ export default function ProfilePage() {
 								<span className="text-xs text-muted-foreground/70">当前工作区</span>
 							</div>
 							<div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-								<ProfileStat icon={ListTodoIcon} label="进行中" value={inProgressTasks} />
-								<ProfileStat icon={CheckCircle2Icon} label="已完成" value={dashboard?.doneTasks ?? null} />
-								<ProfileStat icon={AlertTriangleIcon} label="需关注" value={dashboard?.urgent ?? null} />
-								<ProfileStat icon={ActivityIcon} label="近 7 天活动" value={recentActivityCount} />
+								<ProfileStat
+									icon={ListTodoIcon}
+									label="进行中"
+									value={inProgressTasks}
+								/>
+								<ProfileStat
+									icon={CheckCircle2Icon}
+									label="已完成"
+									value={dashboard?.doneTasks ?? null}
+								/>
+								<ProfileStat
+									icon={AlertTriangleIcon}
+									label="需关注"
+									value={dashboard?.urgent ?? null}
+								/>
+								<ProfileStat
+									icon={ActivityIcon}
+									label="近 7 天活动"
+									value={recentActivityCount}
+								/>
 							</div>
 						</div>
 
-						<div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+						<div
+							className={`grid gap-4 ${mode === "team" ? "lg:grid-cols-[1.2fr_0.8fr]" : ""}`}
+						>
 							{/* 我的最近活动 */}
 							<SurfaceCard className="p-5">
 								<div className="mb-3 flex items-center justify-between">
 									<div>
 										<h2 className="text-[13px] font-semibold">我的最近活动</h2>
-										<p className="mt-1 text-xs text-muted-foreground/70">最近参与的项目操作</p>
+										<p className="mt-1 text-xs text-muted-foreground/70">
+											最近参与的项目操作
+										</p>
 									</div>
 									<HistoryIcon className="size-4 text-muted-foreground/55" />
 								</div>
@@ -436,23 +463,26 @@ export default function ProfilePage() {
 										{recentActivities.map((activity) => {
 											const Icon = activityIconForAction(activity.action);
 											return (
-												<div key={activity.id} className="flex min-w-0 items-start gap-3 py-3 first:pt-0 last:pb-0">
-												<span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-													<Icon className="size-3.5" />
-												</span>
-												<div className="min-w-0 flex-1">
-													<ActivityItem
-														projectName={activity.projectName}
-														action={activity.action}
-														data={activity.data}
-														actor="你"
-														className="block text-[13px]"
-													/>
-													<p className="mt-1 text-[11px] text-muted-foreground/70">
-														{formatActivityAge(activity.createdAt)}
-													</p>
+												<div
+													key={activity.id}
+													className="flex min-w-0 items-start gap-3 py-3 first:pt-0 last:pb-0"
+												>
+													<span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+														<Icon className="size-3.5" />
+													</span>
+													<div className="min-w-0 flex-1">
+														<ActivityItem
+															projectName={activity.projectName}
+															action={activity.action}
+															data={activity.data}
+															actor="你"
+															className="block text-[13px]"
+														/>
+														<p className="mt-1 text-[11px] text-muted-foreground/70">
+															{formatActivityAge(activity.createdAt)}
+														</p>
+													</div>
 												</div>
-											</div>
 											);
 										})}
 									</div>
@@ -460,28 +490,40 @@ export default function ProfilePage() {
 									<div className="flex flex-col items-center justify-center py-8 text-center">
 										<HistoryIcon className="size-5 text-muted-foreground/45" />
 										<p className="mt-2 text-sm text-muted-foreground">还没有个人活动</p>
-										<p className="mt-1 text-xs text-muted-foreground/70">开始编辑任务后，这里会显示你的操作。</p>
+										<p className="mt-1 text-xs text-muted-foreground/70">
+											开始编辑任务后，这里会显示你的操作。
+										</p>
 									</div>
 								)}
 							</SurfaceCard>
 
 							{mode === "team" ? (
-									<SurfaceCard className="p-5">
-										<div className="flex items-start justify-between gap-3">
-											<div>
-												<h2 className="text-[13px] font-semibold">账号与安全</h2>
-												<p className="mt-1 text-xs text-muted-foreground/70">管理当前成员的访问凭证</p>
-											</div>
-											<ShieldCheckIcon className="size-4 text-primary" />
+								<SurfaceCard className="p-5">
+									<div className="flex items-start justify-between gap-3">
+										<div>
+											<h2 className="text-[13px] font-semibold">账号与安全</h2>
+											<p className="mt-1 text-xs text-muted-foreground/70">
+												管理当前成员的访问凭证
+											</p>
 										</div>
-										<div className="mt-4 space-y-2.5">
-											<SecurityMeta label="所属工作区" value={workspaceName || "当前工作区"} />
-											<SecurityMeta label="团队角色" value={ROLE_LABEL[member.role]} />
-											<SecurityMeta label="团队成员" value={`${teamMembers?.length ?? "—"} / 5 人`} />
-											<div className="flex items-center justify-between gap-3 border-t pt-3">
+										<ShieldCheckIcon className="size-4 text-primary" />
+									</div>
+									<div className="mt-4 space-y-2.5">
+										<SecurityMeta
+											label="所属工作区"
+											value={workspaceName || "当前工作区"}
+										/>
+										<SecurityMeta label="团队角色" value={ROLE_LABEL[member.role]} />
+										<SecurityMeta
+											label="团队成员"
+											value={`${teamMembers?.length ?? "—"} / 5 人`}
+										/>
+										<div className="flex items-center justify-between gap-3 border-t pt-3">
 											<div className="min-w-0">
 												<p className="text-sm font-medium">访问密钥</p>
-												<p className={`mt-1 text-xs ${member.hasKey ? "text-emerald-600" : "text-amber-600"}`}>
+												<p
+													className={`mt-1 text-xs ${member.hasKey ? "text-emerald-600" : "text-amber-600"}`}
+												>
 													{member.hasKey ? "已授权，可正常登录" : "未授权，需要生成密钥"}
 												</p>
 											</div>
@@ -491,27 +533,32 @@ export default function ProfilePage() {
 												isSelf
 												canRotate
 												onRotated={() => {
-															invalidateMe(queryClient);
-													}}
+													invalidateMe(queryClient);
+												}}
 											/>
-											</div>
 										</div>
-										<div className="mt-4 rounded-lg bg-muted/55 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-											密钥只在生成时显示一次；轮换后，旧密钥会立即失效。
-										</div>
-										<Link to="/team" className="mt-4 flex items-center justify-between border-t pt-3 text-xs text-muted-foreground transition-colors hover:text-foreground">
-											<span>前往团队管理</span>
-											<ArrowRightIcon className="size-3.5" />
-										</Link>
-									</SurfaceCard>
-								) : null}
+									</div>
+									<div className="mt-4 rounded-lg bg-muted/55 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+										密钥只在生成时显示一次；轮换后，旧密钥会立即失效。
+									</div>
+									<Link
+										to="/team"
+										className="mt-4 flex items-center justify-between border-t pt-3 text-xs text-muted-foreground transition-colors hover:text-foreground"
+									>
+										<span>前往团队管理</span>
+										<ArrowRightIcon className="size-3.5" />
+									</Link>
+								</SurfaceCard>
+							) : null}
 						</div>
 
 						<SurfaceCard className="p-5">
 							<div className="mb-3 flex items-center justify-between">
 								<div>
 									<h2 className="text-[13px] font-semibold">个人活跃</h2>
-									<p className="mt-1 text-xs text-muted-foreground/70">只统计你的操作记录</p>
+									<p className="mt-1 text-xs text-muted-foreground/70">
+										只统计你的操作记录
+									</p>
 								</div>
 								<ActivityIcon className="size-4 text-muted-foreground/55" />
 							</div>
@@ -521,7 +568,6 @@ export default function ProfilePage() {
 								</div>
 							</div>
 						</SurfaceCard>
-
 					</div>
 				)}
 			</PageContent>
@@ -533,7 +579,9 @@ function SecurityMeta({ label, value }: { label: string; value: string }) {
 	return (
 		<div className="flex items-center justify-between gap-3 text-xs">
 			<span className="text-muted-foreground">{label}</span>
-			<span className="truncate text-right font-medium text-foreground">{value}</span>
+			<span className="truncate text-right font-medium text-foreground">
+				{value}
+			</span>
 		</div>
 	);
 }

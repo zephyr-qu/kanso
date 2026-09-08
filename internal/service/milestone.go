@@ -13,7 +13,8 @@ import (
 )
 
 // Milestone 是返回给前端的里程碑 DTO（内嵌基础字段 + 进度聚合）。
-// Progress 口径（0006 Phase 3 任务 3.8 / 0005 §5.4）：关联任务中未归档且位于项目末列数 / 关联任务总数。
+// Progress 口径：关联任务中位于项目末列数 / 关联任务总数（含已归档——归档不改列位置，
+// 已完成任务归档后进度不应回退）。
 type Milestone struct {
 	gen.Milestone
 	Progress *MilestoneProgress `json:"progress"`

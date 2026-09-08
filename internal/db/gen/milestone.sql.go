@@ -109,7 +109,7 @@ const listMilestoneProgress = `-- name: ListMilestoneProgress :many
 SELECT
     m.id AS milestone_id,
     CAST(COALESCE(COUNT(tm.task_id), 0) AS INTEGER) AS total,
-    CAST(COALESCE(SUM(CASE WHEN t.archived_at IS NULL AND c.position = (
+    CAST(COALESCE(SUM(CASE WHEN c.position = (
         SELECT MAX(position) FROM column WHERE project_id = c.project_id
     ) THEN 1 ELSE 0 END), 0) AS INTEGER) AS done
 FROM milestone m
@@ -126,7 +126,9 @@ type ListMilestoneProgressRow struct {
 	Done        int64  `json:"done"`
 }
 
-// milestone progress: linked tasks total / done = unarchived in last column.
+// milestone progress: linked tasks total / done = in last column, INCLUDING archived.
+// Archiving only sets archived_at (column_id is kept), so a completed task that
+// later gets archived must still count toward milestone progress.
 func (q *Queries) ListMilestoneProgress(ctx context.Context, projectID string) ([]ListMilestoneProgressRow, error) {
 	rows, err := q.db.QueryContext(ctx, listMilestoneProgress, projectID)
 	if err != nil {

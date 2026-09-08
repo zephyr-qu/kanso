@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
-	import {
+import {
 	invalidateMilestoneTasks,
 	invalidateMilestones,
 	invalidateProjectScope,
@@ -50,11 +50,13 @@ export default function MilestoneDetailDialog(props: {
 
 	const queryClient = useQueryClient();
 	const unlinkMutation = useMutation({
-		meta: { feedback: { success: "任务已解除里程碑", errorTitle: "解除里程碑失败" } },
+		meta: {
+			feedback: { success: "任务已解除里程碑", errorTitle: "解除里程碑失败" },
+		},
 		mutationFn: (taskId: string) =>
 			api<void>(
 				buildPath("taskMilestones", { taskId, milestoneId: milestone!.id }),
-				{ method: "DELETE" }
+				{ method: "DELETE" },
 			),
 		onSuccess: () => {
 			if (milestone?.id) invalidateMilestoneTasks(queryClient, milestone.id);
@@ -107,7 +109,10 @@ export default function MilestoneDetailDialog(props: {
 						) : tasks && tasks.length > 0 ? (
 							<ul className="max-h-72 space-y-1 overflow-auto pr-1">
 								{tasks.map((t) => (
-									<li key={t.id} className="group flex items-center gap-1.5 rounded-md border border-border px-2 py-1.5 hover:bg-accent/50">
+									<li
+										key={t.id}
+										className="group flex items-center gap-1.5 rounded-md border border-border px-2 py-1.5 hover:bg-accent/50"
+									>
 										<button
 											type="button"
 											className="flex min-w-0 flex-1 items-center gap-2 rounded px-1.5 py-1 text-left text-sm"
@@ -118,13 +123,9 @@ export default function MilestoneDetailDialog(props: {
 										>
 											<span className="min-w-0 flex-1 truncate">{t.title}</span>
 											<span className="shrink-0 text-xs text-muted-foreground">
-												{t.columnName}
+												{/* 单一状态：归档只显示「已归档」，避免与列名（如「已完成」）叠成两个状态。 */}
+												{t.archived ? "已归档" : t.columnName}
 											</span>
-											{t.archived ? (
-												<span className="shrink-0 text-xs text-muted-foreground">
-													已归档
-												</span>
-											) : null}
 										</button>
 										<button
 											type="button"

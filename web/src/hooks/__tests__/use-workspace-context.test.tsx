@@ -28,7 +28,10 @@ function Probe() {
 	);
 }
 
-function renderContext(pathname: string, cachedWorkspaces?: typeof workspaces): string {
+function renderContext(
+	pathname: string,
+	cachedWorkspaces?: typeof workspaces,
+): string {
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false, gcTime: Infinity } },
 	});
@@ -64,9 +67,41 @@ describe("WorkspaceContextProvider", () => {
 		expect(html).toContain("&quot;workspaceName&quot;:null");
 	});
 
+	it("treats refetch error with cached data as ready, not unavailable", () => {
+		// 点击导航/WS 重连会触发 refetch；偶发失败不应把主区域换成「工作区不可用」死屏。
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+		});
+		queryClient.setQueryData(queryKeys.workspaces(), workspaces);
+		queryClient
+			.getQueryCache()
+			.find({ queryKey: queryKeys.workspaces() })
+			?.setState({
+				status: "error",
+				fetchStatus: "idle",
+				error: new Error("refetch failed"),
+			});
+		const html = renderToStaticMarkup(
+			<QueryClientProvider client={queryClient}>
+				<MemoryRouter initialEntries={["/w/w2/dashboard"]}>
+					<WorkspaceContextProvider>
+						<Probe />
+					</WorkspaceContextProvider>
+				</MemoryRouter>
+			</QueryClientProvider>,
+		);
+
+		expect(html).toContain("&quot;status&quot;:&quot;ready&quot;");
+		expect(html).toContain("&quot;workspaceId&quot;:&quot;w2&quot;");
+	});
+
 	it("exposes loading and empty states from the shared query", () => {
-		expect(renderContext("/w/w2/dashboard")).toContain("&quot;status&quot;:&quot;loading&quot;");
-		expect(renderContext("/w/w2/dashboard", [])).toContain("&quot;status&quot;:&quot;empty&quot;");
+		expect(renderContext("/w/w2/dashboard")).toContain(
+			"&quot;status&quot;:&quot;loading&quot;",
+		);
+		expect(renderContext("/w/w2/dashboard", [])).toContain(
+			"&quot;status&quot;:&quot;empty&quot;",
+		);
 	});
 
 	it("shares the accessible list with the home redirect", () => {

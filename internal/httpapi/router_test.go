@@ -2102,6 +2102,15 @@ func TestMilestoneProgress(t *testing.T) {
 	if progress["total"].(float64) != 2 || progress["done"].(float64) != 1 {
 		t.Fatalf("进度应为 total=2 done=1，实际 %v", progress)
 	}
+
+	// 归档已完成任务后进度不应回退（归档不改列位置）。
+	e.do(t, http.MethodPost, "/api/tasks/"+doneTask+"/archive", "")
+	_, body = e.do(t, http.MethodGet, "/api/projects/"+projectID+"/milestones", "")
+	items = decode[[]map[string]any](t, body)
+	progress = items[0]["progress"].(map[string]any)
+	if progress["total"].(float64) != 2 || progress["done"].(float64) != 1 {
+		t.Fatalf("归档完成任务后进度应保持 total=2 done=1，实际 %v", progress)
+	}
 }
 
 // TestBackupTaskMilestones 校验备份快照含 taskMilestones（0006 Phase 3 任务 3.9 / 0005 §5.7）。
