@@ -58,10 +58,10 @@ export async function api(path: string, init?: RequestInit): Promise<Response> {
 	return res;
 }
 
-// 重置：保留当前 owner 所在工作区，清空其项目后重建种子数据。
-// 不能删除最后一个工作区：工作区级联会删除 owner 成员，使后续 bearer key 失效。
+// 重置：保留当前管理员所在工作区，清空其项目后重建种子数据。
+// 不能删除最后一个工作区：工作区级联会删除管理员成员，使后续 bearer key 失效。
 export async function resetAndSeed(): Promise<void> {
-	// 1. 清空工作区内项目，保留工作区与 owner 成员。
+	// 1. 清空工作区内项目，保留工作区与管理员成员。
 	const wsRes = await api("/api/workspaces");
 	const workspaces = (await wsRes.json()) as { id: string }[];
 	let ws = workspaces[0];

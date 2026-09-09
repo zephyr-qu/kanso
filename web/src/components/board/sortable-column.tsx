@@ -9,8 +9,11 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVerticalIcon, TrashIcon } from "lucide-react";
 import { Fragment, memo, useRef, useState } from "react";
 import AddTaskForm from "@/components/board/add-task-form";
-import SortableTaskCard, { TaskCardView } from "@/components/board/sortable-task-card";
+import SortableTaskCard, {
+	TaskCardView,
+} from "@/components/board/sortable-task-card";
 import { Button } from "@/components/ui/button";
+import { useColumnDropState } from "@/hooks/use-board-drag";
 import { sortTasks, type SortConfig } from "@/lib/sort-tasks";
 import type { BoardColumn } from "@/types/board";
 import type { Label } from "@/types/label";
@@ -18,15 +21,7 @@ import type { Task } from "@/types/task";
 
 const SortableColumn = memo(function SortableColumn(props: {
 	column: BoardColumn;
-	dragOver: boolean;
-	/** 正在拖拽的任务 id（跨列动画用；非拖拽/列拖拽时为 null）。 */
-	dragActiveTaskId: string | null;
-	/** 被拖拽任务所在的源列 id。 */
-	activeTaskColumnId: string | null;
-	/** 任务跨列拖拽的临时落点（{columnId, index}），跨列中非 null；同列排序为 null。 */
-	dragPos: { columnId: string; index: number } | null;
-	/** 当前拖拽任务，用于在目标列渲染与真实卡片等高的占位。 */
-	draggedTask: Task | null;
+	// 拖拽语义经 DragBoardProvider → useColumnDropState 下发，不再裸收内部状态。
 	labels: Label[];
 	sortConfig: SortConfig;
 	onRename: (column: BoardColumn, name: string) => void;
@@ -38,11 +33,6 @@ const SortableColumn = memo(function SortableColumn(props: {
 }) {
 	const {
 		column,
-		dragOver,
-		dragActiveTaskId,
-		activeTaskColumnId,
-		dragPos,
-		draggedTask,
 		labels,
 		sortConfig,
 		onRename,
@@ -94,37 +84,34 @@ const SortableColumn = memo(function SortableColumn(props: {
 	// 显示层排序：仅改变渲染顺序，不改写 position；排序视图下禁用任务拖拽（避免与 position 语义冲突）。
 	// 列内任务全部渲染——此前 10 条硬截断会让第 11+ 个任务不可见也不可达，已移除。
 	const sortActive = sortConfig.field !== "position";
-	const visibleTasks = sortActive ? sortTasks(column.tasks, sortConfig) : column.tasks;
+	const visibleTasks = sortActive
+		? sortTasks(column.tasks, sortConfig)
+		: column.tasks;
 	const sortable = !sortActive;
 
 	// SortableContext 的 items 必须与实际渲染的 sortable 卡片一一对应。
 	// 跨列时仍保留源卡片作为布局占位（由 SortableTaskCard 隐藏），
 	// 目标列另外渲染一张不可拖拽的等高占位卡，避免只改 items 却没有真实空间。
-	const baseTaskIds = visibleTasks.map((t) => t.id);
-	const isCrossColumnTarget =
-		sortable &&
-		dragActiveTaskId !== null &&
-		activeTaskColumnId !== null &&
-		draggedTask !== null &&
-		dragPos?.columnId === column.id &&
-		activeTaskColumnId !== column.id;
-	const placeholderIndex = isCrossColumnTarget
-		? Math.min(dragPos?.index ?? visibleTasks.length, visibleTasks.length)
-		: -1;
-	const items = baseTaskIds;
-	const placeholder = isCrossColumnTarget ? (
-		<div
-			key={`drag-placeholder-${draggedTask.id}`}
-			aria-hidden="true"
-			className="kanso-drag-placeholder pointer-events-none"
-		>
-			<TaskCardView
-				task={draggedTask}
-				labels={labels}
-				style={{ visibility: "hidden" }}
-			/>
-		</div>
-	) : null;
+	// 拖拽展示语义从 use-board-drag 的纯函数下发（唯一真相源），列只负责渲染。
+	const { hovered, placeholderIndex, placeholderTask } = useColumnDropState(
+		column.id,
+		sortable,
+	);
+	const items = visibleTasks.map((t) => t.id);
+	const placeholder =
+		placeholderTask && placeholderIndex !== -1 ? (
+			<div
+				key={`drag-placeholder-${placeholderTask.id}`}
+				aria-hidden="true"
+				className="kanso-drag-placeholder pointer-events-none"
+			>
+				<TaskCardView
+					task={placeholderTask}
+					labels={labels}
+					style={{ visibility: "hidden" }}
+				/>
+			</div>
+		) : null;
 	const taskList = (
 		<>
 			{visibleTasks.map((task, index) => (
@@ -152,75 +139,90 @@ const SortableColumn = memo(function SortableColumn(props: {
 			<div
 				// 对齐原型 .col：282px 列、3% 暖灰底、1px 边框、12px 圆角。
 				className="kanso-board-column flex flex-1 flex-col transition-[border-color,background-color] duration-150"
-				data-drag-over={dragOver || undefined}
+				data-drag-over={hovered || undefined}
 			>
-			<div className="kanso-board-column__header">
-				<div className="kanso-board-column__title">
-					<button
-						type="button"
-						ref={setActivatorNodeRef}
-						{...attributes}
-						{...listeners}
-						className="kanso-board-column__grip-button"
-						aria-label={`拖拽列 ${column.name}`}
-					>
-						<GripVerticalIcon className="kanso-board-column__grip" />
-					</button>
-					{editingName ? (
-						<input
-							className="kanso-board-column__name-input"
-							value={draftName}
-							autoFocus
-							aria-label={`编辑列名：${column.name}`}
-							onChange={(event) => setDraftName(event.target.value)}
-							onPointerDown={(event) => event.stopPropagation()}
-							onKeyDown={(event) => {
-								if (event.key === "Enter") {
-									event.preventDefault();
-									commitRename();
-								}
-								if (event.key === "Escape") cancelRename();
-							}}
-							onBlur={commitRename}
-						/>
-					) : (
+				<div className="kanso-board-column__header">
+					<div className="kanso-board-column__title">
 						<button
 							type="button"
-							className="kanso-board-column__name-trigger"
-							title="点击修改列名"
-							aria-label={`修改列名：${column.name}`}
-							onClick={beginRename}
-							onPointerDown={(event) => event.stopPropagation()}
+							ref={setActivatorNodeRef}
+							{...attributes}
+							{...listeners}
+							className="kanso-board-column__grip-button"
+							aria-label={`拖拽列 ${column.name}`}
 						>
-							{column.name}
+							<GripVerticalIcon className="kanso-board-column__grip" />
 						</button>
-					)}
-					<span className={`kanso-board-column__count ${column.wipLimit !== null && column.wipLimit !== undefined && column.tasks.length > column.wipLimit ? "kanso-wip-warning" : ""}`}>
-						{column.tasks.length}{column.wipLimit !== null && column.wipLimit !== undefined ? ` / ${column.wipLimit}` : ""}
-					</span>
+						{editingName ? (
+							<input
+								className="kanso-board-column__name-input"
+								value={draftName}
+								autoFocus
+								aria-label={`编辑列名：${column.name}`}
+								onChange={(event) => setDraftName(event.target.value)}
+								onPointerDown={(event) => event.stopPropagation()}
+								onKeyDown={(event) => {
+									if (event.key === "Enter") {
+										event.preventDefault();
+										commitRename();
+									}
+									if (event.key === "Escape") cancelRename();
+								}}
+								onBlur={commitRename}
+							/>
+						) : (
+							<button
+								type="button"
+								className="kanso-board-column__name-trigger"
+								title="点击修改列名"
+								aria-label={`修改列名：${column.name}`}
+								onClick={beginRename}
+								onPointerDown={(event) => event.stopPropagation()}
+							>
+								{column.name}
+							</button>
+						)}
+						<span
+							className={`kanso-board-column__count ${column.wipLimit !== null && column.wipLimit !== undefined && column.tasks.length > column.wipLimit ? "kanso-wip-warning" : ""}`}
+						>
+							{column.tasks.length}
+							{column.wipLimit !== null && column.wipLimit !== undefined
+								? ` / ${column.wipLimit}`
+								: ""}
+						</span>
+					</div>
+					<div
+						className="kanso-board-column__actions"
+						onPointerDown={(e) => e.stopPropagation()}
+					>
+						<Button
+							variant="ghost"
+							size="icon"
+							className="size-6 text-destructive"
+							aria-label={`删除列 ${column.name}`}
+							onClick={() => onDelete(column)}
+						>
+							<TrashIcon />
+						</Button>
+					</div>
 				</div>
-				<div
-					className="kanso-board-column__actions"
-					onPointerDown={(e) => e.stopPropagation()}
-				>
-					<Button variant="ghost" size="icon" className="size-6 text-destructive" aria-label={`删除列 ${column.name}`} onClick={() => onDelete(column)}><TrashIcon /></Button>
-				</div>
-			</div>
 
-			<div className="kanso-board-column__body flex flex-1 flex-col gap-2">
-			{visibleTasks.length === 0 && !isCrossColumnTarget ? (
-				<p className="kanso-column-empty text-xs">拖拽任务到这里</p>
-			) : (
-				<SortableContext
-					items={items}
-					strategy={verticalListSortingStrategy}
-					disabled={!sortable}
-				>
-					{taskList}
-				</SortableContext>
-			)}
-			<AddTaskForm onAdd={(title, priority) => onAddTask(column.id, title, priority)} />
-			</div>
+				<div className="kanso-board-column__body flex flex-1 flex-col gap-2">
+					{visibleTasks.length === 0 && placeholderIndex === -1 ? (
+						<p className="kanso-column-empty text-xs">拖拽任务到这里</p>
+					) : (
+						<SortableContext
+							items={items}
+							strategy={verticalListSortingStrategy}
+							disabled={!sortable}
+						>
+							{taskList}
+						</SortableContext>
+					)}
+					<AddTaskForm
+						onAdd={(title, priority) => onAddTask(column.id, title, priority)}
+					/>
+				</div>
 			</div>
 		</div>
 	);

@@ -77,7 +77,7 @@ func newTestServiceMode(t *testing.T, mode config.Mode) *testService {
 	if err := svc.SeedDefaultWorkspace(context.Background()); err != nil {
 		t.Fatalf("种子默认工作区失败: %v", err)
 	}
-	if err := svc.SeedOwnerMember(context.Background(), "test-key"); err != nil {
+	if err := svc.SeedAdminMember(context.Background(), "test-key"); err != nil {
 		t.Fatalf("种子 owner 失败: %v", err)
 	}
 	hub := &fakeBroadcaster{}

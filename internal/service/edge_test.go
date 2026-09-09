@@ -1,4 +1,4 @@
-// 边界路径测试：种子分叉、保留名/成员上限、owner 保护、空列表等可达分支。
+// 边界路径测试：种子分叉、保留名/成员上限、管理员保护、空列表等可达分支。
 package service
 
 import (
@@ -10,8 +10,8 @@ import (
 	"kanso/internal/db"
 )
 
-// TestSeedOwnerMemberSkipsNoWorkspace：无工作区时跳过（避免孤儿 owner）。
-func TestSeedOwnerMemberSkipsNoWorkspace(t *testing.T) {
+// TestSeedAdminMemberSkipsNoWorkspace：无工作区时跳过（避免孤儿管理员）。
+func TestSeedAdminMemberSkipsNoWorkspace(t *testing.T) {
 	database, err := db.Open(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -21,17 +21,17 @@ func TestSeedOwnerMemberSkipsNoWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := New(database, config.ModeTeam)
-	// 不种子工作区，直接种子 owner → 应静默跳过。
-	if err := svc.SeedOwnerMember(context.Background(), "key"); err != nil {
-		t.Fatalf("无工作区时 SeedOwnerMember 应跳过，实际 %v", err)
+	// 不种子工作区，直接种子管理员 → 应静默跳过。
+	if err := svc.SeedAdminMember(context.Background(), "key"); err != nil {
+		t.Fatalf("无工作区时 SeedAdminMember 应跳过，实际 %v", err)
 	}
-	if _, ok := svc.OwnerMember(context.Background()); ok {
-		t.Fatal("无工作区不应创建 owner")
+	if _, ok := svc.AdminMember(context.Background()); ok {
+		t.Fatal("无工作区不应创建管理员")
 	}
 }
 
-// TestSeedOwnerMemberCreatesWhenAbsent：有工作区但无 owner → 创建。
-func TestSeedOwnerMemberCreatesWhenAbsent(t *testing.T) {
+// TestSeedAdminMemberCreatesWhenAbsent：有工作区但无管理员 → 创建。
+func TestSeedAdminMemberCreatesWhenAbsent(t *testing.T) {
 	database, err := db.Open(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -44,15 +44,15 @@ func TestSeedOwnerMemberCreatesWhenAbsent(t *testing.T) {
 	if err := svc.SeedDefaultWorkspace(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.SeedOwnerMember(context.Background(), "fresh-key"); err != nil {
-		t.Fatalf("创建 owner 失败: %v", err)
+	if err := svc.SeedAdminMember(context.Background(), "fresh-key"); err != nil {
+		t.Fatalf("创建管理员失败: %v", err)
 	}
-	owner, ok := svc.OwnerMember(context.Background())
+	owner, ok := svc.AdminMember(context.Background())
 	if !ok || owner.Name == "" {
-		t.Fatalf("owner 应已创建: %+v ok=%v", owner, ok)
+		t.Fatalf("管理员应已创建: %+v ok=%v", owner, ok)
 	}
 	if id, ok := svc.MemberIDByKey(context.Background(), "fresh-key"); !ok || id != owner.ID {
-		t.Fatalf("fresh-key 应命中新 owner")
+		t.Fatalf("fresh-key 应命中新管理员")
 	}
 }
 
@@ -82,12 +82,12 @@ func TestMemberLimitsAndProtection(t *testing.T) {
 		t.Fatalf("超出上限应 ErrMemberLimit，实际 %v", err)
 	}
 
-	// owner 受保护：删除最后一名管理员 → ErrOwnerProtected。
-	owner, _ := env.svc.OwnerMember(ctx)
-	if err := env.svc.DeleteMember(ctx, owner.ID); !errors.Is(err, ErrOwnerProtected) {
-		t.Fatalf("删除 owner 应 ErrOwnerProtected，实际 %v", err)
+	// 管理员受保护：删除最后一名管理员 → ErrLastAdmin。
+	owner, _ := env.svc.AdminMember(ctx)
+	if err := env.svc.DeleteMember(ctx, owner.ID); !errors.Is(err, ErrLastAdmin) {
+		t.Fatalf("删除最后一名管理员应 ErrLastAdmin，实际 %v", err)
 	}
-	// 删除普通成员（验证 owner 保护外的路径）。
+	// 删除普通成员（验证管理员保护外的路径）。
 	members, err := env.svc.ListMembers(ctx, wsID)
 	requireNoErr(t, err)
 	var normal string

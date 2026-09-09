@@ -255,6 +255,28 @@ it("rotates, revokes and transfers member credentials with role checks", async (
 	const members = await json<Array<{ id: string; role: string }>>(`/api/workspaces/${workspaceId}/members`);
 	expect(members.body.find((item) => item.id === "mock-member-1")?.role).toBe("admin");
 	expect(members.body.find((item) => item.id === "mock-member-2")?.role).toBe("admin");
+
+	// 管理员原子转移：只能转给普通成员；成功后调用方降级、目标升 admin。
+	const transferAdmin = await fetch(
+		`http://localhost/api/members/mock-member-2/transfer-admin`,
+		{ method: "POST" },
+	);
+	expect(transferAdmin.status).toBe(400);
+	const transferOk = await json<{ id: string; role: string }>(
+		`/api/members/${created.body.id}/transfer-admin`,
+		{ method: "POST" },
+	);
+	expect(transferOk.response.status).toBe(200);
+	expect(transferOk.body.role).toBe("admin");
+	const afterTransfer = await json<Array<{ id: string; role: string }>>(
+		`/api/workspaces/${workspaceId}/members`,
+	);
+	expect(afterTransfer.body.find((item) => item.id === "mock-member-1")?.role).toBe(
+		"member",
+	);
+	expect(afterTransfer.body.find((item) => item.id === created.body.id)?.role).toBe(
+		"admin",
+	);
 });
 
 it("keeps archived tasks intact after same-column reorder", async () => {

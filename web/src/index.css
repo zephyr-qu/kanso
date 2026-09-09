@@ -61,6 +61,12 @@ input:-webkit-autofill:active {
     transition: none !important;
   }
 
+  /* View Transition（工作区切换交叉淡入）对减少动效用户直接关闭。 */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+
   [data-slot="sidebar-gap"],
   [data-slot="sidebar-container"],
   [data-slot="sidebar-group-content"],

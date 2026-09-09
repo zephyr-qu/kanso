@@ -2,7 +2,7 @@
 // dnd-kit 事件在绑定层归一化为 {activeId, overId}；board/viewMode 作为 ctx 显式传入。
 // dragend 产出「提交计划」（DragCommand[]），页面只做 命令 → mutation 的映射。
 // 历史 bug 区域（泳道解析忽略列维度、跨列临时落点、同列让位）整体收敛到此，可单测。
-import { useRef, useState } from "react";
+import { createContext, useContext, useRef, useState, type ReactNode } from "react";
 import type { Board, BoardColumn } from "@/types/board";
 import type { Task } from "@/types/task";
 
@@ -285,7 +285,9 @@ export function dragTransition(
 			);
 			if (
 				sourceColumn?.id === targetColumn.id &&
-				sourceColumn.tasks.indexOf(dragged) === targetIndex
+				// targetIndex 是未归档口径（resolvePlacement 基于 activeTasks），比较必须同口径，
+				// 否则列内有归档任务时全量索引错位，会误判「位置没变」而丢弃 moveTask。
+				activeTasks(sourceColumn).indexOf(dragged) === targetIndex
 			) {
 				return { state: resetState, commands: [] };
 			}
@@ -434,4 +436,81 @@ export function useBoardDrag(board: Board | undefined, viewMode: DragViewMode) {
 		onDragEnd,
 		onDragCancel,
 	};
+}
+
+// ── 列拖拽展示语义（唯一真相源）──────────────────────────────────────────
+// 此前 SortableColumn 裸收 5 项拖拽内部状态并二次推导跨列占位/高亮——语义的第二份
+// 实现。现在收敛为纯函数 + Context 下发，列组件变成纯渲染。
+
+/** 列拖拽展示状态（原 SortableColumn 内 isCrossColumnTarget/placeholderIndex 推导）。 */
+export type ColumnDropState = {
+	/** 拖拽悬停本列（列容器 data-drag-over 高亮）。 */
+	hovered: boolean;
+	/** 跨列拖入本列时的占位卡插入位（-1 = 不渲染）。 */
+	placeholderIndex: number;
+	/** 占位卡要渲染的拖拽任务（无跨列占位时 null）。 */
+	placeholderTask: Task | null;
+};
+
+/** 语义与原列内推导逐条对应：sortable 关闭、非任务拖拽、同列、非目标列 → 均无占位。 */
+export function deriveColumnDropState(
+	board: Board,
+	state: DragState,
+	columnId: string,
+	sortable: boolean,
+): ColumnDropState {
+	const none: ColumnDropState = {
+		hovered: state.dragOverId === columnId,
+		placeholderIndex: -1,
+		placeholderTask: null,
+	};
+	if (!sortable || !state.activeId) return none;
+	// activeId 是任务（而非列）才涉及任务拖拽。
+	const activeTask = findTask(board, state.activeId);
+	if (!activeTask || board.columns.some((column) => column.id === state.activeId))
+		return none;
+	const isCrossColumnTarget =
+		state.dragPos?.columnId === columnId && activeTask.columnId !== columnId;
+	if (!isCrossColumnTarget) return none;
+	// sortable=true 时 visibleTasks 即 column.tasks（未排序），钳制口径与原实现一致。
+	const taskCount =
+		board.columns.find((column) => column.id === columnId)?.tasks.length ?? 0;
+	return {
+		hovered: none.hovered,
+		placeholderIndex: Math.min(state.dragPos?.index ?? taskCount, taskCount),
+		placeholderTask: activeTask,
+	};
+}
+
+const DragBoardContext = createContext<{
+	board: Board;
+	dragState: DragState;
+} | null>(null);
+
+/** 向看板子树下发拖拽状态；SortableColumn 经 useColumnDropState 消费，不再吃 props。 */
+export function DragBoardProvider({
+	board,
+	dragState,
+	children,
+}: {
+	board: Board;
+	dragState: DragState;
+	children: ReactNode;
+}) {
+	return (
+		<DragBoardContext.Provider value={{ board, dragState }}>
+			{children}
+		</DragBoardContext.Provider>
+	);
+}
+
+/** 列组件读取自己的拖拽展示状态；语义推导全部在上面的纯函数里，可单测。 */
+export function useColumnDropState(
+	columnId: string,
+	sortable: boolean,
+): ColumnDropState {
+	const ctx = useContext(DragBoardContext);
+	if (!ctx)
+		throw new Error("useColumnDropState must be used within DragBoardProvider");
+	return deriveColumnDropState(ctx.board, ctx.dragState, columnId, sortable);
 }

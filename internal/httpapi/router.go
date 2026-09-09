@@ -35,12 +35,12 @@ type API struct {
 }
 
 func NewRouter(cfg config.Config, svc *service.Service, hub *realtime.Hub) http.Handler {
-	return NewRouterWithAssets(cfg, svc, hub, nil)
+	return NewRouterWithAssets(cfg, svc, hub, nil, nil)
 }
 
 // NewRouterWithAssets builds the application router and optionally serves the
-// embedded production frontend for non-API paths.
-func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.Hub, assets fs.FS) http.Handler {
+// embedded landing page and SPA for non-API paths.
+func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.Hub, spa fs.FS, landing fs.FS) http.Handler {
 	a := &API{
 		cfg:        cfg,
 		configFile: config.ConfigFilePath(),
@@ -67,8 +67,8 @@ func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.
 	// WebSocket：密钥经查询参数（浏览器无法自定义 WS 请求头），单独注册。
 	r.Get("/api/ws", a.handleWS(hub))
 
-	// 其余 /api 路由全部要求密钥。认证按成员表反查密钥（personal = 单一 owner，
-	// owner 的凭证哈希由启动时 SeedOwnerMember 根据 KANSO_ACCESS_KEY 写入，ADR-0013 修订）。
+	// 其余 /api 路由全部要求密钥。认证按成员表反查密钥（personal = 单一 admin，
+	// admin 的凭证哈希由启动时 SeedAdminMember 根据 KANSO_ACCESS_KEY 写入，ADR-0013 修订）。
 	memberLookup := svc.MemberIDByKey
 	r.Group(func(pr chi.Router) {
 		pr.Use(auth.Middleware(memberLookup))
@@ -86,6 +86,7 @@ func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.
 		pr.Get("/api/members", a.listAllMembers)
 		pr.Post("/api/members", a.createMember)
 		pr.Patch("/api/members/{id}/role", a.updateMemberRole)
+		pr.Post("/api/members/{id}/transfer-admin", a.transferAdmin)
 		pr.Delete("/api/members/{id}", a.deleteMember)
 		pr.Post("/api/members/{id}/key", a.createMemberKey)
 		pr.Delete("/api/members/{id}/key", a.revokeMemberKey)
@@ -133,7 +134,7 @@ func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.
 		pr.Patch("/api/comments/{id}", a.updateComment)
 		pr.Delete("/api/comments/{id}", a.deleteComment)
 	})
-	r.NotFound(staticHandler(assets).ServeHTTP)
+	r.NotFound(staticHandler(spa, landing).ServeHTTP)
 
 	return r
 }

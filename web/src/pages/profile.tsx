@@ -24,7 +24,7 @@ import { PageContent, PageHeader, SurfaceCard } from "@/components/kanso-ui";
 import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
-import { avatarColor, AVATAR_COLORS } from "@/lib/avatar";
+import { AVATAR_COLORS } from "@/lib/avatar";
 import { formatActivityAge } from "@/lib/format-relative";
 import { invalidateMe, queryKeys } from "@/hooks/query-keys";
 import { useWorkspaceContext } from "@/hooks/use-workspace-context";
@@ -167,7 +167,7 @@ function ActivityHeatmap({ activities }: { activities: Activity[] }) {
 
 export default function ProfilePage() {
 	const { workspaceId = "" } = useParams();
-	const { workspace } = useWorkspaceContext();
+	const { currentWorkspace: workspace } = useWorkspaceContext();
 	const queryClient = useQueryClient();
 	// 内联编辑名称（小操作不弹面板）：点编辑 → 输入框，Enter 保存，Esc/失焦取消。
 	const [editing, setEditing] = useState(false);
@@ -242,9 +242,9 @@ export default function ProfilePage() {
 
 	const member = data?.member;
 	const workspaceName = workspace?.name ?? "";
-	const activityOwner = mode === "team" ? member?.name : "Admin";
+	const activityActor = mode === "team" ? member?.name : "Admin";
 	const myActivities = (activities ?? []).filter(
-		(activity) => !activityOwner || activity.actor === activityOwner,
+		(activity) => !activityActor || activity.actor === activityActor,
 	);
 	const recentActivities = myActivities.slice(0, 5);
 	const recentActivityCount = myActivities.filter(
@@ -318,7 +318,7 @@ export default function ProfilePage() {
 													type="button"
 													aria-label={`头像颜色 ${color}`}
 													onClick={() => updateMember.mutate({ avatarColor: color })}
-													className={`size-8 rounded-full transition-transform hover:scale-110 ${(member.avatarColor ?? avatarColor(member.name)) === color ? "ring-2 ring-ring ring-offset-2" : ""}`}
+													className={`size-8 rounded-full transition-transform hover:scale-110 ${member.avatarColor === color ? "ring-2 ring-ring ring-offset-2" : ""}`}
 													style={{ backgroundColor: color }}
 												/>
 											))}
@@ -326,7 +326,7 @@ export default function ProfilePage() {
 									</PopoverPopup>
 								</Popover>
 							) : (
-								// personal 模式：PATCH /api/members/{id} 双模式注册，头像可改（仅 owner 单成员）。
+								// personal 模式：PATCH /api/members/{id} 双模式注册，头像可改（仅管理员单成员）。
 								<MemberAvatar
 									member={member}
 									className="size-14 text-lg font-semibold text-white"

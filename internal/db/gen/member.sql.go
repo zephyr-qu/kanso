@@ -132,12 +132,12 @@ func (q *Queries) GetMemberByAccessKey(ctx context.Context, accessKeyHash *strin
 	return i, err
 }
 
-const getOwnerMember = `-- name: GetOwnerMember :one
+const getAdminMember = `-- name: GetAdminMember :one
 SELECT id, name, role, avatar_color, avatar, access_key_hash, created_at FROM member WHERE role = 'admin' ORDER BY created_at LIMIT 1
 `
 
-func (q *Queries) GetOwnerMember(ctx context.Context) (Member, error) {
-	row := q.db.QueryRowContext(ctx, getOwnerMember)
+func (q *Queries) GetAdminMember(ctx context.Context) (Member, error) {
+	row := q.db.QueryRowContext(ctx, getAdminMember)
 	var i Member
 	err := row.Scan(
 		&i.ID,

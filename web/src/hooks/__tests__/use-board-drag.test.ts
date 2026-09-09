@@ -1,9 +1,11 @@
 // 看板拖拽状态机测试：核心解析 + 回归（泳道列维度、跨列落点、同列 no-op、dragend 提交计划）。
 import { describe, expect, it } from "vitest";
 import {
+	deriveColumnDropState,
 	dragTransition,
 	initialDragState,
 	type DragAction,
+	type DragState,
 	type DragEvent,
 	type DragViewMode,
 	type OverType,
@@ -90,10 +92,18 @@ function act(
 	} satisfies DragAction);
 }
 
-const over = (activeId: string, overId: string, overType: OverType = "task", halfPassed = false) =>
-	({ type: "over", activeId, overId, overType, halfPassed }) as const;
-const end = (activeId: string, overId: string, overType: OverType = "task", halfPassed = false) =>
-	({ type: "end", activeId, overId, overType, halfPassed }) as const;
+const over = (
+	activeId: string,
+	overId: string,
+	overType: OverType = "task",
+	halfPassed = false,
+) => ({ type: "over", activeId, overId, overType, halfPassed }) as const;
+const end = (
+	activeId: string,
+	overId: string,
+	overType: OverType = "task",
+	halfPassed = false,
+) => ({ type: "end", activeId, overId, overType, halfPassed }) as const;
 
 describe("start / cancel", () => {
 	it("start 记录 activeId，清空视觉反馈", () => {
@@ -243,6 +253,19 @@ describe("dragEnd：提交计划", () => {
 		]);
 	});
 
+	// 回归：no-op 比较必须用未归档口径（resolvePlacement 基于 activeTasks）。
+	// 列首有归档任务时全量索引错位一格，旧实现误判「位置没变」而丢弃 moveTask。
+	it("列内有归档任务时同列重排仍提交 moveTask", () => {
+		const board = fixtureBoard();
+		const archived = { ...makeTask("t0", "c1", 0), archivedAt: "2026-01-01T00:00:00Z" };
+		board.columns[0].tasks = [archived, ...board.columns[0].tasks];
+		// 归档口径：t1@0、t2@1；落在 t2 → position 1。全量口径 t1@1 会与目标 1 相等而误判 no-op。
+		const result = act(end("t1", "t2"), board);
+		expect(result.commands).toEqual([
+			{ type: "moveTask", id: "t1", columnId: "c1", position: 1 },
+		]);
+	});
+
 	it("未知任务 → 无命令", () => {
 		const board = fixtureBoard();
 		expect(act(end("ghost", "c2"), board).commands).toEqual([]);
@@ -300,5 +323,70 @@ describe("dragEnd：泳道视图（回归：落点含列维度）", () => {
 			labelId: "l2",
 			attach: true,
 		});
+	});
+});
+
+describe("deriveColumnDropState", () => {
+	const board = fixtureBoard();
+
+	it("跨列拖拽：目标列得到占位索引与拖拽任务", () => {
+		const state: DragState = {
+			activeId: "t1",
+			dragOverId: "c2",
+			dragPos: { columnId: "c2", index: 1 },
+		};
+		expect(deriveColumnDropState(board, state, "c2", true)).toEqual({
+			hovered: true,
+			placeholderIndex: 1,
+			placeholderTask: board.columns[0].tasks[0],
+		});
+	});
+
+	it("同列排序：无占位（占位索引 -1），悬停高亮保留", () => {
+		const state: DragState = {
+			activeId: "t1",
+			dragOverId: "c1",
+			dragPos: { columnId: "c1", index: 1 },
+		};
+		expect(deriveColumnDropState(board, state, "c1", true)).toEqual({
+			hovered: true,
+			placeholderIndex: -1,
+			placeholderTask: null,
+		});
+	});
+
+	it("排序视图禁用拖拽（sortable=false）：无占位", () => {
+		const state: DragState = {
+			activeId: "t1",
+			dragOverId: "c2",
+			dragPos: { columnId: "c2", index: 0 },
+		};
+		expect(deriveColumnDropState(board, state, "c2", false)).toEqual({
+			hovered: true,
+			placeholderIndex: -1,
+			placeholderTask: null,
+		});
+	});
+
+	it("落点索引越界钳制到列任务数", () => {
+		const state: DragState = {
+			activeId: "t1",
+			dragOverId: "c2",
+			dragPos: { columnId: "c2", index: 99 },
+		};
+		expect(deriveColumnDropState(board, state, "c2", true).placeholderIndex).toBe(
+			1,
+		);
+	});
+
+	it("拖拽的是列（activeId 为列 id）：无占位", () => {
+		const state: DragState = {
+			activeId: "c1",
+			dragOverId: "c2",
+			dragPos: { columnId: "c2", index: 0 },
+		};
+		expect(
+			deriveColumnDropState(board, state, "c2", true).placeholderTask,
+		).toBeNull();
 	});
 });

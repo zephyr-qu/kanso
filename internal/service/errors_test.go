@@ -18,7 +18,7 @@ func TestClassifyError(t *testing.T) {
 		{name: "cross project", err: ErrCrossProjectMove, want: ErrorInvalidInput},
 		{name: "member limit", err: ErrMemberLimit, want: ErrorConflict},
 		{name: "admin limit", err: ErrAdminLimit, want: ErrorConflict},
-		{name: "owner protected", err: ErrOwnerProtected, want: ErrorForbidden},
+		{name: "last admin", err: ErrLastAdmin, want: ErrorForbidden},
 		{name: "unknown", err: errors.New("database down"), want: ErrorInternal},
 	}
 	for _, tc := range cases {

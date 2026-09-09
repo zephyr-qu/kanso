@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClockIcon, PencilIcon, PlusIcon, Share2Icon, TrashIcon } from "lucide-react";
+import {
+	ClockIcon,
+	PencilIcon,
+	PlusIcon,
+	Share2Icon,
+	TrashIcon,
+} from "lucide-react";
 import ConfirmDialog from "@/components/confirm-dialog";
 import NameDialog from "@/components/name-dialog";
 import { PinToggleButton } from "@/components/pin-toggle-button";
@@ -34,7 +40,7 @@ import { PageContent, PageHeader, PrimaryButton } from "@/components/kanso-ui";
 
 export default function WorkspacePage() {
 	const { workspaceId = "" } = useParams();
-	const { workspace } = useWorkspaceContext();
+	const { currentWorkspace: workspace } = useWorkspaceContext();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const [createOpen, setCreateOpen] = useState(false);
@@ -50,10 +56,13 @@ export default function WorkspacePage() {
 	const refreshWorkspaces = () => {
 		invalidateWorkspaces(queryClient);
 	};
-	const invalidateProjects = () => invalidateWorkspaceProjects(queryClient, workspaceId);
+	const invalidateProjects = () =>
+		invalidateWorkspaceProjects(queryClient, workspaceId);
 
 	const wsRenameMutation = useMutation({
-		meta: { feedback: { success: "工作区已更新", errorTitle: "重命名工作区失败" } },
+		meta: {
+			feedback: { success: "工作区已更新", errorTitle: "重命名工作区失败" },
+		},
 		mutationFn: (name: string) =>
 			api<Workspace>(buildPath("workspace", { id: workspaceId }), {
 				method: "PATCH",
@@ -77,14 +86,16 @@ export default function WorkspacePage() {
 		isError,
 	} = useQuery({
 		queryKey: queryKeys.projects(workspaceId),
-		queryFn: () => api<Project[]>(buildPath("workspaceProjects", { workspaceId })),
+		queryFn: () =>
+			api<Project[]>(buildPath("workspaceProjects", { workspaceId })),
 		enabled: workspaceId !== "",
 	});
 
 	// 分享进度卡:按项目查里程碑(M5)。
 	const shareMilestones = useQuery({
 		queryKey: queryKeys.milestones(shareProject?.id ?? ""),
-		queryFn: () => api<Milestone[]>(buildPath("projectMilestones", { id: shareProject!.id })),
+		queryFn: () =>
+			api<Milestone[]>(buildPath("projectMilestones", { id: shareProject!.id })),
 		enabled: shareProject !== null,
 	});
 	const createMutation = useMutation({
@@ -148,111 +159,115 @@ export default function WorkspacePage() {
 			</PageHeader>
 
 			<PageContent className="kanso-workspace-content px-[30px] pb-11 pt-[26px]">
-
-			{isLoading ? (
-				<div className="flex justify-center py-16">
-					<Spinner />
-				</div>
-			) : isError ? (
-				<p className="py-16 text-center text-sm text-destructive">
-					加载项目失败
-				</p>
-			) : projects && projects.length > 0 ? (
-				<div className="kanso-workspace-grid">
-					{projects.map((project) => (
-						<Link
-							key={project.id}
-							to={`/w/${workspaceId}/p/${project.id}`}
-							onMouseEnter={() => {
-								preloadRoute("board");
-								prefetchBoard(queryClient, project.id);
-							}}
-							onFocus={() => {
-								preloadRoute("board");
-								prefetchBoard(queryClient, project.id);
-							}}
-					// 对齐原型 .project-card（方向 F）：8px 圆角、1px 边框、内边距 18/18/14、子元素 gap 10px、hover 上浮 3px。
-												className="kanso-project-card group"
-						>
-							<p className="kanso-project-card__title truncate pr-12">
-								{project.name}
-							</p>
-							{/* 计数标签（对齐原型 proj-counts：gap 6px、chip 11px/500/1.5） */}
-											<div className="kanso-project-card__counts">
-												<span className="kanso-chip">
-													{project.taskCount ?? 0} 任务
-												</span>
-												<span className="kanso-chip">
-													{project.inProgressCount ?? 0} 进行中
-								</span>
-							</div>
-							<p className="kanso-project-card__meta pr-12">
-														<ClockIcon className="size-3 shrink-0" />
-								{project.updatedAt
-									? formatUpdated(project.updatedAt)
-									: `创建于 ${project.createdAt.slice(0, 10)}`}
-							</p>
-
-							{/* hover 操作：分享单独右下角、重命名/删除右上角（阻止冒泡避免触发跳转） */}
-							<div
-							className="kanso-project-card__actions"
-								onClick={(e) => e.preventDefault()}
-								onPointerDown={(e) => e.stopPropagation()}
+				{isLoading ? (
+					<div className="flex justify-center py-16">
+						<Spinner />
+					</div>
+				) : isError ? (
+					<p className="py-16 text-center text-sm text-destructive">加载项目失败</p>
+				) : projects && projects.length > 0 ? (
+					<div className="kanso-workspace-grid">
+						{projects.map((project) => (
+							<Link
+								key={project.id}
+								to={`/w/${workspaceId}/p/${project.id}`}
+								onMouseEnter={() => {
+									preloadRoute("board");
+									prefetchBoard(queryClient, project.id);
+								}}
+								onFocus={() => {
+									preloadRoute("board");
+									prefetchBoard(queryClient, project.id);
+								}}
+								// 对齐原型 .project-card（方向 F）：8px 圆角、1px 边框、内边距 18/18/14、子元素 gap 10px、hover 上浮 3px。
+								className="kanso-project-card group"
 							>
-								<PinToggleButton workspaceId={workspaceId} projectId={project.id} name={project.name} className="size-7" />
+								<p className="kanso-project-card__title truncate pr-12">
+									{project.name}
+								</p>
+								{/* 计数标签（对齐原型 proj-counts：gap 6px、chip 11px/500/1.5） */}
+								<div className="kanso-project-card__counts">
+									<span className="kanso-chip">{project.taskCount ?? 0} 任务</span>
+									<span className="kanso-chip">
+										{project.inProgressCount ?? 0} 进行中
+									</span>
+								</div>
+								<p className="kanso-project-card__meta pr-12">
+									<ClockIcon className="size-3 shrink-0" />
+									{project.updatedAt
+										? formatUpdated(project.updatedAt)
+										: `创建于 ${project.createdAt.slice(0, 10)}`}
+								</p>
+
+								{/* hover 操作：分享单独右下角、重命名/删除右上角（阻止冒泡避免触发跳转） */}
+								<div
+									className="kanso-project-card__actions"
+									onClick={(e) => e.preventDefault()}
+									onPointerDown={(e) => e.stopPropagation()}
+								>
+									<PinToggleButton
+										workspaceId={workspaceId}
+										projectId={project.id}
+										name={project.name}
+										className="size-7"
+									/>
 									<Button
 										variant="ghost"
-									size="icon"
-									className="size-7"
-									aria-label={`重命名 ${project.name}`}
-									onClick={() => setRenaming(project)}
-								>
-									<PencilIcon />
-								</Button>
-								<Button
-									variant="ghost"
-									size="icon"
-									className="size-7 text-destructive"
-									aria-label={`删除 ${project.name}`}
-									onClick={() => setDeleting(project)}
-								>
-									<TrashIcon />
-								</Button>
-							</div>
+										size="icon"
+										className="size-7"
+										aria-label={`重命名 ${project.name}`}
+										onClick={() => setRenaming(project)}
+									>
+										<PencilIcon />
+									</Button>
+									<Button
+										variant="ghost"
+										size="icon"
+										className="size-7 text-destructive"
+										aria-label={`删除 ${project.name}`}
+										onClick={() => setDeleting(project)}
+									>
+										<TrashIcon />
+									</Button>
+								</div>
 
-							{/* 分享按钮：右下角（hover 显示；阻止冒泡避免触发跳转） */}
-							<div
-							className="kanso-project-card__share"
-								onClick={(e) => e.preventDefault()}
-								onPointerDown={(e) => e.stopPropagation()}
-							>
-								<Button
-									variant="ghost"
-									size="icon"
-									className="size-7"
-									aria-label={`分享 ${project.name}`}
-									onClick={() => setShareProject(project)}
+								{/* 分享按钮：右下角（hover 显示；阻止冒泡避免触发跳转） */}
+								<div
+									className="kanso-project-card__share"
+									onClick={(e) => e.preventDefault()}
+									onPointerDown={(e) => e.stopPropagation()}
 								>
-									<Share2Icon />
-								</Button>
-							</div>
-						</Link>
-					))}
-					<button type="button" className="kanso-project-card kanso-new-project-card" onClick={() => setCreateOpen(true)}>
-						<PlusIcon className="size-5" />
-						<span>新建项目</span>
-					</button>
-				</div>
-			) : (
-				<Empty>
-					<EmptyHeader>
-						<EmptyTitle>还没有项目</EmptyTitle>
-						<EmptyDescription>
-							点击右上角"新建项目"，系统会自动创建默认列（待办/进行中/已阻塞/已完成）。
-						</EmptyDescription>
-					</EmptyHeader>
-				</Empty>
-			)}
+									<Button
+										variant="ghost"
+										size="icon"
+										className="size-7"
+										aria-label={`分享 ${project.name}`}
+										onClick={() => setShareProject(project)}
+									>
+										<Share2Icon />
+									</Button>
+								</div>
+							</Link>
+						))}
+						<button
+							type="button"
+							className="kanso-project-card kanso-new-project-card"
+							onClick={() => setCreateOpen(true)}
+						>
+							<PlusIcon className="size-5" />
+							<span>新建项目</span>
+						</button>
+					</div>
+				) : (
+					<Empty>
+						<EmptyHeader>
+							<EmptyTitle>还没有项目</EmptyTitle>
+							<EmptyDescription>
+								点击右上角"新建项目"，系统会自动创建默认列（待办/进行中/已阻塞/已完成）。
+							</EmptyDescription>
+						</EmptyHeader>
+					</Empty>
+				)}
 			</PageContent>
 
 			<NameDialog
@@ -264,12 +279,13 @@ export default function WorkspacePage() {
 				onSubmit={async (name) => {
 					await createMutation.mutateAsync(name);
 				}}
-			>
-			</NameDialog>
+			></NameDialog>
 
 			<ShareMilestoneDialog
 				open={shareProject !== null}
-				onOpenChange={(o) => { if (!o) setShareProject(null); }}
+				onOpenChange={(o) => {
+					if (!o) setShareProject(null);
+				}}
 				projectName={shareProject?.name ?? ""}
 				milestones={shareMilestones.data ?? []}
 			/>
@@ -283,8 +299,7 @@ export default function WorkspacePage() {
 				submitLabel="保存"
 				initialValue={renaming?.name ?? ""}
 				onSubmit={async (name) => {
-					if (renaming)
-						await renameMutation.mutateAsync({ id: renaming.id, name });
+					if (renaming) await renameMutation.mutateAsync({ id: renaming.id, name });
 				}}
 			/>
 			<ConfirmDialog

@@ -1,5 +1,12 @@
 // 看板页：编排与渲染。数据/缓存/乐观更新逻辑都在领域 hooks 里（架构候选 1）。
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import {
+	lazy,
+	Suspense,
+	useCallback,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
 	KeyboardSensor,
@@ -32,7 +39,11 @@ import { useMilestoneLink } from "@/hooks/use-milestone-link";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useTaskMutations } from "@/hooks/use-task-mutations";
 import { useWorkspaceContext } from "@/hooks/use-workspace-context";
-import { useBoardDrag, swimlaneGroups } from "@/hooks/use-board-drag";
+import {
+	DragBoardProvider,
+	swimlaneGroups,
+	useBoardDrag,
+} from "@/hooks/use-board-drag";
 import { overSignal } from "@/lib/board-dnd";
 import type { Board, BoardColumn, Milestone } from "@/types/board";
 import type { Label } from "@/types/label";
@@ -41,14 +52,16 @@ import { PageContent } from "@/components/kanso-ui";
 import { BoardToolbar } from "@/components/board/board-toolbar";
 
 const BoardDialogs = lazy(() =>
-	import("@/components/board/board-dialogs").then(({ BoardDialogs: Dialogs }) => ({
-		default: Dialogs,
-	})),
+	import("@/components/board/board-dialogs").then(
+		({ BoardDialogs: Dialogs }) => ({
+			default: Dialogs,
+		}),
+	),
 );
 
 export default function BoardPage() {
 	const { projectId = "", workspaceId = "" } = useParams();
-	const { workspace } = useWorkspaceContext();
+	const { currentWorkspace: workspace } = useWorkspaceContext();
 
 	// 打开项目即记录"最近打开"，供仪表盘"项目速览"展示。
 	useEffect(() => {
@@ -83,18 +96,13 @@ export default function BoardPage() {
 	// 显示层排序（按项目持久化到 localStorage，刷新保持）：不改写 position。
 	const { sort: sortConfig, setSort: setSortConfig } = useBoardSort(projectId);
 	const { board, isLoading, isError, columnOps } = useBoardData(projectId);
-	const swimlanes = useMemo(
-		() => (board ? swimlaneGroups(board) : []),
-		[board],
-	);
+	const swimlanes = useMemo(() => (board ? swimlaneGroups(board) : []), [board]);
 	const taskOps = useTaskMutations(projectId, workspaceId);
 	const labelOps = useLabelMutations(projectId, workspaceId);
-	// 拖拽状态机（useBoardDrag）：视觉状态 + dragend 提交计划，纯函数在 hooks/use-board-drag.ts。
+	// 拖拽状态机（useBoardDrag）：视觉状态 + dragend 提交计划，纯函数在 hooks/use-board-drag.tsx。
 	const {
 		dragState,
 		activeTask,
-		dragActiveTaskId,
-		activeTaskColumnId,
 		onDragStart,
 		onDragOver,
 		onDragEnd,
@@ -280,30 +288,29 @@ export default function BoardPage() {
 						}}
 						milestoneLink={milestoneLink}
 					/>
-					<BoardCanvas
-						board={board}
-						viewMode={viewMode}
-						swimlanes={swimlanes}
-						dragState={dragState}
-						activeTask={activeTask}
-						dragActiveTaskId={dragActiveTaskId}
-						activeTaskColumnId={activeTaskColumnId}
-						reducedMotion={reducedMotion}
-						sensors={sensors}
-						announcements={announcements}
-						onDragStart={onDragStart}
-						onDragOver={onDragOver}
-						onDragEnd={handleDragEnd}
-						onDragCancel={onDragCancel}
-						sortConfig={sortConfig}
-						onRename={handleRenameColumn}
-						onDelete={setDeleting}
-						onAddTask={handleAddTask}
-						onOpenTask={handleOpenTask}
-						onArchiveTask={handleArchiveTask}
-						onToggleLabel={handleToggleLabel}
-						onEditTask={setEditingTask}
-					/>
+					<DragBoardProvider board={board} dragState={dragState}>
+						<BoardCanvas
+							board={board}
+							viewMode={viewMode}
+							swimlanes={swimlanes}
+							activeTask={activeTask}
+							reducedMotion={reducedMotion}
+							sensors={sensors}
+							announcements={announcements}
+							onDragStart={onDragStart}
+							onDragOver={onDragOver}
+							onDragEnd={handleDragEnd}
+							onDragCancel={onDragCancel}
+							sortConfig={sortConfig}
+							onRename={handleRenameColumn}
+							onDelete={setDeleting}
+							onAddTask={handleAddTask}
+							onOpenTask={handleOpenTask}
+							onArchiveTask={handleArchiveTask}
+							onToggleLabel={handleToggleLabel}
+							onEditTask={setEditingTask}
+						/>
+					</DragBoardProvider>
 				</PageContent>
 			) : (
 				<Empty>
@@ -316,62 +323,73 @@ export default function BoardPage() {
 				</Empty>
 			)}
 
-
 			<Suspense fallback={null}>
-			<BoardDialogs
-				board={board}
-				workspaceId={workspaceId}
-				projectId={projectId}
-				deleting={deleting}
-				setDeleting={setDeleting}
-				createOpen={createOpen}
-				setCreateOpen={setCreateOpen}
-				onCreateColumn={async (name) => {
-					await columnOps.createColumn.mutateAsync(name);
-				}}
-				onDeleteColumn={async () => {
-					if (deleting) await columnOps.deleteColumn.mutateAsync(deleting.id);
-				}}
-				editingTask={editingTask}
-				setEditingTask={setEditingTask}
-				onUpdateTask={async (name) => {
-					if (editingTask) await taskOps.updateTask.mutateAsync({ id: editingTask.id, title: name });
-				}}
-				labelManagerOpen={labelManagerOpen}
-				setLabelManagerOpen={setLabelManagerOpen}
-				labels={board?.labels ?? []}
-				onCreateLabel={async (name) => {
-					await labelOps.createLabel.mutateAsync({ name });
-				}}
-				onRenameLabel={async (id, name) => {
-					await labelOps.renameLabel.mutateAsync({ id, name });
-				}}
-				onDeleteLabel={async (id) => {
-					await labelOps.deleteLabel.mutateAsync(id);
-				}}
-				archiveOpen={archiveOpen}
-				setArchiveOpen={setArchiveOpen}
-				archivedTasks={archivedQuery.data}
-				archivedLoading={archivedQuery.isLoading}
-				archivedError={archivedQuery.isError}
-				onRestoreTask={(task) => taskOps.setArchived.mutate({ id: task.id, archived: false })}
-				onDeleteArchivedTask={(task) => taskOps.deleteTask.mutate(task.id)}
-				milestoneOpen={milestoneOpen}
-				setMilestoneOpen={setMilestoneOpen}
-				milestones={milestonesQuery.data}
-				newMilestone={newMilestone}
-				setNewMilestone={setNewMilestone}
-				onCreateMilestone={(name) => void milestoneOps.create.mutateAsync(name)}
-				editingMilestone={editingMilestone}
-				setEditingMilestone={setEditingMilestone}
-				onRenameMilestone={(id, name) => milestoneOps.rename.mutateAsync({ id, name })}
-				onUpdateMilestoneDueDate={(id, dueDate) => milestoneOps.updateDueDate.mutateAsync({ id, dueDate })}
-				onDeleteMilestone={(milestone) => void milestoneOps.remove.mutateAsync(milestone.id)}
-				shareOpen={shareOpen}
-				setShareOpen={setShareOpen}
-				detailMilestone={detailMilestone}
-				setDetailMilestone={setDetailMilestone}
-			/>
+				<BoardDialogs
+					board={board}
+					workspaceId={workspaceId}
+					projectId={projectId}
+					deleting={deleting}
+					setDeleting={setDeleting}
+					createOpen={createOpen}
+					setCreateOpen={setCreateOpen}
+					onCreateColumn={async (name) => {
+						await columnOps.createColumn.mutateAsync(name);
+					}}
+					onDeleteColumn={async () => {
+						if (deleting) await columnOps.deleteColumn.mutateAsync(deleting.id);
+					}}
+					editingTask={editingTask}
+					setEditingTask={setEditingTask}
+					onUpdateTask={async (name) => {
+						if (editingTask)
+							await taskOps.updateTask.mutateAsync({
+								id: editingTask.id,
+								title: name,
+							});
+					}}
+					labelManagerOpen={labelManagerOpen}
+					setLabelManagerOpen={setLabelManagerOpen}
+					labels={board?.labels ?? []}
+					onCreateLabel={async (name) => {
+						await labelOps.createLabel.mutateAsync({ name });
+					}}
+					onRenameLabel={async (id, name) => {
+						await labelOps.renameLabel.mutateAsync({ id, name });
+					}}
+					onDeleteLabel={async (id) => {
+						await labelOps.deleteLabel.mutateAsync(id);
+					}}
+					archiveOpen={archiveOpen}
+					setArchiveOpen={setArchiveOpen}
+					archivedTasks={archivedQuery.data}
+					archivedLoading={archivedQuery.isLoading}
+					archivedError={archivedQuery.isError}
+					onRestoreTask={(task) =>
+						taskOps.setArchived.mutate({ id: task.id, archived: false })
+					}
+					onDeleteArchivedTask={(task) => taskOps.deleteTask.mutate(task.id)}
+					milestoneOpen={milestoneOpen}
+					setMilestoneOpen={setMilestoneOpen}
+					milestones={milestonesQuery.data}
+					newMilestone={newMilestone}
+					setNewMilestone={setNewMilestone}
+					onCreateMilestone={(name) => void milestoneOps.create.mutateAsync(name)}
+					editingMilestone={editingMilestone}
+					setEditingMilestone={setEditingMilestone}
+					onRenameMilestone={(id, name) =>
+						milestoneOps.rename.mutateAsync({ id, name })
+					}
+					onUpdateMilestoneDueDate={(id, dueDate) =>
+						milestoneOps.updateDueDate.mutateAsync({ id, dueDate })
+					}
+					onDeleteMilestone={(milestone) =>
+						void milestoneOps.remove.mutateAsync(milestone.id)
+					}
+					shareOpen={shareOpen}
+					setShareOpen={setShareOpen}
+					detailMilestone={detailMilestone}
+					setDetailMilestone={setDetailMilestone}
+				/>
 			</Suspense>
 
 			{/* 子路由：任务详情右侧抽屉（fixed 覆盖在看板之上） */}
