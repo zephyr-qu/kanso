@@ -24,6 +24,7 @@ web/dist/*
 .e2e-*/
 .vscode/
 /kanso
+/*.exe
 
 # 本地文档（不入版本管理）
 docs/

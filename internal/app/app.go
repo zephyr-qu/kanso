@@ -1,5 +1,5 @@
 // Package app 负责 Kanso 进程的启动、运行与关闭生命周期。
-// cmd/kanso 只保留命令行参数、信号和退出码处理，领域初始化集中在这里。
+// kanso serve（internal/cli）负责命令行与信号；领域初始化集中在这里。
 package app
 
 import (
