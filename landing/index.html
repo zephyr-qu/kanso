@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Kanso — 私有化的轻量看板工作台</title>
+		<meta name="description" content="Kanso 是一个安静、清晰的任务管理空间：看板、任务、里程碑和工作区，单机部署，数据掌握在自己手里。" />
+		<link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+		<link rel="stylesheet" href="./style.css" />
+	</head>
+	<body>
+		<div class="landing-page">
+			<div class="landing-grain" aria-hidden="true"></div>
+
+			<header class="landing-header">
+				<a class="landing-logo" href="/" aria-label="Kanso 首页">
+					<span class="landing-mark" aria-hidden="true">簡</span>
+					<span>Kanso</span>
+				</a>
+				<nav class="landing-nav" id="landing-nav" aria-label="主导航">
+					<a href="#method">为什么 Kanso</a>
+					<a href="#features">工作方式</a>
+					<a href="#about">关于产品</a>
+					<a class="landing-nav-mobile-cta" href="/login">进入工作区
+						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
+					</a>
+				</nav>
+				<a class="landing-header-cta" href="/login">进入工作区
+					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
+				</a>
+				<button class="landing-menu-button" type="button" aria-label="打开菜单" aria-expanded="false" aria-controls="landing-nav">
+					<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+				</button>
+			</header>
+
+			<main>
+				<section class="landing-hero">
+					<div class="landing-hero-copy">
+						<div class="landing-eyebrow"><span class="landing-eyebrow-line"></span> 私有化的轻量工作台 <span class="landing-eyebrow-number">01 / 04</span></div>
+						<h1>把事情，放回<br /><em>它该在的位置。</em></h1>
+						<p class="landing-hero-lede">Kanso 是一个安静、清晰的任务管理空间。把脑中的杂音摊开、排好，然后只专注于眼前的一件事。</p>
+						<div class="landing-hero-actions">
+							<a class="landing-button landing-button-primary" href="/login">开始使用
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
+							</a>
+							<a class="landing-button landing-button-quiet" href="#preview">看一眼工作台 <span>↓</span></a>
+						</div>
+						<div class="landing-proof-row">
+							<div class="landing-proof-avatars"><span>R</span><span>Y</span><span>L</span><span>+</span></div>
+							<p>已经有 <strong>1,284</strong> 个小项目<br />选择了更安静的工作方式</p>
+						</div>
+					</div>
+
+					<div class="landing-preview-wrap" aria-label="Kanso 看板工作台预览">
+						<div class="landing-preview-note landing-preview-note-top">WORK QUIETLY</div>
+						<div class="landing-preview-note landing-preview-note-bottom">KANSO / 01</div>
+						<div class="landing-board-preview">
+							<div class="landing-board-topbar">
+								<div class="landing-board-brand">
+									<span class="landing-mark" aria-hidden="true">簡</span>
+									<span>Kanso</span>
+								</div>
+								<div class="landing-board-top-actions">
+									<span class="landing-board-search">
+										<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+										搜索</span>
+									<span class="landing-board-avatar">林</span>
+								</div>
+							</div>
+							<div class="landing-board-body">
+								<aside class="landing-board-sidebar">
+									<div class="landing-board-workspace">
+										<span class="landing-workspace-dot"></span>
+										<span>个人工作区</span>
+									</div>
+									<div class="landing-board-nav-item active">
+										<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg>
+										我的项目</div>
+									<div class="landing-board-nav-item">
+										<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/></svg>
+										收集箱</div>
+									<div class="landing-board-nav-item">
+										<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+										已完成</div>
+									<div class="landing-board-sidebar-line"></div>
+									<div class="landing-board-sidebar-label">项目</div>
+									<div class="landing-board-project"><span class="project-dot orange"></span> Kanso 官网</div>
+									<div class="landing-board-project"><span class="project-dot blue"></span> 生活方式</div>
+								</aside>
+								<main class="landing-board-main">
+									<div class="landing-board-heading">
+										<div>
+											<span class="landing-board-kicker">PROJECT / 02</span>
+											<h3>产品发布计划</h3>
+										</div>
+										<button class="landing-board-add" type="button" aria-label="添加任务">
+											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+										</button>
+									</div>
+									<div class="landing-board-columns">
+										<div class="landing-board-column">
+											<div class="landing-column-title">
+												<span><i class="column-dot orange"></i>待处理</span>
+												<small>3</small>
+											</div>
+											<div class="landing-column-cards">
+												<div class="landing-task-card featured">
+													<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+													<span>整理用户反馈</span>
+												</div>
+												<div class="landing-task-card"><span class="task-checkbox"></span><span>确定 Q3 目标</span></div>
+												<div class="landing-task-card"><span class="task-checkbox"></span><span>准备周会材料</span></div>
+											</div>
+										</div>
+										<div class="landing-board-column">
+											<div class="landing-column-title">
+												<span><i class="column-dot blue"></i>进行中</span>
+												<small>2</small>
+											</div>
+											<div class="landing-column-cards">
+												<div class="landing-task-card"><span class="task-checkbox"></span><span>重构登录流程</span></div>
+												<div class="landing-task-card"><span class="task-checkbox"></span><span>发布产品更新</span></div>
+											</div>
+										</div>
+										<div class="landing-board-column">
+											<div class="landing-column-title">
+												<span><i class="column-dot green"></i>已完成</span>
+												<small>4</small>
+											</div>
+											<div class="landing-column-cards">
+												<div class="landing-task-card"><span class="task-checkbox"></span><span>设计新图标</span></div>
+												<div class="landing-task-card"><span class="task-checkbox"></span><span>清理旧分支</span></div>
+												<div class="landing-task-card"><span class="task-checkbox"></span><span>更新 README</span></div>
+											</div>
+										</div>
+									</div>
+								</main>
+							</div>
+						</div>
+					</div>
+				</section>
+
+				<section class="landing-manifesto" id="method">
+					<div class="landing-section-label"><span>02</span> 让工具退后一步</div>
+					<div class="landing-manifesto-content">
+						<h2>好的工作台，<br /><span>不会和你抢注意力。</span></h2>
+						<div class="landing-manifesto-aside">
+							<p>Kanso 不试图管理你。它只负责把事情放在眼前，让每个项目都有一个开始、一个进行中，以及一个可以被好好收尾的地方。</p>
+							<a href="#features" class="landing-text-link">看看它如何工作
+								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
+							</a>
+						</div>
+					</div>
+				</section>
+
+				<section class="landing-feature-section" id="features">
+					<div class="landing-section-intro">
+						<div class="landing-section-label"><span>03</span> 一条自然的工作流</div>
+						<p>从捕捉念头，到交付结果。<br />每一步都刚刚好。</p>
+					</div>
+					<div class="landing-feature-grid">
+						<article class="landing-feature-card">
+							<div class="landing-feature-card-top"><span>01</span>
+								<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>
+							</div>
+							<div class="landing-feature-icon orange">
+								<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>
+							</div>
+							<h3>看得见的进度</h3>
+							<p>一块清爽的看板，把杂乱的待办变成下一步自然浮现的路径。</p>
+							<div class="landing-feature-arrow">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
+							</div>
+						</article>
+						<article class="landing-feature-card">
+							<div class="landing-feature-card-top"><span>02</span>
+								<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+							</div>
+							<div class="landing-feature-icon blue">
+								<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+							</div>
+							<h3>少一点打扰</h3>
+							<p>轻量、克制、不追着你发送通知。专注的时候，界面也保持安静。</p>
+							<div class="landing-feature-arrow">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
+							</div>
+						</article>
+						<article class="landing-feature-card">
+							<div class="landing-feature-card-top"><span>03</span>
+								<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+							</div>
+							<div class="landing-feature-icon green">
+								<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+							</div>
+							<h3>只在你的空间里</h3>
+							<p>单机部署，数据掌握在自己手里。适合小团队，也适合一个人的长期项目。</p>
+							<div class="landing-feature-arrow">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
+							</div>
+						</article>
+					</div>
+				</section>
+
+				<section class="landing-quiet-section" id="preview">
+					<div class="landing-quiet-copy">
+						<div class="landing-section-label"><span>04</span> 给混乱一个容器</div>
+						<h2>从“我得记住”<br />到“我知道下一步”。</h2>
+						<p>看板、任务、里程碑和团队活动，被收进一个不会打扰你的地方。需要的时候，它总在这里。</p>
+						<ul class="landing-check-list">
+							<li>
+								<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+								看板和列表，自由切换</li>
+							<li>
+								<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+								任务详情里保留上下文</li>
+							<li>
+								<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+								为自己或小团队部署</li>
+						</ul>
+					</div>
+					<div class="landing-orbit-art" aria-hidden="true">
+						<div class="landing-orbit orbit-one"></div>
+						<div class="landing-orbit orbit-two"></div>
+						<div class="landing-orbit orbit-three"></div>
+						<div class="landing-orbit-center"><span class="landing-mark">簡</span></div>
+						<span class="landing-orbit-label label-one">想法</span>
+						<span class="landing-orbit-label label-two">行动</span>
+						<span class="landing-orbit-label label-three">完成</span>
+					</div>
+				</section>
+
+				<section class="landing-cta-section" id="about">
+					<div class="landing-cta-stamp">K / 2026</div>
+					<h2>今天，就从一件事开始。</h2>
+					<p>你的工作空间已经准备好了。</p>
+					<a class="landing-button landing-button-primary" href="/login">进入 Kanso
+						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
+					</a>
+				</section>
+			</main>
+
+			<footer class="landing-footer">
+				<div class="landing-footer-brand"><span class="landing-mark" aria-hidden="true">簡</span><span>Kanso</span><small>简单，专注。</small></div>
+				<div class="landing-footer-meta"><span>内网看板 · 自用轻量 · 现代简约</span><span>© 2026 Kanso</span></div>
+			</footer>
+		</div>
+
+		<script>
+			(function () {
+				var button = document.querySelector(".landing-menu-button");
+				var nav = document.getElementById("landing-nav");
+				if (!button || !nav) return;
+				function setOpen(open) {
+					nav.classList.toggle("is-open", open);
+					button.setAttribute("aria-expanded", String(open));
+					button.setAttribute("aria-label", open ? "关闭菜单" : "打开菜单");
+				}
+				button.addEventListener("click", function () {
+					setOpen(!nav.classList.contains("is-open"));
+				});
+				nav.addEventListener("click", function (event) {
+					if (event.target.closest("a")) setOpen(false);
+				});
+			})();
+		</script>
+	</body>
+</html>

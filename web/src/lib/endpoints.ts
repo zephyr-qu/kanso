@@ -16,6 +16,8 @@ export const ENDPOINT_TEMPLATES = {
 	members: "/api/members",
 	member: "/api/members/:id",
 	memberKey: "/api/members/:id/key",
+	memberRole: "/api/members/:id/role",
+	memberTransferAdmin: "/api/members/:id/transfer-admin",
 	// 项目
 	project: "/api/projects/:id",
 	setProjectPinned: "/api/projects/:id/pinned",

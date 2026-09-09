@@ -632,7 +632,7 @@ export function me(authKey?: string): {
 	member: Member | undefined;
 	mode: "team";
 } {
-	const owner = db.members.find((item) => item.role === "admin");
+	const admin = db.members.find((item) => item.role === "admin");
 	if (authKey) {
 		const matchedId = Object.entries(db.memberKeys).find(
 			([, key]) => key === authKey,
@@ -641,7 +641,7 @@ export function me(authKey?: string): {
 		if (matched)
 			return { member: matched, mode: "team" };
 	}
-	return { member: owner, mode: "team" };
+	return { member: admin, mode: "team" };
 }
 
 /** 为成员生成新访问密钥；旧密钥立即失效，明文只由本次调用返回。 */
@@ -664,12 +664,14 @@ export function revokeMemberKey(memberId: string): boolean {
 	return true;
 }
 
-export function transferOwner(memberId: string): boolean {
-	const members = db.members;
-	const target = members.find((item) => item.id === memberId);
-	const current = members.find((item) => item.role === "admin");
-	if (!target || !current || target.id === current.id) return false;
-	current.role = "member";
+/** 原子转移管理员：调用方降为 member、目标升为 admin；目标必须是普通成员。 */
+export function transferAdmin(fromId: string, toId: string): boolean {
+	if (fromId === toId) return false;
+	const from = db.members.find((item) => item.id === fromId);
+	const target = db.members.find((item) => item.id === toId);
+	if (!from || !target) return false;
+	if (from.role !== "admin" || target.role !== "member") return false;
+	from.role = "member";
 	target.role = "admin";
 	persistMockDb();
 	return true;
@@ -694,7 +696,7 @@ export function createMember(
 	return { ok: true, member: persistAnd(member) };
 }
 
-/** 删除成员：所有者不可删除；同时清理其访问密钥。 */
+/** 删除成员：最后一名管理员不可删除；同时清理其访问密钥。 */
 export function deleteMember(
 	memberId: string,
 ): { ok: true } | { ok: false; error: string } {

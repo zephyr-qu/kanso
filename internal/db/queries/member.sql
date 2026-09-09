@@ -14,7 +14,7 @@ ORDER BY m.created_at, m.id;
 -- name: GetMember :one
 SELECT * FROM member WHERE id = ?;
 
--- name: GetOwnerMember :one
+-- name: GetAdminMember :one
 SELECT id, name, role, avatar_color, avatar, access_key_hash, created_at FROM member WHERE role = 'admin' ORDER BY created_at LIMIT 1;
 
 -- name: GetMemberByAccessKey :one

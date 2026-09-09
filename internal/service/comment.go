@@ -105,7 +105,7 @@ func (s *Service) CreateComment(ctx context.Context, taskID, content string) (Ta
 }
 
 // UpdateComment edits a comment's content; comment editing is ordinary team
-// content work, while deletion remains an owner-only data operation.
+// content work, while deletion remains an admin-only data operation.
 func (s *Service) UpdateComment(ctx context.Context, commentID, content string) (TaskComment, error) {
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {

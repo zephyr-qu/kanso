@@ -250,7 +250,7 @@ func TestDeleteWorkspaceDatabaseError(t *testing.T) {
 	}
 }
 
-func TestRequireOwnerLookupErrors(t *testing.T) {
+func TestRequireAdminLookupErrors(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		err  error
@@ -278,7 +278,7 @@ func TestRequireOwnerLookupErrors(t *testing.T) {
 			}
 			defer res.Body.Close()
 			if res.StatusCode != tc.want {
-				t.Fatalf("%s owner lookup should return %d, got %d", tc.name, tc.want, res.StatusCode)
+				t.Fatalf("%s admin lookup should return %d, got %d", tc.name, tc.want, res.StatusCode)
 			}
 		})
 	}

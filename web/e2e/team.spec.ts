@@ -39,6 +39,7 @@ test("admin/member 双身份：工作区团队页、密钥撤销与管理员并�
 	await page.goto(`/w/${workspace.id}/team`);
 	await expect(page.getByRole("heading", { name: "团队" })).toBeVisible();
 	await expect(page.getByText("协作者")).toBeVisible();
+	await expect(page.getByRole("button", { name: "转移管理员" })).toBeVisible();
 
 	const rotated = await api(`/api/members/${member.id}/key`, { method: "POST" });
 	expect(rotated.status).toBe(200);
@@ -59,9 +60,9 @@ test("admin/member 双身份：工作区团队页、密钥撤销与管理员并�
 		body: JSON.stringify({ role: "admin" }),
 	});
 	expect(promoted.status).toBe(200);
-	const oldOwnerManagement = await memberApi("mock-key", "/api/workspaces", {
+	const oldAdminManagement = await memberApi("mock-key", "/api/workspaces", {
 		method: "POST",
 		body: JSON.stringify({ name: "不应创建" }),
 	});
-	expect(oldOwnerManagement.status).toBe(201);
+	expect(oldAdminManagement.status).toBe(201);
 });

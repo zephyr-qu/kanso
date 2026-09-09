@@ -1,6 +1,5 @@
-// 成员头像：上传图优先，无图时显示首字母 + 底色。
+// 成员头像：上传图优先，无图时显示默认剪影图 + 底色。
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { avatarColor } from "@/lib/avatar";
 import type { Member } from "@/types/member";
 
 export function MemberAvatar({
@@ -14,12 +13,14 @@ export function MemberAvatar({
 		<Avatar
 			className={className}
 			style={{
-				backgroundColor: member.avatarColor ?? avatarColor(member.name),
+				// 无自定义色时用主题色（不是按名字哈希取色）。
+				backgroundColor: member.avatarColor ?? "var(--semantic-action-primary)",
 			}}
 		>
-			{member.avatar ? (
-				<AvatarImage src={member.avatar} alt={member.name} />
-			) : null}
+			<AvatarImage
+				src={member.avatar ?? "/default-avatar.svg"}
+				alt={member.name}
+			/>
 			<AvatarFallback>{member.name.slice(0, 2)}</AvatarFallback>
 		</Avatar>
 	);

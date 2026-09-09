@@ -50,7 +50,7 @@ func ClassifyError(err error) ErrorKind {
 	switch {
 	case errors.Is(err, ErrNotFound):
 		return ErrorNotFound
-	case errors.Is(err, ErrForbidden), errors.Is(err, ErrOwnerProtected):
+	case errors.Is(err, ErrForbidden), errors.Is(err, ErrLastAdmin):
 		return ErrorForbidden
 	case errors.Is(err, ErrInvalidInput), errors.Is(err, ErrInvalidBackup),
 		errors.Is(err, ErrCrossProjectMove), errors.Is(err, ErrLabelNotFound),

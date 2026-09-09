@@ -35,7 +35,7 @@ func (a *API) listMembers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) listAllMembers(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOwner(w, r) {
+	if !a.requireAdmin(w, r) {
 		return
 	}
 	members, err := a.svc.ListAllMembers(r.Context())
@@ -46,7 +46,7 @@ func (a *API) listAllMembers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, members)
 }
 
-func (a *API) requireOwner(w http.ResponseWriter, r *http.Request) bool {
+func (a *API) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
 	err := a.svc.RequireInstanceAdmin(r.Context(), auth.MemberID(r))
 	if err == nil {
 		return true
@@ -63,14 +63,9 @@ func (a *API) requireOwner(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-// requireOwnerInTeam 保留给现有破坏性操作调用；权限现在统一由管理员角色决定。
-func (a *API) requireOwnerInTeam(w http.ResponseWriter, r *http.Request) bool {
-	return a.requireOwner(w, r)
-}
-
 func (a *API) updateMember(w http.ResponseWriter, r *http.Request) {
 	targetID := chi.URLParam(r, "id")
-	if targetID != auth.MemberID(r) && !a.requireOwner(w, r) {
+	if targetID != auth.MemberID(r) && !a.requireAdmin(w, r) {
 		return
 	}
 	var body struct {
@@ -111,7 +106,7 @@ func (a *API) updateMember(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) createMember(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOwner(w, r) {
+	if !a.requireAdmin(w, r) {
 		return
 	}
 	var body struct {
@@ -141,7 +136,7 @@ func (a *API) createMember(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) updateMemberRole(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOwner(w, r) {
+	if !a.requireAdmin(w, r) {
 		return
 	}
 	var body struct {
@@ -156,7 +151,7 @@ func (a *API) updateMemberRole(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "成员不存在")
 			return
 		}
-		if errors.Is(err, service.ErrOwnerProtected) {
+		if errors.Is(err, service.ErrLastAdmin) {
 			writeError(w, http.StatusBadRequest, "至少保留一名管理员")
 			return
 		}
@@ -170,8 +165,30 @@ func (a *API) updateMemberRole(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, member)
 }
 
+// transferAdmin 把管理员身份原子转移给目标成员（仅当前管理员可调用）：
+// 目标升为 admin、调用方降为 member，服务层同一事务内互换，管理员总数不变。
+func (a *API) transferAdmin(w http.ResponseWriter, r *http.Request) {
+	if !a.requireAdmin(w, r) {
+		return
+	}
+	member, err := a.svc.TransferAdmin(r.Context(), auth.MemberID(r), chi.URLParam(r, "id"))
+	if err != nil {
+		if errors.Is(err, service.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "成员不存在")
+			return
+		}
+		if errors.Is(err, service.ErrInvalidInput) {
+			writeError(w, http.StatusBadRequest, "只能把管理员身份转移给普通成员")
+			return
+		}
+		writeServiceError(w, err, "转移管理员失败")
+		return
+	}
+	writeJSON(w, http.StatusOK, member)
+}
+
 func (a *API) deleteMember(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOwner(w, r) {
+	if !a.requireAdmin(w, r) {
 		return
 	}
 	if err := a.svc.DeleteMember(r.Context(), chi.URLParam(r, "id")); err != nil {
@@ -179,7 +196,7 @@ func (a *API) deleteMember(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "成员不存在")
 			return
 		}
-		if errors.Is(err, service.ErrOwnerProtected) {
+		if errors.Is(err, service.ErrLastAdmin) {
 			writeError(w, http.StatusBadRequest, "至少保留一名管理员")
 			return
 		}
@@ -233,7 +250,7 @@ func (a *API) revokeMemberKey(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) addWorkspaceMember(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOwner(w, r) {
+	if !a.requireAdmin(w, r) {
 		return
 	}
 	var body struct {
@@ -254,7 +271,7 @@ func (a *API) addWorkspaceMember(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) removeWorkspaceMember(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOwner(w, r) {
+	if !a.requireAdmin(w, r) {
 		return
 	}
 	if err := a.svc.RemoveMemberFromWorkspace(r.Context(), chi.URLParam(r, "id"), chi.URLParam(r, "memberId")); err != nil {

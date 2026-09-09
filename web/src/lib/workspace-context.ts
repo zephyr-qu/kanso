@@ -55,3 +55,22 @@ export function resolveWorkspace(
 		? { status: "ready", requestedId, workspace }
 		: { status: "unavailable", requestedId, workspace: undefined };
 }
+
+/**
+ * 展示用「当前工作区」决策（CONTEXT.md 导航上下文语言）：
+ * - URL 工作区校验通过 → 用解析结果；
+ * - URL 无工作区段（/settings、/app 等）→ 回退最近一次活动工作区，
+ *   无记忆或该工作区已不可访问时回退列表首个；
+ * - URL 工作区校验失败（被删/无权）→ 不回退，保持中性——「工作区不可用」
+ *   是显式状态，禁止默认工作区静默覆盖。回退值仅供展示，路由跳转只认
+ *   isRouteAuthoritative 的解析结果。
+ */
+export function resolveDisplayWorkspace(
+	resolution: WorkspaceResolution,
+	workspaces: Workspace[] | undefined,
+	lastActiveId: string,
+): Workspace | undefined {
+	if (resolution.workspace) return resolution.workspace;
+	if (resolution.requestedId !== null) return undefined;
+	return workspaces?.find((item) => item.id === lastActiveId) ?? workspaces?.[0];
+}

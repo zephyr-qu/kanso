@@ -24,6 +24,9 @@ export default defineConfig({
 					KANSO_ADDR: `127.0.0.1:${apiPort}`,
 					KANSO_API_URL: apiURL,
 					KANSO_MODE: process.env.KANSO_MODE ?? "personal",
+					KANSO_DATA_DIR:
+						process.env.KANSO_DATA_DIR ??
+						path.resolve("..", "temp", "e2e-data"),
 				GOCACHE: path.resolve("..", ".gocache-e2e"),
 				// W-5：WS 升级 Origin 白名单——浏览器 origin 是 Vite dev server（webURL）。
 				KANSO_WS_ORIGINS: webURL,

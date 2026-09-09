@@ -36,8 +36,8 @@ type dbHandle interface {
 }
 
 // New 完成数据库、迁移、领域种子、路由和 HTTP Server 初始化。
-// assets 可为 nil，此时非 API 路由返回 404；生产环境传入嵌入式前端资源。
-func New(ctx context.Context, cfg config.Config, version string, assets fs.FS) (*App, error) {
+// spa / landing 可为 nil；生产环境分别传入嵌入式 SPA 与落地页资源。
+func New(ctx context.Context, cfg config.Config, version string, spa fs.FS, landing fs.FS) (*App, error) {
 	if err := config.Validate(cfg); err != nil {
 		return nil, fmt.Errorf("启动配置校验失败: %w", err)
 	}
@@ -74,13 +74,13 @@ func New(ctx context.Context, cfg config.Config, version string, assets fs.FS) (
 	if err := svc.SeedDefaultWorkspace(ctx); err != nil {
 		return fail(fmt.Errorf("初始化默认工作区失败: %w", err))
 	}
-	if err := svc.SeedOwnerMember(ctx, cfg.AccessKey); err != nil {
+	if err := svc.SeedAdminMember(ctx, cfg.AccessKey); err != nil {
 		return fail(fmt.Errorf("初始化管理员成员失败: %w", err))
 	}
 
 	hub := realtime.NewHub()
 	httpapi.Version = version
-	router := httpapi.NewRouterWithAssets(cfg, svc, hub, assets)
+	router := httpapi.NewRouterWithAssets(cfg, svc, hub, spa, landing)
 	server := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           router,

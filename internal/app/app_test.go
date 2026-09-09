@@ -20,8 +20,8 @@ func testConfig(t *testing.T) config.Config {
 	}
 }
 
-func TestNewBuildsReadyHandlerAndSeedsOwner(t *testing.T) {
-	application, err := New(context.Background(), testConfig(t), "test-version", nil)
+func TestNewBuildsReadyHandlerAndSeedsAdmin(t *testing.T) {
+	application, err := New(context.Background(), testConfig(t), "test-version", nil, nil)
 	if err != nil {
 		t.Fatalf("New 失败: %v", err)
 	}
@@ -45,12 +45,12 @@ func TestNewBuildsReadyHandlerAndSeedsOwner(t *testing.T) {
 	res := httptest.NewRecorder()
 	application.Handler().ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
-		t.Fatalf("启动时应写入 owner 密钥，实际 %d: %s", res.Code, res.Body.String())
+		t.Fatalf("启动时应写入管理员密钥，实际 %d: %s", res.Code, res.Body.String())
 	}
 }
 
 func TestRunStopsWhenContextIsCancelled(t *testing.T) {
-	application, err := New(context.Background(), testConfig(t), "test-version", nil)
+	application, err := New(context.Background(), testConfig(t), "test-version", nil, nil)
 	if err != nil {
 		t.Fatalf("New 失败: %v", err)
 	}

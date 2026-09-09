@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 type TaskDetailHeaderProps = {
 	workspaceId: string;
 	projectId: string;
-	taskId: string;
 	data?: TaskDetail;
 	onArchive: () => void;
 	onDelete: () => void;
@@ -21,7 +20,6 @@ type TaskDetailHeaderProps = {
 export function TaskDetailHeader({
 	workspaceId,
 	projectId,
-	taskId,
 	data,
 	onArchive,
 	onDelete,
@@ -45,7 +43,6 @@ export function TaskDetailHeader({
 			<div className="kanso-task-detail__header-right shrink-0">
 				{data ? (
 					<>
-						<span className="kanso-task-detail__task-id">TASK · {taskId.toUpperCase()}</span>
 						<div className="kanso-task-detail__header-actions">
 							<Button
 								variant="ghost"

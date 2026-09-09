@@ -10,6 +10,7 @@ import (
 
 	"kanso/internal/app"
 	"kanso/internal/config"
+	"kanso/landing"
 	"kanso/web"
 )
 
@@ -23,7 +24,7 @@ func main() {
 	}
 
 	cfg := config.Load()
-	application, err := app.New(context.Background(), cfg, version, web.DistFS())
+	application, err := app.New(context.Background(), cfg, version, web.DistFS(), landing.FS())
 	if err != nil {
 		log.Fatalf("初始化应用失败: %v", err)
 	}

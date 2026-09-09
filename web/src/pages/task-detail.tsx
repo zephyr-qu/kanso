@@ -87,7 +87,6 @@ export default function TaskDetailPage() {
 				<TaskDetailHeader
 					workspaceId={workspaceId}
 					projectId={projectId}
-					taskId={taskId}
 					data={data}
 					onArchive={() => taskOps.setArchived.mutate({ id: taskId, archived: !data?.task.archivedAt })}
 					onDelete={() => setDeleteOpen(true)}

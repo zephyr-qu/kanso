@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { ArrowLeft, Check, ChevronDown, GaugeIcon, LayersIcon, Plus, SettingsIcon } from "lucide-react";
-import { Link } from "react-router";
 
 const workspaces = [
 	{ id: "studio", name: "Kanso 工作室", mark: "K", pinned: ["官网改版"], projects: ["官网改版", "产品发布", "内容计划"] },
@@ -77,7 +76,7 @@ export default function WorkspaceSwitcherPrototype() {
 				<div className="flex h-full flex-col">
 					<header className="flex h-[52px] shrink-0 items-center justify-between border-b px-6 text-xs text-muted-foreground">
 						<span>工作区原型预览</span>
-						<Link className="inline-flex items-center gap-1.5 hover:text-foreground" to="/"><ArrowLeft size={14} /> 返回首页</Link>
+						<a className="inline-flex items-center gap-1.5 hover:text-foreground" href="/"><ArrowLeft size={14} /> 返回首页</a>
 					</header>
 					<div className="flex-1 overflow-auto px-8 pb-12 pt-8">
 						<div className="mx-auto max-w-4xl">

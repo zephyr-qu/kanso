@@ -1,6 +1,8 @@
 // 路由（react-router v7，library 模式）：/login 公开，其余路由经 RequireAuth 守卫。
 // 守卫依据 zustand 登录态；401 事件（api.ts 广播）使登录态失效并重定向回登录页。
-import { lazy, Suspense, useEffect } from "react";
+// "/" 由独立静态落地页承担（生产 Go embed / 开发 Vite middleware）；SPA 内再导航到 "/"
+// 时做整页跳转，避免 React Router 接管营销页。
+import { lazy, Suspense, useEffect, useLayoutEffect } from "react";
 import {
 	createBrowserRouter,
 	Navigate,
@@ -18,7 +20,6 @@ const BoardPage = lazy(routeLoaders.board);
 const CalendarPage = lazy(routeLoaders.calendar);
 const DashboardPage = lazy(routeLoaders.dashboard);
 const LoginPage = lazy(routeLoaders.login);
-const LandingPage = lazy(routeLoaders.landing);
 const WorkspaceSwitcherPrototype = lazy(routeLoaders.workspaceSwitcherPrototype);
 const ProfilePage = lazy(routeLoaders.profile);
 const RedirectHome = lazy(routeLoaders.redirectHome);
@@ -26,6 +27,17 @@ const SettingsPage = lazy(routeLoaders.settings);
 const TeamPage = lazy(routeLoaders.team);
 const TaskDetailPage = lazy(routeLoaders.taskDetail);
 const WorkspacePage = lazy(routeLoaders.workspace);
+
+function ExitToLanding() {
+	useLayoutEffect(() => {
+		window.location.replace("/");
+	}, []);
+	return (
+		<div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+			加载中…
+		</div>
+	);
+}
 
 function RequireAuth() {
 	const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -44,7 +56,7 @@ function RequireAuth() {
 }
 
 const router = createBrowserRouter([
-	{ path: "/", element: <LandingPage /> },
+	{ path: "/", element: <ExitToLanding /> },
 	{ path: "/prototype/workspace-switcher", element: <WorkspaceSwitcherPrototype /> },
 	{ path: "/login", element: <LoginPage /> },
 	{

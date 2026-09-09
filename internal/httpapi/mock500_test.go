@@ -328,8 +328,8 @@ func TestHandler500ReadOps(t *testing.T) {
 	}
 }
 
-// TestRequireOwnerServerError 覆盖成员删除服务层 DB 故障 → 500 分支。
-func TestRequireOwnerServerError(t *testing.T) {
+// TestRequireAdminServerError 覆盖成员删除服务层 DB 故障 → 500 分支。
+func TestRequireAdminServerError(t *testing.T) {
 	srv, mock := newMockRouter(t)
 	expectAuth(mock, "m1")
 	mock.ExpectBegin()

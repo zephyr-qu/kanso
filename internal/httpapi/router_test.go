@@ -1887,7 +1887,7 @@ func TestSearchIncludesComment(t *testing.T) {
 	}
 }
 
-func TestMemberAdministrationRequiresOwner(t *testing.T) {
+func TestMemberAdministrationRequiresAdmin(t *testing.T) {
 	e := newTestEnv(t)
 	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
 	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
@@ -1915,7 +1915,7 @@ func TestMemberAdministrationRequiresOwner(t *testing.T) {
 	if res, _ := e.doAuth(t, memberKey, http.MethodDelete, "/api/members/"+memberID, ""); res.StatusCode != http.StatusForbidden {
 		t.Fatalf("普通成员删除成员应 403，实际 %d", res.StatusCode)
 	}
-	// 敏感设置与全量备份同样只允许 owner：否则普通成员可读取/修改访问密钥，
+	// 敏感设置与全量备份同样只允许管理员：否则普通成员可读取/修改访问密钥，
 	// 或通过导入备份破坏整个实例数据。
 	if res, _ := e.doAuth(t, memberKey, http.MethodGet, "/api/settings/config", ""); res.StatusCode != http.StatusForbidden {
 		t.Fatalf("普通成员读取配置应 403，实际 %d", res.StatusCode)
@@ -1970,9 +1970,9 @@ func TestMemberCredentialGovernanceAndAdminPromotion(t *testing.T) {
 	}
 }
 
-// TestDestructiveDeleteRequiresOwner 校验团队模式下工作区/项目/列的 DELETE 均需 owner
-// （普通成员 403；owner 正常删除）。个人模式无成员表，恒放行（ADR-0013）。
-func TestDestructiveDeleteRequiresOwner(t *testing.T) {
+// TestDestructiveDeleteRequiresAdmin 校验团队模式下工作区/项目/列的 DELETE 均需管理员
+// （普通成员 403；管理员正常删除）。个人模式无成员表，恒放行（ADR-0013）。
+func TestDestructiveDeleteRequiresAdmin(t *testing.T) {
 	e := newTestEnv(t)
 	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
 	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
@@ -1995,9 +1995,9 @@ func TestDestructiveDeleteRequiresOwner(t *testing.T) {
 	if res, _ := e.doAuth(t, memberKey, http.MethodDelete, "/api/columns/"+columnID, ""); res.StatusCode != http.StatusForbidden {
 		t.Fatalf("普通成员删除列应 403，实际 %d", res.StatusCode)
 	}
-	// owner 可正常删除（删除列 204）。
+	// 管理员可正常删除（删除列 204）。
 	if res, _ := e.do(t, http.MethodDelete, "/api/columns/"+columnID, ""); res.StatusCode != http.StatusNoContent {
-		t.Fatalf("owner 删除列应 204，实际 %d", res.StatusCode)
+		t.Fatalf("管理员删除列应 204，实际 %d", res.StatusCode)
 	}
 }
 
@@ -2171,7 +2171,7 @@ func TestDashboardFocusExcludesDone(t *testing.T) {
 // ---- 契约与回归测试（2026-08-16 补）----
 
 // newTestEnvMode 以指定模式构建测试环境；newTestEnv 保持团队模式默认不变。
-// 两种模式均应用全部迁移并种子 owner 成员（personal = 单一 owner，ADR-0013 修订）。
+// 两种模式均应用全部迁移并种子管理员成员（personal = 单一 admin，ADR-0013 修订）。
 func newTestEnvMode(t *testing.T, mode config.Mode) *testEnv {
 	return newTestEnvModeOrigins(t, mode, nil)
 }
@@ -2190,9 +2190,9 @@ func newTestEnvModeOrigins(t *testing.T, mode config.Mode, wsOrigins []string) *
 	if err := svc.SeedDefaultWorkspace(context.Background()); err != nil {
 		t.Fatalf("种子默认工作区失败: %v", err)
 	}
-	// 种子 owner 成员并把测试密钥写入其 access_key（与 main.go 启动流程一致）。
-	if err := svc.SeedOwnerMember(context.Background(), testKey); err != nil {
-		t.Fatalf("种子 owner 成员失败: %v", err)
+	// 种子管理员成员并把测试密钥写入其 access_key（与 main.go 启动流程一致）。
+	if err := svc.SeedAdminMember(context.Background(), testKey); err != nil {
+		t.Fatalf("种子管理员成员失败: %v", err)
 	}
 	cfg := config.Config{
 		Addr:                 "127.0.0.1:0",
@@ -2527,5 +2527,50 @@ func TestProjectPinned(t *testing.T) {
 	_, body = e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/pinned-projects", "")
 	if items := decode[[]map[string]any](t, body); len(items) != 0 {
 		t.Fatalf("取消后应为空，实际 %v", items)
+	}
+}
+
+// TestAdminTransfer 校验管理员原子转移（CHANGELOG 0.4.0：显式轮换、撤销与管理员原子转移）。
+func TestAdminTransfer(t *testing.T) {
+	e := newTestEnv(t)
+
+	// 造一个普通成员和一个管理员（管理员作为"非法目标"用例）。
+	_, body := e.do(t, http.MethodPost, "/api/members", `{"name":"接力"}`)
+	memberB := decode[map[string]any](t, body)
+	bID := memberB["id"].(string)
+	_, body = e.do(t, http.MethodPost, "/api/members", `{"name":"副手"}`)
+	adminC := decode[map[string]any](t, body)
+	cID := adminC["id"].(string)
+	if res, _ := e.do(t, http.MethodPatch, "/api/members/"+cID+"/role", `{"role":"admin"}`); res.StatusCode != http.StatusOK {
+		t.Fatalf("提升副手为管理员应 200，实际 %d", res.StatusCode)
+	}
+
+	// 非法目标：目标是管理员 → 400。
+	if res, body := e.do(t, http.MethodPost, "/api/members/"+cID+"/transfer-admin", ""); res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("转移到管理员应 400，实际 %d，body %s", res.StatusCode, body)
+	}
+	// 非法目标：转移到自己 → 400。
+	_, meBody := e.do(t, http.MethodGet, "/api/me", "")
+	ownerID := decode[map[string]any](t, meBody)["member"].(map[string]any)["id"].(string)
+	if res, body := e.do(t, http.MethodPost, "/api/members/"+ownerID+"/transfer-admin", ""); res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("转移到自己应 400，实际 %d，body %s", res.StatusCode, body)
+	}
+	// 不存在的成员 → 404。
+	if res, body := e.do(t, http.MethodPost, "/api/members/missing-member/transfer-admin", ""); res.StatusCode != http.StatusNotFound {
+		t.Fatalf("转移到不存在成员应 404，实际 %d，body %s", res.StatusCode, body)
+	}
+
+	// 合法转移：目标升 admin、原管理员降 member。
+	res, body := e.do(t, http.MethodPost, "/api/members/"+bID+"/transfer-admin", "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("转移应 200，实际 %d，body %s", res.StatusCode, body)
+	}
+	if got := decode[map[string]any](t, body)["role"]; got != "admin" {
+		t.Fatalf("转移后目标应为 admin，实际 %v", got)
+	}
+
+	// 原管理员已降级：原密钥调管理员接口应 403。
+	if res, _ := e.do(t, http.MethodGet, "/api/members", ""); res.StatusCode != http.StatusForbidden {
+		t.Fatalf("原管理员降级后列成员应 403，实际 %d", res.StatusCode)
 	}
 }

@@ -31,7 +31,7 @@ type Member struct {
 const (
 	memberRoleAdmin  = "admin"
 	memberRoleMember = "member"
-	defaultOwnerName = "Ad"
+	defaultAdminName = "Ad"
 )
 
 var (
@@ -39,8 +39,8 @@ var (
 	ErrMemberLimit = errors.New("member limit reached")
 	// ErrAdminLimit 表示实例管理员数量已达上限。
 	ErrAdminLimit = errors.New("admin limit reached")
-	// ErrOwnerProtected 保留错误名以减少领域层调用方改动；语义已经变为不能删除或降级最后一名管理员。
-	ErrOwnerProtected = errors.New("last admin cannot be removed or demoted")
+	// ErrLastAdmin 表示不能删除或降级最后一名管理员。
+	ErrLastAdmin = errors.New("last admin cannot be removed or demoted")
 	// ErrReservedName 表示初始化管理员名称不能被普通成员占用。
 	ErrReservedName = errors.New("name 'Admin' is reserved")
 )
@@ -64,11 +64,11 @@ func (s *Service) VerifyKey(ctx context.Context, key string) bool {
 	return ok
 }
 
-// SeedOwnerMember 保持历史方法名以避免启动链路扩大改动；实际创建的是实例管理员。
+// SeedAdminMember 确保实例至少有一名管理员，并把启动密钥写入其哈希。
 // 管理员是全局身份，不需要为默认工作区写入关系表。
-func (s *Service) SeedOwnerMember(ctx context.Context, accessKey string) error {
+func (s *Service) SeedAdminMember(ctx context.Context, accessKey string) error {
 	q := gen.New(s.db)
-	admin, err := q.GetOwnerMember(ctx)
+	admin, err := q.GetAdminMember(ctx)
 	if errors.Is(err, sql.ErrNoRows) {
 		members, listErr := listAllMembers(ctx, s.db)
 		if listErr != nil {
@@ -92,7 +92,7 @@ func (s *Service) SeedOwnerMember(ctx context.Context, accessKey string) error {
 				return err
 			}
 			now := time.Now().UTC().Format(time.RFC3339)
-			name := defaultOwnerName
+			name := defaultAdminName
 			if s.mode == config.ModePersonal {
 				name = "Admin"
 			}
@@ -155,11 +155,6 @@ func (s *Service) MemberIdentityByID(ctx context.Context, memberID string) (gen.
 		return gen.Member{}, false
 	}
 	return member, true
-}
-
-// RequireOwner is the compatibility name for the instance-admin capability.
-func (s *Service) RequireOwner(ctx context.Context, memberID string) error {
-	return s.RequireInstanceAdmin(ctx, memberID)
 }
 
 func (s *Service) ListMembers(ctx context.Context, workspaceID string) ([]Member, error) {
@@ -291,7 +286,7 @@ func (s *Service) UpdateMemberRole(ctx context.Context, targetID, role string) (
 			return Member{}, err
 		}
 		if admins <= 1 {
-			return Member{}, ErrOwnerProtected
+			return Member{}, ErrLastAdmin
 		}
 	}
 	if target.Role != memberRoleAdmin && role == memberRoleAdmin {
@@ -314,6 +309,49 @@ func (s *Service) UpdateMemberRole(ctx context.Context, targetID, role string) (
 	return toMemberDTO(target), nil
 }
 
+// TransferAdmin 将管理员身份原子转移给目标成员：同一事务内目标升为 admin、
+// 原管理员（调用方）降为 member。两步任一失败整体回滚，管理员总数不变，
+// 因此无需再做管理员上限/保底校验——这正是"原子"的含义。
+func (s *Service) TransferAdmin(ctx context.Context, fromID, toID string) (Member, error) {
+	if fromID == toID {
+		return Member{}, ErrInvalidInput
+	}
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return Member{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	from, err := q.GetMember(ctx, fromID)
+	if err != nil {
+		return Member{}, mapNoRows(err)
+	}
+	if from.Role != memberRoleAdmin {
+		return Member{}, ErrForbidden
+	}
+	target, err := q.GetMember(ctx, toID)
+	if err != nil {
+		return Member{}, mapNoRows(err)
+	}
+	if target.Role != memberRoleMember {
+		return Member{}, ErrInvalidInput
+	}
+	if _, err := q.UpdateMemberRole(ctx, gen.UpdateMemberRoleParams{ID: toID, Role: memberRoleAdmin}); err != nil {
+		return Member{}, fmt.Errorf("更新成员角色失败: %w", err)
+	}
+	if _, err := q.UpdateMemberRole(ctx, gen.UpdateMemberRoleParams{ID: fromID, Role: memberRoleMember}); err != nil {
+		return Member{}, fmt.Errorf("更新原管理员角色失败: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return Member{}, fmt.Errorf("提交事务失败: %w", err)
+	}
+	target.Role = memberRoleAdmin
+	// 双方角色都变了：分别广播，便于客户端刷新列表与自身权限。
+	s.emitAll(EventMemberUpdated, "", toID)
+	s.emitAll(EventMemberUpdated, "", fromID)
+
+	return toMemberDTO(target), nil
+}
+
 func (s *Service) DeleteMember(ctx context.Context, memberID string) error {
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
@@ -330,7 +368,7 @@ func (s *Service) DeleteMember(ctx context.Context, memberID string) error {
 			return err
 		}
 		if admins <= 1 {
-			return ErrOwnerProtected
+			return ErrLastAdmin
 		}
 	}
 	if _, err := q.DeleteMember(ctx, memberID); err != nil {
@@ -387,9 +425,9 @@ func (s *Service) RevokeMemberKey(ctx context.Context, memberID string) error {
 	return nil
 }
 
-// OwnerMember returns the first admin for startup callers; the returned role is admin.
-func (s *Service) OwnerMember(ctx context.Context) (Member, bool) {
-	admin, err := gen.New(s.db).GetOwnerMember(ctx)
+// AdminMember returns the first admin for startup callers; the returned role is admin.
+func (s *Service) AdminMember(ctx context.Context) (Member, bool) {
+	admin, err := gen.New(s.db).GetAdminMember(ctx)
 	if err != nil {
 		return Member{}, false
 	}

@@ -23,10 +23,8 @@ type BoardCanvasProps = {
 	board: Board;
 	viewMode: "columns" | "swimlane";
 	swimlanes: SwimlaneGroup[];
-	dragState: DragState;
+	// 拖拽内部状态经 DragBoardProvider 下发，画布不再搬运；activeTask 仅供 DragOverlay。
 	activeTask: Task | null;
-	dragActiveTaskId: string | null;
-	activeTaskColumnId: string | null;
 	reducedMotion: boolean;
 	sensors: ComponentProps<typeof DndContext>["sensors"];
 	announcements: Announcements;
@@ -53,10 +51,7 @@ export function BoardCanvas({
 	board,
 	viewMode,
 	swimlanes,
-	dragState,
 	activeTask,
-	dragActiveTaskId,
-	activeTaskColumnId,
 	reducedMotion,
 	sensors,
 	announcements,
@@ -102,11 +97,6 @@ export function BoardCanvas({
 							<SortableColumn
 								key={column.id}
 								column={column}
-								dragOver={dragState.dragOverId === column.id}
-								dragActiveTaskId={dragActiveTaskId}
-								activeTaskColumnId={activeTaskColumnId}
-								dragPos={dragState.dragPos}
-								draggedTask={activeTask}
 								labels={board.labels}
 								sortConfig={sortConfig}
 								onRename={onRename}

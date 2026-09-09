@@ -9,7 +9,8 @@ import { useWorkspaceContext } from "@/hooks/use-workspace-context";
 import type { MeResponse } from "@/types/me";
 
 export default function RedirectHome() {
-	const { workspaces, status, workspaceDashboardPath } = useWorkspaceContext();
+	const { workspaces, status, currentWorkspaceId, workspaceDashboardPath } =
+		useWorkspaceContext();
 	const { data: me } = useQuery({
 		queryKey: queryKeys.me(),
 		queryFn: () => api<MeResponse>(buildPath("me")),
@@ -22,12 +23,16 @@ export default function RedirectHome() {
 			</div>
 		);
 	}
-	if (status === "unavailable" || status === "empty" || workspaces.length === 0) {
+	if (
+		status === "unavailable" ||
+		status === "empty" ||
+		workspaces.length === 0
+	) {
 		return (
 			<div className="flex h-full items-center justify-center text-sm text-destructive">
 				{me?.member.role === "member" ? "等待管理员授权工作区" : "无法加载工作区"}
 			</div>
 		);
 	}
-	return <Navigate to={workspaceDashboardPath(workspaces[0].id)} replace />;
+	return <Navigate to={workspaceDashboardPath(currentWorkspaceId)} replace />;
 }

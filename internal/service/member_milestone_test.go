@@ -12,13 +12,13 @@ func TestMemberLifecycle(t *testing.T) {
 	ctx := context.Background()
 	wsID := defaultWorkspaceID(t, env)
 
-	// 初始 owner 存在（SeedOwnerMember 种了 test-key）。
-	owner, ok := env.svc.OwnerMember(ctx)
+	// 初始管理员存在（SeedAdminMember 种了 test-key）。
+	owner, ok := env.svc.AdminMember(ctx)
 	if !ok || owner.Role != memberRoleAdmin {
 		t.Fatalf("管理员成员应存在: %+v ok=%v", owner, ok)
 	}
 
-	// 密钥校验：test-key 命中 owner；未知密钥不命中。
+	// 密钥校验：test-key 命中管理员；未知密钥不命中。
 	if _, ok := env.svc.MemberIDByKey(ctx, "test-key"); !ok {
 		t.Fatal("test-key 应命中")
 	}
@@ -32,7 +32,7 @@ func TestMemberLifecycle(t *testing.T) {
 		t.Fatal("VerifyKey(wrong) 应为 false")
 	}
 
-	// GetMe / MemberNameByID / RequireOwner。
+	// GetMe / MemberNameByID / RequireInstanceAdmin。
 	me, err := env.svc.GetMe(ctx, owner.ID)
 	requireNoErr(t, err)
 	if name, ok := env.svc.MemberNameByID(ctx, owner.ID); !ok || name != me.Name {
@@ -41,20 +41,20 @@ func TestMemberLifecycle(t *testing.T) {
 	if _, ok := env.svc.MemberNameByID(ctx, "nope"); ok {
 		t.Fatal("MemberNameByID 不存在应返回 false")
 	}
-	requireNoErr(t, env.svc.RequireOwner(ctx, owner.ID))
-	if err := env.svc.RequireOwner(ctx, "nope"); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("RequireOwner 不存在应 ErrNotFound，实际 %v", err)
+	requireNoErr(t, env.svc.RequireInstanceAdmin(ctx, owner.ID))
+	if err := env.svc.RequireInstanceAdmin(ctx, "nope"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("RequireInstanceAdmin 不存在应 ErrNotFound，实际 %v", err)
 	}
 
-	// 创建普通成员（team 模式）→ 非 owner。
+	// 创建普通成员（team 模式）→ 非管理员。
 	member, err := env.svc.CreateMember(ctx, "普通成员")
 	requireNoErr(t, err)
 	requireNoErr(t, env.svc.AddMemberToWorkspace(ctx, wsID, member.ID))
 	if member.Role == memberRoleAdmin {
 		t.Fatal("新成员不应是管理员")
 	}
-	if err := env.svc.RequireOwner(ctx, member.ID); !errors.Is(err, ErrForbidden) {
-		t.Fatalf("非 owner 成员 RequireOwner 应 ErrForbidden，实际 %v", err)
+	if err := env.svc.RequireInstanceAdmin(ctx, member.ID); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("非管理员成员 RequireInstanceAdmin 应 ErrForbidden，实际 %v", err)
 	}
 
 	// 列表。
@@ -149,7 +149,7 @@ func TestMemberProfileKeepsActivityActor(t *testing.T) {
 	requireNoErr(t, err)
 
 	// 把管理员改名后，身份资料与活动记录保持可用。
-	owner, _ := env.svc.OwnerMember(ctx)
+	owner, _ := env.svc.AdminMember(ctx)
 	if _, err := env.svc.UpdateMemberProfile(ctx, owner.ID, ptr("新主人"), nil, nil); err != nil {
 		t.Fatal(err)
 	}
