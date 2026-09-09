@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+命令行统一到单一 `kanso` 二进制：
+
+- 启动服务改为显式子命令：`kanso serve`（裸跑 `kanso` 不再启动 HTTP）
+- 同二进制提供 HTTP 客户端：`health` / `login` / `whoami` / `workspace` / `project` / `board` / `task` / `label` / `milestone`
+- 任务支持 update、archive/restore、archived 列表与 delete；标签与里程碑支持 CRUD 及与任务的关联
+- 移除独立 `kansoctl`；Docker `ENTRYPOINT` 改为 `["/app/kanso", "serve"]`
+- 入门教程见 [tutorial/cli](tutorial/cli/README.md)
+
+**升级注意**：本地脚本、Compose 外的手工启动、以及文档中的 `go run ./cmd/kanso` / `./kanso` 需改为带 `serve`。
+
 ## 0.4.0 - 2026-09-09
 
 团队安全与权限完善：

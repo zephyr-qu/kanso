@@ -20,4 +20,4 @@ pnpm --dir "$project_root/web" build
 version=${VERSION:-$(git -C "$project_root" describe --tags --always --dirty 2>/dev/null || echo dev)}
 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${version}" -o "$project_root/kanso" "$project_root/cmd/kanso"
 
-printf '构建完成：%s\n' "$project_root/kanso"
+printf '构建完成：%s\n启动服务：%s serve\n' "$project_root/kanso" "$project_root/kanso"

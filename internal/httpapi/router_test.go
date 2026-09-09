@@ -2190,7 +2190,7 @@ func newTestEnvModeOrigins(t *testing.T, mode config.Mode, wsOrigins []string) *
 	if err := svc.SeedDefaultWorkspace(context.Background()); err != nil {
 		t.Fatalf("种子默认工作区失败: %v", err)
 	}
-	// 种子管理员成员并把测试密钥写入其 access_key（与 main.go 启动流程一致）。
+	// 种子管理员成员并把测试密钥写入其 access_key（与 kanso serve / app.New 启动流程一致）。
 	if err := svc.SeedAdminMember(context.Background(), testKey); err != nil {
 		t.Fatalf("种子管理员成员失败: %v", err)
 	}
