@@ -21,8 +21,8 @@ func TestColumnMoveWIPErrors(t *testing.T) {
 		failSQL func(m sqlmock.Sqlmock)
 	}{
 		{
-			name: "WIP更新失败400", method: http.MethodPatch, path: "/api/columns/c1",
-			body: `{"wipLimit":5}`, want: http.StatusBadRequest,
+			name: "WIP更新失败500", method: http.MethodPatch, path: "/api/columns/c1",
+			body: `{"wipLimit":5}`, want: http.StatusInternalServerError,
 			failSQL: func(m sqlmock.Sqlmock) {
 				m.ExpectBegin()
 				m.ExpectQuery("UpdateColumnWIP").WillReturnError(errors.New("db down"))
@@ -84,6 +84,7 @@ func TestCommentDeleteError(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id", "task_id", "author", "content", "created_at"}).
 			AddRow("c1", "t1", "Admin", "内容", "2026-01-01"))
 	expectTaskExists(mock)
+	expectProjectWritable(mock)
 	mock.ExpectExec("DELETE FROM comment").WillReturnError(errors.New("db down"))
 	mock.ExpectRollback()
 
@@ -104,8 +105,8 @@ func TestArchivedTasksError(t *testing.T) {
 	srv, mock := newMockRouter(t)
 	expectAuth(mock, "m1")
 	mock.ExpectQuery("FROM project WHERE id").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at"}).
-			AddRow("p1", "w1", "项目", 0, "2026-01-01", "2026-01-01"))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at", "archived_at"}).
+			AddRow("p1", "w1", "项目", 0, "2026-01-01", "2026-01-01", nil))
 	mock.ExpectQuery("ListArchivedTasksByProject").WillReturnError(errors.New("db down"))
 
 	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/projects/p1/archived-tasks", nil)
@@ -136,8 +137,8 @@ func TestMilestoneWriteErrors(t *testing.T) {
 			failSQL: func(m sqlmock.Sqlmock) {
 				m.ExpectBegin()
 				m.ExpectQuery("FROM project WHERE id").
-					WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at"}).
-						AddRow("p1", "w1", "项目", 0, "2026-01-01", "2026-01-01"))
+					WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at", "archived_at"}).
+						AddRow("p1", "w1", "项目", 0, "2026-01-01", "2026-01-01", nil))
 				m.ExpectQuery("INSERT INTO milestone").WillReturnError(errors.New("db down"))
 				m.ExpectRollback()
 			},
@@ -198,8 +199,8 @@ func TestFinalHandler500(t *testing.T) {
 			want: http.StatusInternalServerError,
 			failSQL: func(m sqlmock.Sqlmock) {
 				m.ExpectQuery("FROM project WHERE id").
-					WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at"}).
-						AddRow("p1", "w1", "项目", 0, "2026-01-01", "2026-01-01"))
+					WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at", "archived_at"}).
+						AddRow("p1", "w1", "项目", 0, "2026-01-01", "2026-01-01", nil))
 				m.ExpectQuery("ListColumnsByProject").
 					WillReturnRows(sqlmock.NewRows([]string{"id", "project_id", "name", "position", "wip_limit", "created_at"}).
 						AddRow("c1", "p1", "待办", 0, nil, "2026-01-01"))

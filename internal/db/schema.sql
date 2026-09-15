@@ -13,10 +13,12 @@ CREATE TABLE project (
 	name TEXT NOT NULL,
 	position INTEGER NOT NULL DEFAULT 0,
 	pinned INTEGER NOT NULL DEFAULT 0,
+	archived_at TEXT,
 	created_at TEXT NOT NULL,
 	updated_at TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX idx_project_workspace ON project (workspace_id);
+CREATE INDEX idx_project_archived ON project (workspace_id, archived_at);
 
 CREATE TABLE column (
     id TEXT PRIMARY KEY,

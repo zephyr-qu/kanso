@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "kanso": {
+      "command": "kanso",
+      "args": ["mcp"],
+      "env": {
+        "KANSO_API_URL": "http://127.0.0.1:8080"
+      }
+    }
+  }
+}

@@ -103,6 +103,9 @@ func (s *Service) ListWorkspaceMembers(ctx context.Context, workspaceID string) 
 
 // AddMemberToWorkspace grants one existing member access to a workspace.
 func (s *Service) AddMemberToWorkspace(ctx context.Context, workspaceID, memberID string) error {
+	if memberID == "" {
+		return invalidInput("缺少成员")
+	}
 	var exists int
 	if err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM workspace WHERE id = ?)`, workspaceID).Scan(&exists); err != nil {
 		return fmt.Errorf("检查工作区失败: %w", err)

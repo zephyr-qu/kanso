@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -25,7 +24,7 @@ func (a *API) createWorkspace(w http.ResponseWriter, r *http.Request) {
 	if !a.requireCapability(w, r, service.CapabilityManageStructure) {
 		return
 	}
-	name, ok := decodeNameBody(w, r, "工作区名称")
+	name, ok := decodeNameBody(w, r)
 	if !ok {
 		return
 	}
@@ -42,16 +41,12 @@ func (a *API) renameWorkspace(w http.ResponseWriter, r *http.Request) {
 	if !a.requireCapability(w, r, service.CapabilityManageStructure) {
 		return
 	}
-	name, ok := decodeNameBody(w, r, "工作区名称")
+	name, ok := decodeNameBody(w, r)
 	if !ok {
 		return
 	}
 	workspace, err := a.svc.RenameWorkspace(r.Context(), chi.URLParam(r, "id"), name)
 	if err != nil {
-		if errors.Is(err, service.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "工作区不存在")
-			return
-		}
 		writeServiceError(w, err, "重命名工作区失败")
 		return
 	}
@@ -64,14 +59,6 @@ func (a *API) deleteWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.svc.DeleteWorkspace(r.Context(), chi.URLParam(r, "id")); err != nil {
-		if errors.Is(err, service.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "工作区不存在")
-			return
-		}
-		if errors.Is(err, service.ErrLastWorkspace) {
-			writeError(w, http.StatusBadRequest, "至少保留一个工作区")
-			return
-		}
 		writeServiceError(w, err, "删除工作区失败")
 		return
 	}

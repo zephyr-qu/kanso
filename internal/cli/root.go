@@ -43,6 +43,7 @@ func NewRoot(version string, assets ServeAssets) (*cobra.Command, *Options) {
 	root.AddCommand(newTaskCmd(opts))
 	root.AddCommand(newLabelCmd(opts))
 	root.AddCommand(newMilestoneCmd(opts))
+	root.AddCommand(newMCPCmd(opts))
 	return root, opts
 }
 

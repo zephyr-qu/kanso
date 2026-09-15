@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"errors"
 	"net/http"
 	"strings"
 
@@ -19,11 +18,7 @@ func (a *API) resourceAccessMiddleware(next http.Handler) http.Handler {
 			if err := a.admission.AdmitResource(
 				r.Context(), auth.MemberID(r), resourceType, resourceID,
 			); err != nil {
-				fallback := "资源不存在"
-				if errors.Is(err, service.ErrForbidden) {
-					fallback = "无权访问当前工作区"
-				}
-				writeServiceError(w, err, fallback)
+				writeServiceError(w, err, "检查资源权限失败")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -75,15 +70,7 @@ func pathPart(parts []string, index int) string {
 
 func (a *API) requireCapability(w http.ResponseWriter, r *http.Request, capability service.Capability) bool {
 	if err := a.svc.RequireCapability(r.Context(), auth.MemberID(r), capability); err != nil {
-		if errors.Is(err, service.ErrForbidden) {
-			writeError(w, http.StatusForbidden, "当前成员没有执行此操作的权限")
-			return false
-		}
-		if errors.Is(err, service.ErrNotFound) {
-			writeError(w, http.StatusUnauthorized, "成员不存在")
-			return false
-		}
-		writeServiceError(w, err, "检查成员权限失败")
+		writeAuthError(w, err, "当前成员没有执行此操作的权限", "检查成员权限失败")
 		return false
 	}
 	return true

@@ -37,6 +37,13 @@ func expectColumnExists(m sqlmock.Sqlmock) {
 			AddRow("c1", "p1", "待办", 0, nil, "2026-01-01"))
 }
 
+// expectProjectWritable mock GetProject 成功且未归档。
+func expectProjectWritable(m sqlmock.Sqlmock) {
+	m.ExpectQuery("FROM project WHERE id").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at", "archived_at"}).
+			AddRow("p1", "w1", "项目", 0, "2026-01-01", "2026-01-01", nil))
+}
+
 // TestCreateTaskServiceErrors 覆盖 CreateTask 内部各失败点。
 func TestCreateTaskServiceErrors(t *testing.T) {
 	cases := []struct {
@@ -58,6 +65,7 @@ func TestCreateTaskServiceErrors(t *testing.T) {
 			failSQL: func(m sqlmock.Sqlmock) {
 				m.ExpectBegin()
 				expectColumnExists(m)
+				expectProjectWritable(m)
 				m.ExpectQuery("MaxTaskPositionByColumn").WillReturnError(errors.New("db down"))
 				m.ExpectRollback()
 			},
@@ -67,6 +75,7 @@ func TestCreateTaskServiceErrors(t *testing.T) {
 			failSQL: func(m sqlmock.Sqlmock) {
 				m.ExpectBegin()
 				expectColumnExists(m)
+				expectProjectWritable(m)
 				m.ExpectQuery("MaxTaskPositionByColumn").
 					WillReturnRows(sqlmock.NewRows([]string{"position"}).AddRow(0))
 				m.ExpectQuery("INSERT INTO task").WillReturnError(errors.New("db down"))
@@ -78,6 +87,7 @@ func TestCreateTaskServiceErrors(t *testing.T) {
 			failSQL: func(m sqlmock.Sqlmock) {
 				m.ExpectBegin()
 				expectColumnExists(m)
+				expectProjectWritable(m)
 				m.ExpectQuery("MaxTaskPositionByColumn").
 					WillReturnRows(sqlmock.NewRows([]string{"position"}).AddRow(0))
 				m.ExpectQuery("INSERT INTO task").
@@ -92,6 +102,7 @@ func TestCreateTaskServiceErrors(t *testing.T) {
 			failSQL: func(m sqlmock.Sqlmock) {
 				m.ExpectBegin()
 				expectColumnExists(m)
+				expectProjectWritable(m)
 				m.ExpectQuery("MaxTaskPositionByColumn").
 					WillReturnRows(sqlmock.NewRows([]string{"position"}).AddRow(0))
 				m.ExpectQuery("INSERT INTO task").
@@ -153,11 +164,12 @@ func TestTaskWriteServiceErrors(t *testing.T) {
 			name: "删除活动失败500", method: http.MethodDelete, path: "/api/tasks/t1",
 			want: http.StatusInternalServerError,
 			failSQL: func(m sqlmock.Sqlmock) {
-				// DeleteTask 在事务内：GetTask 成功 → 删活动失败 → 回滚 → 500。
+				// DeleteTask 在事务内：GetTask → GetProject(可写) → 删活动失败 → 回滚 → 500。
 				m.ExpectBegin()
 				m.ExpectQuery("FROM task WHERE id").
 					WillReturnRows(sqlmock.NewRows([]string{"id", "project_id", "column_id", "title", "description", "position", "priority", "due_date", "archived_at", "created_at", "updated_at"}).
 						AddRow("t1", "p1", "c1", "t", nil, 0, "med", nil, nil, "2026-01-01", "2026-01-01"))
+				expectProjectWritable(m)
 				m.ExpectExec("DELETE FROM activity").WillReturnError(errors.New("db down"))
 				m.ExpectRollback()
 			},

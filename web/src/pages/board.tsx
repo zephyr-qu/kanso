@@ -7,7 +7,7 @@ import {
 	useMemo,
 	useState,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	KeyboardSensor,
 	PointerSensor,
@@ -23,7 +23,7 @@ import { BoardMilestones } from "@/components/board/board-milestones";
 import { recordProjectOpen } from "@/lib/recent-projects";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
-import { queryKeys } from "@/hooks/query-keys";
+import { invalidateWorkspaceProjects, queryKeys } from "@/hooks/query-keys";
 import {
 	Empty,
 	EmptyDescription,
@@ -68,6 +68,7 @@ export default function BoardPage() {
 		if (workspaceId && projectId) recordProjectOpen(workspaceId, projectId);
 	}, [workspaceId, projectId]);
 	const navigate = useNavigate();
+	const queryClient = useQueryClient();
 	const workspaceName = workspace?.name ?? "工作区";
 
 	const [createOpen, setCreateOpen] = useState(false);
@@ -96,6 +97,7 @@ export default function BoardPage() {
 	// 显示层排序（按项目持久化到 localStorage，刷新保持）：不改写 position。
 	const { sort: sortConfig, setSort: setSortConfig } = useBoardSort(projectId);
 	const { board, isLoading, isError, columnOps } = useBoardData(projectId);
+	const projectArchived = Boolean(board?.project.archivedAt);
 	const swimlanes = useMemo(() => (board ? swimlaneGroups(board) : []), [board]);
 	const taskOps = useTaskMutations(projectId, workspaceId);
 	const labelOps = useLabelMutations(projectId, workspaceId);
@@ -122,6 +124,17 @@ export default function BoardPage() {
 	});
 	// 里程碑所有操作收敛到领域 hook（建/改名/设截止/删除/关联，成功统一失效列表）。
 	const milestoneOps = useMilestoneMutations(projectId, workspaceId);
+	const restoreProject = useMutation({
+		meta: { feedback: { success: "项目已恢复", errorTitle: "恢复项目失败" } },
+		mutationFn: () =>
+			api<Board["project"]>(buildPath("projectRestore", { id: projectId }), {
+				method: "POST",
+			}),
+		onSuccess: () => {
+			invalidateWorkspaceProjects(queryClient, workspaceId);
+			void queryClient.invalidateQueries({ queryKey: queryKeys.board(projectId) });
+		},
+	});
 	const { milestoneLink, startMilestoneLink, clearLinkPress, suppressClickRef } =
 		useMilestoneLink((taskId, milestoneId) =>
 			milestoneOps.attach.mutate({ taskId, milestoneId }),
@@ -148,6 +161,10 @@ export default function BoardPage() {
 
 	// dragend：状态机产出提交计划，这里只做 命令 → mutation 的映射（列/任务/标签各归其 hook）。
 	function handleDragEnd(event: DragEndEvent) {
+		if (projectArchived) {
+			onDragCancel();
+			return;
+		}
 		const { overId, overType, halfPassed } = overSignal(event);
 		const commands = onDragEnd(
 			String(event.active.id),
@@ -176,15 +193,17 @@ export default function BoardPage() {
 
 	const handleRenameColumn = useCallback(
 		(column: BoardColumn, name: string) => {
+			if (projectArchived) return;
 			void columnOps.renameColumn.mutateAsync({ id: column.id, name });
 		},
-		[columnOps.renameColumn],
+		[columnOps.renameColumn, projectArchived],
 	);
 	const handleAddTask = useCallback(
 		(columnId: string, title: string, priority: string) => {
+			if (projectArchived) return;
 			taskOps.createTask.mutate({ columnId, title, priority });
 		},
-		[taskOps.createTask],
+		[taskOps.createTask, projectArchived],
 	);
 	const handleOpenTask = useCallback(
 		(task: Task) => {
@@ -196,19 +215,21 @@ export default function BoardPage() {
 	);
 	const handleArchiveTask = useCallback(
 		(task: Task) => {
+			if (projectArchived) return;
 			taskOps.setArchived.mutate({ id: task.id, archived: true });
 		},
-		[taskOps.setArchived],
+		[taskOps.setArchived, projectArchived],
 	);
 	const handleToggleLabel = useCallback(
 		(task: Task, label: Label) => {
+			if (projectArchived) return;
 			labelOps.toggleLabel.mutate({
 				taskId: task.id,
 				labelId: label.id,
 				attach: !(task.labels ?? []).some((item) => item.id === label.id),
 			});
 		},
-		[labelOps.toggleLabel],
+		[labelOps.toggleLabel, projectArchived],
 	);
 	const announcements: Announcements = {
 		onDragStart: ({ active }) => {
@@ -266,6 +287,8 @@ export default function BoardPage() {
 				setLabelManagerOpen={setLabelManagerOpen}
 				setArchiveOpen={setArchiveOpen}
 				setMilestoneOpen={setMilestoneOpen}
+				onRestoreProject={() => restoreProject.mutate()}
+				restoring={restoreProject.isPending}
 			/>
 
 			{isLoading ? (

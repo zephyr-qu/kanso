@@ -4,7 +4,7 @@
 INSERT INTO workspace (id, name, created_at) VALUES (?, ?, ?);
 
 -- name: ImportProjects :exec
-INSERT INTO project (id, workspace_id, name, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?);
+INSERT INTO project (id, workspace_id, name, position, created_at, updated_at, archived_at) VALUES (?, ?, ?, ?, ?, ?, ?);
 
 -- name: ImportColumns :exec
 INSERT INTO column (id, project_id, name, position, wip_limit, created_at) VALUES (?, ?, ?, ?, ?, ?);

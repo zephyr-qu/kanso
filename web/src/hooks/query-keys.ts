@@ -11,6 +11,8 @@ export const queryKeys = {
 	dashboard: (workspaceId: string) => ["dashboard", workspaceId] as const,
 	projectsRoot: () => ["projects"] as const,
 	projects: (workspaceId: string) => ["projects", workspaceId] as const,
+	archivedProjects: (workspaceId: string) =>
+		["archived-projects", workspaceId] as const,
 	pinnedProjects: (workspaceId: string) => ["pinned-projects", workspaceId] as const,
 	board: (projectId: string) => ["board", projectId] as const,
 	task: (taskId: string) => ["task", taskId] as const,
@@ -66,6 +68,9 @@ export function invalidateWorkspaceProjects(
 ): void {
 	queryClient.invalidateQueries({ queryKey: queryKeys.projectsRoot() });
 	queryClient.invalidateQueries({ queryKey: queryKeys.projects(workspaceId) });
+	queryClient.invalidateQueries({
+		queryKey: queryKeys.archivedProjects(workspaceId),
+	});
 	queryClient.invalidateQueries({ queryKey: queryKeys.pinnedProjects(workspaceId) });
 	invalidateWorkspaceAggregates(queryClient, workspaceId);
 }
@@ -148,6 +153,8 @@ function invalidateProjectRealtimeEvent(
 			EVENT_TYPES.projectDeleted,
 			EVENT_TYPES.projectPinned,
 			EVENT_TYPES.projectUnpinned,
+			EVENT_TYPES.projectArchived,
+			EVENT_TYPES.projectRestored,
 		].includes(eventType as never)
 	) {
 		invalidateProjectScope(queryClient, { projectId, workspaceId });
@@ -240,6 +247,8 @@ export function invalidateRealtimeEvent(
 				EVENT_TYPES.projectCreated,
 				EVENT_TYPES.projectUpdated,
 				EVENT_TYPES.projectDeleted,
+				EVENT_TYPES.projectArchived,
+				EVENT_TYPES.projectRestored,
 			].includes(eventType as never)
 		) {
 			invalidateWorkspaceProjects(queryClient, scopeId);

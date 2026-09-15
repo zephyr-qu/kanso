@@ -9,10 +9,65 @@ import (
 	"context"
 )
 
+const archiveProject = `-- name: ArchiveProject :one
+UPDATE project SET archived_at = ?, updated_at = ?, pinned = 0 WHERE id = ?
+RETURNING id, workspace_id, name, position, created_at, updated_at, archived_at
+`
+
+type ArchiveProjectParams struct {
+	ArchivedAt *string `json:"archivedAt"`
+	UpdatedAt  string  `json:"updatedAt"`
+	ID         string  `json:"id"`
+}
+
+type ArchiveProjectRow struct {
+	ID          string  `json:"id"`
+	WorkspaceID string  `json:"workspaceId"`
+	Name        string  `json:"name"`
+	Position    int64   `json:"position"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
+	ArchivedAt  *string `json:"archivedAt"`
+}
+
+func (q *Queries) ArchiveProject(ctx context.Context, arg ArchiveProjectParams) (ArchiveProjectRow, error) {
+	row := q.db.QueryRowContext(ctx, archiveProject, arg.ArchivedAt, arg.UpdatedAt, arg.ID)
+	var i ArchiveProjectRow
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Position,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ArchivedAt,
+	)
+	return i, err
+}
+
+const countIncompleteActiveTasks = `-- name: CountIncompleteActiveTasks :one
+SELECT COUNT(*) AS count
+FROM task AS t
+INNER JOIN column AS c ON c.id = t.column_id
+WHERE t.project_id = ?
+  AND t.archived_at IS NULL
+  AND c.position < (
+    SELECT MAX(c2.position) FROM column AS c2 WHERE c2.project_id = t.project_id
+  )
+`
+
+// Incomplete = active (not archived) and not in the final column (max position).
+func (q *Queries) CountIncompleteActiveTasks(ctx context.Context, projectID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countIncompleteActiveTasks, projectID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createProject = `-- name: CreateProject :one
 INSERT INTO project (id, workspace_id, name, position, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?)
-RETURNING id, workspace_id, name, position, created_at, updated_at
+RETURNING id, workspace_id, name, position, created_at, updated_at, archived_at
 `
 
 type CreateProjectParams struct {
@@ -25,12 +80,13 @@ type CreateProjectParams struct {
 }
 
 type CreateProjectRow struct {
-	ID          string `json:"id"`
-	WorkspaceID string `json:"workspaceId"`
-	Name        string `json:"name"`
-	Position    int64  `json:"position"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
+	ID          string  `json:"id"`
+	WorkspaceID string  `json:"workspaceId"`
+	Name        string  `json:"name"`
+	Position    int64   `json:"position"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
+	ArchivedAt  *string `json:"archivedAt"`
 }
 
 func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (CreateProjectRow, error) {
@@ -50,6 +106,7 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (C
 		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ArchivedAt,
 	)
 	return i, err
 }
@@ -67,16 +124,17 @@ func (q *Queries) DeleteProject(ctx context.Context, id string) (int64, error) {
 }
 
 const getProject = `-- name: GetProject :one
-SELECT id, workspace_id, name, position, created_at, updated_at FROM project WHERE id = ?
+SELECT id, workspace_id, name, position, created_at, updated_at, archived_at FROM project WHERE id = ?
 `
 
 type GetProjectRow struct {
-	ID          string `json:"id"`
-	WorkspaceID string `json:"workspaceId"`
-	Name        string `json:"name"`
-	Position    int64  `json:"position"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
+	ID          string  `json:"id"`
+	WorkspaceID string  `json:"workspaceId"`
+	Name        string  `json:"name"`
+	Position    int64   `json:"position"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
+	ArchivedAt  *string `json:"archivedAt"`
 }
 
 func (q *Queries) GetProject(ctx context.Context, id string) (GetProjectRow, error) {
@@ -89,21 +147,74 @@ func (q *Queries) GetProject(ctx context.Context, id string) (GetProjectRow, err
 		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ArchivedAt,
 	)
 	return i, err
 }
 
+const listArchivedProjectsByWorkspace = `-- name: ListArchivedProjectsByWorkspace :many
+SELECT id, workspace_id, name, position, created_at, updated_at, archived_at
+FROM project
+WHERE workspace_id = ? AND archived_at IS NOT NULL
+ORDER BY archived_at DESC, updated_at DESC
+`
+
+type ListArchivedProjectsByWorkspaceRow struct {
+	ID          string  `json:"id"`
+	WorkspaceID string  `json:"workspaceId"`
+	Name        string  `json:"name"`
+	Position    int64   `json:"position"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
+	ArchivedAt  *string `json:"archivedAt"`
+}
+
+func (q *Queries) ListArchivedProjectsByWorkspace(ctx context.Context, workspaceID string) ([]ListArchivedProjectsByWorkspaceRow, error) {
+	rows, err := q.db.QueryContext(ctx, listArchivedProjectsByWorkspace, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListArchivedProjectsByWorkspaceRow
+	for rows.Next() {
+		var i ListArchivedProjectsByWorkspaceRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Name,
+			&i.Position,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ArchivedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listProjectsByWorkspace = `-- name: ListProjectsByWorkspace :many
-SELECT id, workspace_id, name, position, created_at, updated_at FROM project WHERE workspace_id = ? ORDER BY position, created_at
+SELECT id, workspace_id, name, position, created_at, updated_at, archived_at
+FROM project
+WHERE workspace_id = ? AND archived_at IS NULL
+ORDER BY position, created_at
 `
 
 type ListProjectsByWorkspaceRow struct {
-	ID          string `json:"id"`
-	WorkspaceID string `json:"workspaceId"`
-	Name        string `json:"name"`
-	Position    int64  `json:"position"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
+	ID          string  `json:"id"`
+	WorkspaceID string  `json:"workspaceId"`
+	Name        string  `json:"name"`
+	Position    int64   `json:"position"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
+	ArchivedAt  *string `json:"archivedAt"`
 }
 
 func (q *Queries) ListProjectsByWorkspace(ctx context.Context, workspaceID string) ([]ListProjectsByWorkspaceRow, error) {
@@ -122,6 +233,7 @@ func (q *Queries) ListProjectsByWorkspace(ctx context.Context, workspaceID strin
 			&i.Position,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ArchivedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -137,7 +249,8 @@ func (q *Queries) ListProjectsByWorkspace(ctx context.Context, workspaceID strin
 }
 
 const updateProjectName = `-- name: UpdateProjectName :one
-UPDATE project SET name = ?, updated_at = ? WHERE id = ? RETURNING id, workspace_id, name, position, created_at, updated_at
+UPDATE project SET name = ?, updated_at = ? WHERE id = ?
+RETURNING id, workspace_id, name, position, created_at, updated_at, archived_at
 `
 
 type UpdateProjectNameParams struct {
@@ -147,12 +260,13 @@ type UpdateProjectNameParams struct {
 }
 
 type UpdateProjectNameRow struct {
-	ID          string `json:"id"`
-	WorkspaceID string `json:"workspaceId"`
-	Name        string `json:"name"`
-	Position    int64  `json:"position"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
+	ID          string  `json:"id"`
+	WorkspaceID string  `json:"workspaceId"`
+	Name        string  `json:"name"`
+	Position    int64   `json:"position"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
+	ArchivedAt  *string `json:"archivedAt"`
 }
 
 func (q *Queries) UpdateProjectName(ctx context.Context, arg UpdateProjectNameParams) (UpdateProjectNameRow, error) {
@@ -165,6 +279,7 @@ func (q *Queries) UpdateProjectName(ctx context.Context, arg UpdateProjectNamePa
 		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ArchivedAt,
 	)
 	return i, err
 }

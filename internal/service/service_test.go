@@ -204,6 +204,60 @@ func TestProjectLifecycle(t *testing.T) {
 	}
 }
 
+func TestProjectArchiveLifecycle(t *testing.T) {
+	env := newTestService(t)
+	ctx := t.Context()
+	wsID := defaultWorkspaceID(t, env)
+
+	project, err := env.svc.CreateProject(ctx, wsID, "归档项目")
+	requireNoErr(t, err)
+	board, err := env.svc.GetBoard(ctx, project.ID)
+	requireNoErr(t, err)
+	todoID := board.Columns[0].ID
+	doneID := board.Columns[len(board.Columns)-1].ID
+
+	incomplete, _, err := env.svc.CreateTask(ctx, todoID, "未完成", "", "", nil, nil)
+	requireNoErr(t, err)
+	if _, err := env.svc.SetProjectArchived(ctx, project.ID, true); !errors.Is(err, ErrProjectHasIncompleteTasks) {
+		t.Fatalf("有未完成任务应 ErrProjectHasIncompleteTasks，实际 %v", err)
+	}
+
+	if _, err := env.svc.MoveTask(ctx, incomplete.ID, &doneID, 0); err != nil {
+		t.Fatalf("移到完成列失败: %v", err)
+	}
+	archived, err := env.svc.SetProjectArchived(ctx, project.ID, true)
+	requireNoErr(t, err)
+	if archived.ArchivedAt == nil {
+		t.Fatal("归档应设置 ArchivedAt")
+	}
+
+	active, err := env.svc.ListProjects(ctx, wsID)
+	requireNoErr(t, err)
+	for _, item := range active {
+		if item.ID == project.ID {
+			t.Fatal("归档项目不应出现在活跃列表")
+		}
+	}
+	archivedList, err := env.svc.ListArchivedProjects(ctx, wsID)
+	requireNoErr(t, err)
+	if len(archivedList) != 1 || archivedList[0].ID != project.ID {
+		t.Fatalf("归档列表应含该项目，实际 %+v", archivedList)
+	}
+
+	if _, _, err := env.svc.CreateTask(ctx, todoID, "禁止", "", "", nil, nil); !errors.Is(err, ErrProjectArchived) {
+		t.Fatalf("归档后创建任务应 ErrProjectArchived，实际 %v", err)
+	}
+
+	restored, err := env.svc.SetProjectArchived(ctx, project.ID, false)
+	requireNoErr(t, err)
+	if restored.ArchivedAt != nil {
+		t.Fatal("恢复应清空 ArchivedAt")
+	}
+	if _, _, err := env.svc.CreateTask(ctx, todoID, "恢复后", "", "", nil, nil); err != nil {
+		t.Fatalf("恢复后应可创建任务: %v", err)
+	}
+}
+
 func TestListProjectsInProgressUsesTaskColumn(t *testing.T) {
 	env := newTestService(t)
 	ctx := context.Background()

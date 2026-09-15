@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -19,6 +18,16 @@ func (a *API) listProjects(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, projects)
 }
 
+// listArchivedProjects 返回工作区下已归档项目列表。
+func (a *API) listArchivedProjects(w http.ResponseWriter, r *http.Request) {
+	projects, err := a.svc.ListArchivedProjects(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeServiceError(w, err, "查询归档项目失败")
+		return
+	}
+	writeJSON(w, http.StatusOK, projects)
+}
+
 // createProject 创建项目（自动种子固定看板默认列；0008：模板已移除，忽略请求中的 template 字段）。
 func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
 	if !a.requireCapability(w, r, service.CapabilityManageStructure) {
@@ -28,10 +37,6 @@ func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 	}
 	if !decodeBody(w, r, &body) {
-		return
-	}
-	if body.Name == "" {
-		writeError(w, http.StatusBadRequest, "项目名称不能为空")
 		return
 	}
 	project, err := a.svc.CreateProject(r.Context(), chi.URLParam(r, "id"), body.Name)
@@ -47,16 +52,12 @@ func (a *API) renameProject(w http.ResponseWriter, r *http.Request) {
 	if !a.requireCapability(w, r, service.CapabilityManageStructure) {
 		return
 	}
-	name, ok := decodeNameBody(w, r, "项目名称")
+	name, ok := decodeNameBody(w, r)
 	if !ok {
 		return
 	}
 	project, err := a.svc.RenameProject(r.Context(), chi.URLParam(r, "id"), name)
 	if err != nil {
-		if errors.Is(err, service.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "项目不存在")
-			return
-		}
 		writeServiceError(w, err, "重命名项目失败")
 		return
 	}
@@ -69,14 +70,36 @@ func (a *API) deleteProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.svc.DeleteProject(r.Context(), chi.URLParam(r, "id")); err != nil {
-		if errors.Is(err, service.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "项目不存在")
-			return
-		}
 		writeServiceError(w, err, "删除项目失败")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// archiveProject 归档项目（需无未完成活跃任务）。
+func (a *API) archiveProject(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityManageStructure) {
+		return
+	}
+	project, err := a.svc.SetProjectArchived(r.Context(), chi.URLParam(r, "id"), true)
+	if err != nil {
+		writeServiceError(w, err, "归档项目失败")
+		return
+	}
+	writeJSON(w, http.StatusOK, project)
+}
+
+// restoreProject 恢复已归档项目。
+func (a *API) restoreProject(w http.ResponseWriter, r *http.Request) {
+	if !a.requireCapability(w, r, service.CapabilityManageStructure) {
+		return
+	}
+	project, err := a.svc.SetProjectArchived(r.Context(), chi.URLParam(r, "id"), false)
+	if err != nil {
+		writeServiceError(w, err, "恢复项目失败")
+		return
+	}
+	writeJSON(w, http.StatusOK, project)
 }
 
 // listPinnedProjects 返回跨工作区置顶项目列表。
@@ -98,10 +121,6 @@ func (a *API) setProjectPinned(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.svc.SetProjectPinned(r.Context(), chi.URLParam(r, "id"), body.Pinned); err != nil {
-		if errors.Is(err, service.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "项目不存在")
-			return
-		}
 		writeServiceError(w, err, "更新置顶失败")
 		return
 	}

@@ -91,7 +91,9 @@ export function activityDetail(
 		case "project.updated":
 		case "project.deleted":
 		case "project.pinned":
-		case "project.unpinned": {
+		case "project.unpinned":
+		case "project.archived":
+		case "project.restored": {
 			const value = parseActivityData(data).name;
 			return typeof value === "string" && value ? `「${value}」` : "";
 		}

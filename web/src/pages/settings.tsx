@@ -26,6 +26,9 @@ type SettingsConfig = {
 	wsOrigins: string;
 	autoArchiveAfterDays: number;
 	configFile: string;
+	aiBaseURL: string;
+	aiModel: string;
+	aiConfigured: boolean;
 };
 
 const AUTO_ARCHIVE_OPTIONS = [1, 3, 7, 14, 30, 90];
@@ -44,6 +47,10 @@ export default function SettingsPage() {
 	const [wsOrigins, setWsOrigins] = useState("");
 	const [configFile, setConfigFile] = useState("kanso-config.json");
 	const [autoArchiveAfterDays, setAutoArchiveAfterDays] = useState(7);
+	const [aiBaseURL, setAiBaseURL] = useState("");
+	const [aiModel, setAiModel] = useState("");
+	const [aiAPIKey, setAiAPIKey] = useState("");
+	const [aiConfigured, setAiConfigured] = useState(false);
 	const [theme, setThemeValue] = useState<Theme>(getTheme());
 	const [version, setVersion] = useState("");
 
@@ -55,6 +62,10 @@ export default function SettingsPage() {
 				setWsOrigins(cfg.wsOrigins);
 				setAutoArchiveAfterDays(cfg.autoArchiveAfterDays || 7);
 				setConfigFile(cfg.configFile);
+				setAiBaseURL(cfg.aiBaseURL || "");
+				setAiModel(cfg.aiModel || "");
+				setAiConfigured(Boolean(cfg.aiConfigured));
+				setAiAPIKey("");
 			})
 			.catch(() =>
 				toastManager.add({
@@ -87,11 +98,18 @@ export default function SettingsPage() {
 					dataDir,
 					wsOrigins,
 					autoArchiveAfterDays,
+					aiBaseURL,
+					aiModel,
+					aiAPIKey,
 				}),
 			});
+			if (aiAPIKey.trim()) {
+				setAiConfigured(true);
+				setAiAPIKey("");
+			}
 			toastManager.add({
 				title: "已保存",
-				description: `已写入 ${res.configFile}；监听地址、数据目录与 WS 白名单将在重启服务后生效。`,
+				description: `已写入 ${res.configFile}；监听地址、数据目录与 WS 白名单将在重启服务后生效；AI 配置立即生效。`,
 				type: "success",
 			});
 		} catch (error) {
@@ -180,7 +198,7 @@ export default function SettingsPage() {
 			<PageHeader>
 				<h1 className="text-[17px] font-[650] tracking-tight">设置</h1>
 				<span className="text-[13px] text-muted-foreground">
-					外观 · 服务配置 · 数据 · 关于
+					外观 · 服务配置 · AI · 数据 · 关于
 				</span>
 			</PageHeader>
 
@@ -280,8 +298,49 @@ export default function SettingsPage() {
 						</Button>
 					</div>
 					<p className="mt-3 text-xs text-muted-foreground/70">
-						重启后生效：监听地址、数据目录、WS 白名单；自动归档立即生效。
+						重启后生效：监听地址、数据目录、WS 白名单；自动归档与 AI 配置立即生效。
 					</p>
+				</SurfaceCard>
+
+				{/* AI 捕获：OpenAI 兼容接口（密钥不回传） */}
+				<SurfaceCard className="kanso-settings-card mt-3.5 p-5">
+					<div className="text-sm font-semibold">AI 捕获</div>
+					<div className="mb-3 mt-1 text-xs text-muted-foreground/70">
+						粘贴文本拆任务时调用的 OpenAI 兼容接口；密钥仅保存在服务端。
+						{aiConfigured ? " · 已配置密钥" : " · 尚未配置密钥"}
+					</div>
+					<div className="grid gap-x-6 sm:grid-cols-2">
+						<div className="min-w-0">
+							<SettingField
+								label="API Base URL"
+								description="KANSO_AI_BASE_URL · https://api.openai.com/v1"
+								value={aiBaseURL}
+								onChange={setAiBaseURL}
+							/>
+							<SettingField
+								label="模型"
+								description="KANSO_AI_MODEL · gpt-4o-mini"
+								value={aiModel}
+								onChange={setAiModel}
+							/>
+						</div>
+						<div className="min-w-0">
+							<div className="setting-field">
+								<div className="text-sm font-semibold">API Key</div>
+								<div className="mb-2 mt-1 text-xs text-muted-foreground/70">
+									KANSO_AI_API_KEY · 留空则保持已有密钥不变
+								</div>
+								<Input
+									type="password"
+									value={aiAPIKey}
+									onChange={(e) => setAiAPIKey(e.target.value)}
+									placeholder={aiConfigured ? "••••••••（已配置）" : "sk-…"}
+									className="h-10 max-w-[640px] font-mono"
+									autoComplete="off"
+								/>
+							</div>
+						</div>
+					</div>
 				</SurfaceCard>
 
 				{/* 数据：导出备份 */}

@@ -81,11 +81,12 @@ function dayLabel(iso: string, now: Date, prefix: string): string | null {
 }
 
 // 相对时间文案（原型项目卡片 meta："更新于今天 / 昨天 / N 天前 / N 周前"）。
-export function formatUpdated(iso: string, now = Date.now()): string {
+// prefix 可换成「归档于」等同类语义。
+export function formatUpdated(iso: string, now = Date.now(), prefix = "更新于"): string {
 	const date = new Date(now);
-	const label = dayLabel(iso, date, "更新于");
+	const label = dayLabel(iso, date, prefix);
 	if (label) return label;
-	return `更新于 ${Math.floor(calendarDaysAgo(iso, date) / 7)} 周前`;
+	return `${prefix} ${Math.floor(calendarDaysAgo(iso, date) / 7)} 周前`;
 }
 
 // 任务卡底部的紧凑时间：优先级不抢空间，使用短相对日期（本地日历日口径）。

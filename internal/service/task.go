@@ -17,6 +17,9 @@ import (
 // labels 为项目内标签 ID 列表，创建时同事务内贴标签；跨项目标签返回 ErrCrossProjectMove。
 // 返回任务与所属项目 ID。
 func (s *Service) CreateTask(ctx context.Context, columnID, title, description string, priority string, dueDate *string, labels []string) (gen.Task, string, error) {
+	if title == "" {
+		return gen.Task{}, "", invalidInput("任务标题不能为空")
+	}
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
 		return gen.Task{}, "", err
@@ -26,6 +29,9 @@ func (s *Service) CreateTask(ctx context.Context, columnID, title, description s
 	column, err := q.GetColumn(ctx, columnID)
 	if err != nil {
 		return gen.Task{}, "", mapNoRows(err)
+	}
+	if _, err := s.requireProjectWritableByID(ctx, q, column.ProjectID); err != nil {
+		return gen.Task{}, "", err
 	}
 
 	position, err := q.MaxTaskPositionByColumn(ctx, columnID)
@@ -116,6 +122,9 @@ func (s *Service) CreateTask(ctx context.Context, columnID, title, description s
 // UpdateTask 更新任务标题/描述/优先级/截止日期（指针字段为空表示不改）；
 // dueDate 传空串指针表示清空截止日期。不存在时返回 ErrNotFound。
 func (s *Service) UpdateTask(ctx context.Context, taskID string, title, description, priority *string, dueDate *string) (gen.Task, error) {
+	if title != nil && *title == "" {
+		return gen.Task{}, invalidInput("任务标题不能为空")
+	}
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
 		return gen.Task{}, err
@@ -124,6 +133,9 @@ func (s *Service) UpdateTask(ctx context.Context, taskID string, title, descript
 	current, err := q.GetTask(ctx, taskID)
 	if err != nil {
 		return gen.Task{}, mapNoRows(err)
+	}
+	if _, err := s.requireProjectWritableByID(ctx, q, current.ProjectID); err != nil {
+		return gen.Task{}, err
 	}
 	if title == nil {
 		title = &current.Title
@@ -186,6 +198,9 @@ func (s *Service) DeleteTask(ctx context.Context, taskID string) error {
 	if err != nil {
 		return mapNoRows(err)
 	}
+	if _, err := s.requireProjectWritableByID(ctx, q, task.ProjectID); err != nil {
+		return err
+	}
 	// 先删活动（activity 无外键，需显式清理，spec：不保留孤儿记录）。
 	if err := q.DeleteActivityByTask(ctx, taskID); err != nil {
 		return fmt.Errorf("删除任务活动失败: %w", err)
@@ -217,6 +232,9 @@ func (s *Service) SetTaskArchived(ctx context.Context, taskID string, archived b
 	current, err := q.GetTask(ctx, taskID)
 	if err != nil {
 		return gen.Task{}, mapNoRows(err)
+	}
+	if _, err := s.requireProjectWritableByID(ctx, q, current.ProjectID); err != nil {
+		return gen.Task{}, err
 	}
 	if (current.ArchivedAt != nil) == archived {
 		return current, nil
@@ -338,6 +356,9 @@ func (s *Service) MoveTask(ctx context.Context, taskID string, targetColumnID *s
 	task, err := q.GetTask(ctx, taskID)
 	if err != nil {
 		return gen.Task{}, mapNoRows(err)
+	}
+	if _, err := s.requireProjectWritableByID(ctx, q, task.ProjectID); err != nil {
+		return gen.Task{}, err
 	}
 	sourceColumnID := task.ColumnID
 	destColumnID := sourceColumnID

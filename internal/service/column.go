@@ -132,15 +132,21 @@ func (s *Service) ListArchivedTasks(ctx context.Context, projectID string) ([]ge
 
 // CreateColumn 在项目末尾追加新列。
 func (s *Service) CreateColumn(ctx context.Context, projectID, name string, wipLimit *int64) (gen.Column, error) {
+	if name == "" {
+		return gen.Column{}, invalidInput("列名称不能为空")
+	}
+	if wipLimit != nil && *wipLimit < 0 {
+		return gen.Column{}, invalidInput("WIP 限制无效")
+	}
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
 		return gen.Column{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	// 校验项目存在（外键会兜底，但这里给出清晰的 404）。
-	if _, err := q.GetProject(ctx, projectID); err != nil {
-		return gen.Column{}, mapNoRows(err)
+	// 校验项目存在且未归档（外键会兜底，但这里给出清晰错误）。
+	if _, err := s.requireProjectWritableByID(ctx, q, projectID); err != nil {
+		return gen.Column{}, err
 	}
 
 	// W-2：新列 position 取 MAX+1 而非 COUNT——删除中间列留洞后 COUNT 会与既有
@@ -174,7 +180,7 @@ func (s *Service) CreateColumn(ctx context.Context, projectID, name string, wipL
 // UpdateColumnWIP updates the optional warning threshold; nil clears it.
 func (s *Service) UpdateColumnWIP(ctx context.Context, columnID string, limit *int64) (gen.Column, error) {
 	if limit != nil && *limit < 0 {
-		return gen.Column{}, fmt.Errorf("wip limit must be non-negative")
+		return gen.Column{}, invalidInput("WIP 限制无效")
 	}
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
@@ -186,6 +192,9 @@ func (s *Service) UpdateColumnWIP(ctx context.Context, columnID string, limit *i
 	if err != nil {
 		return gen.Column{}, mapNoRows(err)
 	}
+	if _, err := s.requireProjectWritableByID(ctx, q, column.ProjectID); err != nil {
+		return gen.Column{}, err
+	}
 	if err := s.commitEvents(ctx, tx, q, Event{Action: EventColumnUpdated, ProjectID: column.ProjectID, EntityID: column.ID, Data: map[string]any{"name": column.Name, "wipLimit": limit}, RecordActivity: true}); err != nil {
 		return gen.Column{}, err
 	}
@@ -194,6 +203,9 @@ func (s *Service) UpdateColumnWIP(ctx context.Context, columnID string, limit *i
 
 // RenameColumn 重命名列；不存在时返回 ErrNotFound。
 func (s *Service) RenameColumn(ctx context.Context, columnID, name string) (gen.Column, error) {
+	if name == "" {
+		return gen.Column{}, invalidInput("列名称不能为空")
+	}
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
 		return gen.Column{}, err
@@ -206,6 +218,9 @@ func (s *Service) RenameColumn(ctx context.Context, columnID, name string) (gen.
 	})
 	if err != nil {
 		return gen.Column{}, mapNoRows(err)
+	}
+	if _, err := s.requireProjectWritableByID(ctx, q, column.ProjectID); err != nil {
+		return gen.Column{}, err
 	}
 	if err := s.commitEvents(ctx, tx, q, Event{Action: EventColumnUpdated, ProjectID: column.ProjectID, EntityID: column.ID, Data: map[string]string{"name": column.Name}, RecordActivity: true}); err != nil {
 		return gen.Column{}, err
@@ -223,6 +238,9 @@ func (s *Service) DeleteColumn(ctx context.Context, columnID string) error {
 	column, err := q.GetColumn(ctx, columnID)
 	if err != nil {
 		return mapNoRows(err)
+	}
+	if _, err := s.requireProjectWritableByID(ctx, q, column.ProjectID); err != nil {
+		return err
 	}
 	// 先清列内任务的活动（activity 无外键，需显式清理）。
 	if err := q.DeleteActivitiesByColumn(ctx, columnID); err != nil {
@@ -251,6 +269,9 @@ func (s *Service) MoveColumn(ctx context.Context, columnID string, targetPositio
 	column, err := q.GetColumn(ctx, columnID)
 	if err != nil {
 		return gen.Column{}, mapNoRows(err)
+	}
+	if _, err := s.requireProjectWritableByID(ctx, q, column.ProjectID); err != nil {
+		return gen.Column{}, err
 	}
 
 	columns, err := q.ListColumnsByProject(ctx, column.ProjectID)

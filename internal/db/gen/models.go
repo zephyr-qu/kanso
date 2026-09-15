@@ -59,13 +59,14 @@ type Milestone struct {
 }
 
 type Project struct {
-	ID          string `json:"id"`
-	WorkspaceID string `json:"workspaceId"`
-	Name        string `json:"name"`
-	Position    int64  `json:"position"`
-	Pinned      int64  `json:"pinned"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
+	ID          string  `json:"id"`
+	WorkspaceID string  `json:"workspaceId"`
+	Name        string  `json:"name"`
+	Position    int64   `json:"position"`
+	Pinned      int64   `json:"pinned"`
+	ArchivedAt  *string `json:"archivedAt"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
 }
 
 type Task struct {

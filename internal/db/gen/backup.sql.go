@@ -220,17 +220,18 @@ func (q *Queries) ListAllMilestones(ctx context.Context) ([]Milestone, error) {
 }
 
 const listAllProjects = `-- name: ListAllProjects :many
-SELECT id, workspace_id, name, position, created_at, updated_at FROM project
+SELECT id, workspace_id, name, position, created_at, updated_at, archived_at FROM project
 ORDER BY created_at
 `
 
 type ListAllProjectsRow struct {
-	ID          string `json:"id"`
-	WorkspaceID string `json:"workspaceId"`
-	Name        string `json:"name"`
-	Position    int64  `json:"position"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
+	ID          string  `json:"id"`
+	WorkspaceID string  `json:"workspaceId"`
+	Name        string  `json:"name"`
+	Position    int64   `json:"position"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
+	ArchivedAt  *string `json:"archivedAt"`
 }
 
 func (q *Queries) ListAllProjects(ctx context.Context) ([]ListAllProjectsRow, error) {
@@ -249,6 +250,7 @@ func (q *Queries) ListAllProjects(ctx context.Context) ([]ListAllProjectsRow, er
 			&i.Position,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ArchivedAt,
 		); err != nil {
 			return nil, err
 		}

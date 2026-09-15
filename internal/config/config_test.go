@@ -27,6 +27,35 @@ func TestLoadDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadAIDefaultsAndEnv(t *testing.T) {
+	t.Setenv("KANSO_CONFIG_FILE", filepath.Join(t.TempDir(), "absent.json"))
+	t.Setenv("KANSO_AI_BASE_URL", "")
+	t.Setenv("KANSO_AI_API_KEY", "")
+	t.Setenv("KANSO_AI_MODEL", "")
+	cfg := Load()
+	if cfg.AIBaseURL != DefaultAIBaseURL {
+		t.Fatalf("默认 AIBaseURL 应为 %q，实际 %q", DefaultAIBaseURL, cfg.AIBaseURL)
+	}
+	if cfg.AIModel != DefaultAIModel {
+		t.Fatalf("默认 AIModel 应为 %q，实际 %q", DefaultAIModel, cfg.AIModel)
+	}
+	if cfg.AIAPIKey != "" {
+		t.Fatalf("默认 AIAPIKey 应为空")
+	}
+
+	t.Setenv("KANSO_AI_BASE_URL", "https://llm.example/v1/")
+	t.Setenv("KANSO_AI_API_KEY", "sk-env")
+	t.Setenv("KANSO_AI_MODEL", "env-model")
+	cfg = Load()
+	if cfg.AIBaseURL != "https://llm.example/v1" {
+		t.Fatalf("env BaseURL 应去尾斜杠，实际 %q", cfg.AIBaseURL)
+	}
+	if cfg.AIAPIKey != "sk-env" || cfg.AIModel != "env-model" {
+		t.Fatalf("env AI 字段应生效: %+v", cfg)
+	}
+}
+
+
 func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("KANSO_ADDR", "127.0.0.1:9999")
 	t.Setenv("KANSO_ACCESS_KEY", "secret-key")

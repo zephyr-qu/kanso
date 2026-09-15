@@ -8,6 +8,7 @@ export type Project = {
 	position: number;
 	createdAt: string;
 	updatedAt: string;
+	archivedAt?: string | null;
 	columnCount?: number;
 	taskCount?: number;
 	inProgressCount?: number;

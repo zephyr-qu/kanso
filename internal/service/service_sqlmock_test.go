@@ -69,8 +69,8 @@ func TestListProjectsStatsError(t *testing.T) {
 	mock, svc := newMockService(t)
 	// 项目列表成功 → 统计聚合失败。
 	mock.ExpectQuery("ListProjectsByWorkspace").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at"}).
-			AddRow("p1", "w1", "项目", 0, "2026-01-01", "2026-01-01"))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at", "archived_at"}).
+			AddRow("p1", "w1", "项目", 0, "2026-01-01", "2026-01-01", nil))
 	mock.ExpectQuery("p.id AS project_id").
 		WillReturnError(errors.New("统计查询失败"))
 	if _, err := svc.ListProjects(context.Background(), "w1"); err == nil {
@@ -82,8 +82,8 @@ func TestGetBoardColumnsError(t *testing.T) {
 	mock, svc := newMockService(t)
 	// 项目存在，列查询失败。
 	mock.ExpectQuery("FROM project WHERE id").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at"}).
-			AddRow("p1", "w1", "项目", 0, "2026-01-01", "2026-01-01"))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at", "archived_at"}).
+			AddRow("p1", "w1", "项目", 0, "2026-01-01", "2026-01-01", nil))
 	mock.ExpectQuery("ListColumnsByProject").
 		WillReturnError(errors.New("列查询失败"))
 	if _, err := svc.GetBoard(context.Background(), "p1"); err == nil {

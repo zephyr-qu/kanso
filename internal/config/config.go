@@ -3,7 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -38,6 +38,10 @@ const (
 	DefaultAutoArchiveEnabled   = true
 	DefaultAutoArchiveAfterDays = 7
 	MaxAutoArchiveAfterDays     = 3650
+	// DefaultAIBaseURL 是 OpenAI 兼容 Chat Completions 的默认根路径（含 /v1）。
+	DefaultAIBaseURL = "https://api.openai.com/v1"
+	// DefaultAIModel 是 AI 捕获默认模型。
+	DefaultAIModel = "gpt-4o-mini"
 )
 
 // FileConfig 是持久化到磁盘的运行配置（JSON），不含运行模式（模式仅由 KANSO_MODE 启动时决定）。
@@ -52,6 +56,12 @@ type FileConfig struct {
 	AutoArchiveEnabled *bool `json:"autoArchiveEnabled"`
 	// AutoArchiveAfterDays 是任务进入完成列后保留的天数。
 	AutoArchiveAfterDays int `json:"autoArchiveAfterDays"`
+	// AIBaseURL 是 OpenAI 兼容 API 根路径（如 https://api.openai.com/v1）。
+	AIBaseURL string `json:"aiBaseURL"`
+	// AIAPIKey 是模型调用密钥（设置页 GET 不回传明文）。
+	AIAPIKey string `json:"aiAPIKey"`
+	// AIModel 是 Chat Completions 模型名。
+	AIModel string `json:"aiModel"`
 }
 
 // ConfigFilePath 返回配置文件路径：KANSO_CONFIG_FILE 显式指定时用之，否则默认 ./kanso-config.json。
@@ -109,6 +119,12 @@ type Config struct {
 	AutoArchiveEnabled bool
 	// AutoArchiveAfterDays 是任务进入完成列后保留的天数。
 	AutoArchiveAfterDays int
+	// AIBaseURL 是 OpenAI 兼容 API 根路径。
+	AIBaseURL string
+	// AIAPIKey 是模型调用密钥。
+	AIAPIKey string
+	// AIModel 是 Chat Completions 模型名。
+	AIModel string
 }
 
 // Validate 检查启动所需的运行配置，避免服务已初始化一半才因地址或数据目录失败。
@@ -170,7 +186,7 @@ func Load() Config {
 	fileCfg := FileConfig{}
 	if fc, err := ReadFile(ConfigFilePath()); err != nil {
 		// 配置文件缺失/损坏不阻断启动：回退内置默认，并打警告便于发现。
-		log.Printf("⚠️ 读取配置文件失败（使用内置默认）: %v", err)
+		slog.Warn("读取配置文件失败，使用内置默认", slog.Any("err", err))
 	} else {
 		fileCfg = fc
 	}
@@ -190,6 +206,9 @@ func Load() Config {
 		WSOrigins:            parseOrigins(firstNonEmpty(os.Getenv("KANSO_WS_ORIGINS"), fileCfg.WSOrigins)),
 		AutoArchiveEnabled:   autoArchiveEnabled,
 		AutoArchiveAfterDays: autoArchiveAfterDays,
+		AIBaseURL:            strings.TrimRight(firstNonEmpty(os.Getenv("KANSO_AI_BASE_URL"), fileCfg.AIBaseURL, DefaultAIBaseURL), "/"),
+		AIAPIKey:             firstNonEmpty(os.Getenv("KANSO_AI_API_KEY"), fileCfg.AIAPIKey),
+		AIModel:              firstNonEmpty(os.Getenv("KANSO_AI_MODEL"), fileCfg.AIModel, DefaultAIModel),
 	}
 }
 

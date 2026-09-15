@@ -199,7 +199,7 @@ func (s *Service) ImportBackup(ctx context.Context, b BackupData) error {
 		}
 	}
 	for _, p := range b.Projects {
-		if err := q.ImportProjects(ctx, gen.ImportProjectsParams{ID: p.ID, WorkspaceID: p.WorkspaceID, Name: p.Name, Position: p.Position, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt}); err != nil {
+		if err := q.ImportProjects(ctx, gen.ImportProjectsParams{ID: p.ID, WorkspaceID: p.WorkspaceID, Name: p.Name, Position: p.Position, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt, ArchivedAt: p.ArchivedAt}); err != nil {
 			return fmt.Errorf("导入项目失败: %w", err)
 		}
 	}

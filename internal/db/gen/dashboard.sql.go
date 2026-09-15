@@ -82,7 +82,7 @@ SELECT
     t.created_at
 FROM task AS t
 INNER JOIN project AS p ON p.id = t.project_id
-WHERE t.archived_at IS NULL AND p.workspace_id = ?
+WHERE t.archived_at IS NULL AND p.workspace_id = ? AND p.archived_at IS NULL
 `
 
 type ListAllTasksRow struct {
@@ -121,7 +121,7 @@ SELECT
 FROM column AS c
 INNER JOIN project AS p ON p.id = c.project_id
 LEFT JOIN task AS t ON c.id = t.column_id AND t.archived_at IS NULL
-WHERE p.workspace_id = ?
+WHERE p.workspace_id = ? AND p.archived_at IS NULL
 GROUP BY c.name
 ORDER BY task_count DESC
 `
@@ -170,6 +170,7 @@ INNER JOIN column AS c ON t.column_id = c.id
 INNER JOIN project AS p ON c.project_id = p.id
 WHERE
     t.archived_at IS NULL
+    AND p.archived_at IS NULL
     AND (t.priority = 'urgent' OR t.due_date IS NOT NULL)
     AND p.workspace_id = ?
 ORDER BY t.updated_at DESC
@@ -225,7 +226,7 @@ SELECT
     COUNT(*) AS task_count
 FROM task AS t
 INNER JOIN project AS p ON p.id = t.project_id
-WHERE t.archived_at IS NULL AND p.workspace_id = ?
+WHERE t.archived_at IS NULL AND p.workspace_id = ? AND p.archived_at IS NULL
 GROUP BY priority
 ORDER BY CASE priority
     WHEN 'urgent' THEN 0
@@ -275,7 +276,7 @@ SELECT
 FROM project AS p
 LEFT JOIN column AS c ON p.id = c.project_id
 LEFT JOIN task AS t ON c.id = t.column_id AND t.archived_at IS NULL
-WHERE p.workspace_id = ?
+WHERE p.workspace_id = ? AND p.archived_at IS NULL
 GROUP BY p.id, c.id
 ORDER BY p.created_at, c.position
 `
@@ -339,6 +340,7 @@ WHERE
         )
     )
     AND p.workspace_id = ?
+    AND p.archived_at IS NULL
 GROUP BY day
 ORDER BY day
 `
@@ -387,6 +389,7 @@ WHERE
         WHERE c2.project_id = t.project_id
     )
     AND p.workspace_id = ?
+    AND p.archived_at IS NULL
     AND t.archived_at IS NULL
     AND NOT EXISTS (
         SELECT 1

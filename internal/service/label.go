@@ -13,14 +13,17 @@ import (
 
 // CreateLabel 创建项目级标签；项目不存在时返回 ErrNotFound（此前 FK 违约映射 500）。
 func (s *Service) CreateLabel(ctx context.Context, projectID, name string) (gen.Label, error) {
+	if name == "" {
+		return gen.Label{}, invalidInput("标签名称不能为空")
+	}
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
 		return gen.Label{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := q.GetProject(ctx, projectID); err != nil {
-		return gen.Label{}, mapNoRows(err)
+	if _, err := s.requireProjectWritableByID(ctx, q, projectID); err != nil {
+		return gen.Label{}, err
 	}
 	labelID, err := id.New()
 	if err != nil {
@@ -58,8 +61,14 @@ func (s *Service) UpdateLabel(ctx context.Context, labelID string, name *string)
 	if err != nil {
 		return gen.Label{}, mapNoRows(err)
 	}
+	if _, err := s.requireProjectWritableByID(ctx, q, current.ProjectID); err != nil {
+		return gen.Label{}, err
+	}
 	newName := current.Name
 	if name != nil {
+		if *name == "" {
+			return gen.Label{}, invalidInput("标签名称不能为空")
+		}
 		newName = *name
 	}
 	label, err := q.UpdateLabel(ctx, gen.UpdateLabelParams{ID: labelID, Name: newName})
@@ -89,6 +98,9 @@ func (s *Service) DeleteLabel(ctx context.Context, labelID string) error {
 	if err != nil {
 		return mapNoRows(err)
 	}
+	if _, err := s.requireProjectWritableByID(ctx, q, label.ProjectID); err != nil {
+		return err
+	}
 	n, err := q.DeleteLabel(ctx, labelID)
 	if err != nil {
 		return fmt.Errorf("删除标签失败: %w", err)
@@ -117,6 +129,9 @@ func (s *Service) AttachLabel(ctx context.Context, taskID, labelID string) error
 	task, err := q.GetTask(ctx, taskID)
 	if err != nil {
 		return mapNoRows(err)
+	}
+	if _, err := s.requireProjectWritableByID(ctx, q, task.ProjectID); err != nil {
+		return err
 	}
 	label, err := q.GetLabel(ctx, labelID)
 	if err != nil {
@@ -160,6 +175,9 @@ func (s *Service) DetachLabel(ctx context.Context, taskID, labelID string) error
 	task, err := q.GetTask(ctx, taskID)
 	if err != nil {
 		return mapNoRows(err)
+	}
+	if _, err := s.requireProjectWritableByID(ctx, q, task.ProjectID); err != nil {
+		return err
 	}
 	label, err := q.GetLabel(ctx, labelID)
 	if err != nil {

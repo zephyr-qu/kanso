@@ -29,7 +29,7 @@ func (s *Service) ListCalendarTasks(ctx context.Context, workspaceID string) ([]
 		       t.priority, t.due_date
 		FROM task t
 		JOIN project p ON p.id = t.project_id
-		WHERE p.workspace_id = ? AND t.archived_at IS NULL AND t.due_date IS NOT NULL
+		WHERE p.workspace_id = ? AND p.archived_at IS NULL AND t.archived_at IS NULL AND t.due_date IS NOT NULL
 		ORDER BY t.due_date, t.updated_at DESC`, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("查询日历任务失败: %w", err)

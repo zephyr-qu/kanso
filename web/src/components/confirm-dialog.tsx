@@ -19,9 +19,12 @@ export default function ConfirmDialog(props: {
 	title: string;
 	description: string;
 	confirmLabel?: string;
+	/** 破坏性操作用红色确认按钮（默认）；恢复等非破坏操作用主按钮。 */
+	destructive?: boolean;
 	onConfirm: () => Promise<void>;
 }) {
 	const [submitting, setSubmitting] = useState(false);
+	const destructive = props.destructive !== false;
 
 	return (
 		<Dialog open={props.open} onOpenChange={props.onOpenChange}>
@@ -35,7 +38,7 @@ export default function ConfirmDialog(props: {
 					<DialogFooter variant="bare" className="p-4 pt-0">
 						<DialogClose render={<Button variant="ghost">取消</Button>} />
 						<Button
-							variant="destructive"
+							variant={destructive ? "destructive" : "default"}
 							loading={submitting}
 							onClick={async () => {
 								setSubmitting(true);

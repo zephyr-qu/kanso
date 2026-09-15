@@ -52,6 +52,7 @@ func TestCommentLabelServiceErrors(t *testing.T) {
 			failSQL: func(m sqlmock.Sqlmock) {
 				m.ExpectBegin()
 				expectTaskExists(m)
+				expectProjectWritable(m)
 				m.ExpectQuery("INSERT INTO comment").WillReturnError(errors.New("db down"))
 				m.ExpectRollback()
 			},
@@ -71,6 +72,7 @@ func TestCommentLabelServiceErrors(t *testing.T) {
 			failSQL: func(m sqlmock.Sqlmock) {
 				m.ExpectBegin()
 				expectTaskExists(m)
+				expectProjectWritable(m)
 				m.ExpectQuery("FROM label WHERE id").WillReturnError(sql.ErrNoRows)
 				m.ExpectRollback()
 			},
@@ -81,6 +83,7 @@ func TestCommentLabelServiceErrors(t *testing.T) {
 			failSQL: func(m sqlmock.Sqlmock) {
 				m.ExpectBegin()
 				expectTaskExists(m)
+				expectProjectWritable(m)
 				m.ExpectQuery("FROM label WHERE id").
 					WillReturnRows(sqlmock.NewRows([]string{"id", "project_id", "name", "created_at"}).
 						AddRow("l1", "p1", "标签", "2026-01-01"))
@@ -128,8 +131,8 @@ func TestColumnServiceErrors(t *testing.T) {
 			failSQL: func(m sqlmock.Sqlmock) {
 				m.ExpectBegin()
 				m.ExpectQuery("FROM project WHERE id").
-					WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at"}).
-						AddRow("p1", "w1", "项目", 0, "2026-01-01", "2026-01-01"))
+					WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at", "archived_at"}).
+						AddRow("p1", "w1", "项目", 0, "2026-01-01", "2026-01-01", nil))
 				m.ExpectQuery("MaxColumnPositionByProject").WillReturnError(errors.New("db down"))
 			},
 		},
@@ -139,8 +142,8 @@ func TestColumnServiceErrors(t *testing.T) {
 			failSQL: func(m sqlmock.Sqlmock) {
 				m.ExpectBegin()
 				m.ExpectQuery("FROM project WHERE id").
-					WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at"}).
-						AddRow("p1", "w1", "项目", 0, "2026-01-01", "2026-01-01"))
+					WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at", "archived_at"}).
+						AddRow("p1", "w1", "项目", 0, "2026-01-01", "2026-01-01", nil))
 				m.ExpectQuery("MaxColumnPositionByProject").
 					WillReturnRows(sqlmock.NewRows([]string{"position"}).AddRow(0))
 				m.ExpectQuery("INSERT INTO column").WillReturnError(errors.New("db down"))
@@ -154,6 +157,7 @@ func TestColumnServiceErrors(t *testing.T) {
 				m.ExpectQuery("FROM column WHERE id").
 					WillReturnRows(sqlmock.NewRows([]string{"id", "project_id", "name", "position", "wip_limit", "created_at"}).
 						AddRow("c1", "p1", "列", 0, nil, "2026-01-01"))
+				expectProjectWritable(m)
 				m.ExpectExec("DELETE FROM activity").WillReturnError(errors.New("db down"))
 				m.ExpectRollback()
 			},
