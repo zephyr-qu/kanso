@@ -320,7 +320,7 @@ func TestTaskMoveLookupErrors(t *testing.T) {
 func TestListMilestonesDatabaseError(t *testing.T) {
 	srv, mock := newMockRouter(t)
 	expectAuth(mock, "m1")
-	mock.ExpectQuery("FROM project WHERE id").WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at"}).AddRow("p1", "w1", "Project", 0, "2026-01-01", "2026-01-01"))
+	mock.ExpectQuery("FROM project WHERE id").WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at", "archived_at"}).AddRow("p1", "w1", "Project", 0, "2026-01-01", "2026-01-01", nil))
 	mock.ExpectQuery("ListMilestonesByProject").WillReturnError(errors.New("db down"))
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/projects/p1/milestones", nil)
@@ -385,8 +385,8 @@ func TestDeleteProjectDatabaseError(t *testing.T) {
 	srv, mock := newMockRouter(t)
 	expectAuth(mock, "m1")
 	mock.ExpectBegin()
-	mock.ExpectQuery("FROM project WHERE id").WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at"}).
-		AddRow("p1", "w1", "Project", 0, "2026-01-01", "2026-01-01"))
+	mock.ExpectQuery("FROM project WHERE id").WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at", "archived_at"}).
+		AddRow("p1", "w1", "Project", 0, "2026-01-01", "2026-01-01", nil))
 	mock.ExpectExec("DeleteActivitiesByProject").WillReturnError(errors.New("db down"))
 	mock.ExpectRollback()
 
@@ -479,6 +479,7 @@ func TestMilestoneAssociationDatabaseErrors(t *testing.T) {
 			expectAuth(mock, "m1")
 			mock.ExpectBegin()
 			mock.ExpectQuery("FROM task WHERE id").WillReturnRows(sqlmock.NewRows(taskCols).AddRow(taskRow()...))
+			expectProjectWritable(mock)
 			mock.ExpectQuery("FROM milestone WHERE id").WillReturnRows(sqlmock.NewRows([]string{"id", "project_id", "name", "due_date", "created_at"}).AddRow("ms1", "p1", "Milestone", nil, "2026-01-01"))
 			if attached {
 				mock.ExpectExec("AttachTaskMilestone").WillReturnError(errors.New("db down"))
@@ -533,8 +534,8 @@ func TestDeleteProjectOperationDatabaseError(t *testing.T) {
 	srv, mock := newMockRouter(t)
 	expectAuth(mock, "m1")
 	mock.ExpectBegin()
-	mock.ExpectQuery("FROM project WHERE id").WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at"}).
-		AddRow("p1", "w1", "Project", 0, "2026-01-01", "2026-01-01"))
+	mock.ExpectQuery("FROM project WHERE id").WillReturnRows(sqlmock.NewRows([]string{"id", "workspace_id", "name", "position", "created_at", "updated_at", "archived_at"}).
+		AddRow("p1", "w1", "Project", 0, "2026-01-01", "2026-01-01", nil))
 	mock.ExpectExec("DeleteActivitiesByProject").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("DeleteProject").WillReturnError(errors.New("db down"))
 	mock.ExpectRollback()

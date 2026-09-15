@@ -2,7 +2,6 @@
 package httpapi
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -57,10 +56,6 @@ func (a *API) importBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.svc.ImportBackup(r.Context(), body); err != nil {
-		if errors.Is(err, service.ErrInvalidBackup) {
-			writeError(w, http.StatusBadRequest, "备份文件格式无效")
-			return
-		}
 		writeServiceError(w, err, "导入备份失败")
 		return
 	}

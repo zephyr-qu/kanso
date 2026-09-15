@@ -598,7 +598,19 @@ export function createTask(column: BoardColumn, input: Partial<Task>): Task {
 }
 
 export function projectSummaries(workspaceId: string): Project[] {
-	return clone(db.projects[workspaceId] ?? []).map((project) => {
+	return summarizeProjects(
+		(db.projects[workspaceId] ?? []).filter((project) => !project.archivedAt),
+	);
+}
+
+export function archivedProjectSummaries(workspaceId: string): Project[] {
+	return summarizeProjects(
+		(db.projects[workspaceId] ?? []).filter((project) => !!project.archivedAt),
+	).sort((a, b) => (b.archivedAt ?? "").localeCompare(a.archivedAt ?? ""));
+}
+
+function summarizeProjects(projects: Project[]): Project[] {
+	return clone(projects).map((project) => {
 		const board = db.boards[project.id];
 		const columns = board?.columns ?? [];
 		const tasks =
@@ -622,6 +634,15 @@ export function projectSummaries(workspaceId: string): Project[] {
 			inProgressCount: inProgress,
 		};
 	});
+}
+
+export function countIncompleteActiveTasks(projectId: string): number {
+	const board = db.boards[projectId];
+	if (!board || board.columns.length === 0) return 0;
+	const lastId = board.columns.at(-1)?.id;
+	return board.columns
+		.flatMap((column) => column.tasks)
+		.filter((task) => !task.archivedAt && task.columnId !== lastId).length;
 }
 
 export function board(projectId: string): Board | undefined {

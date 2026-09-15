@@ -232,7 +232,7 @@ func (s *Service) UpdateMemberProfile(ctx context.Context, memberID string, name
 // CreateMember creates a global identity. Workspace authorization is a separate operation.
 func (s *Service) CreateMember(ctx context.Context, name string) (Member, error) {
 	if name == "" {
-		return Member{}, ErrInvalidInput
+		return Member{}, invalidInput("成员名称不能为空")
 	}
 	if name == "Admin" {
 		return Member{}, ErrReservedName
@@ -266,7 +266,7 @@ func (s *Service) CreateMember(ctx context.Context, name string) (Member, error)
 
 func (s *Service) UpdateMemberRole(ctx context.Context, targetID, role string) (Member, error) {
 	if role != memberRoleAdmin && role != memberRoleMember {
-		return Member{}, ErrInvalidInput
+		return Member{}, invalidInput("请求参数无效")
 	}
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
@@ -314,7 +314,7 @@ func (s *Service) UpdateMemberRole(ctx context.Context, targetID, role string) (
 // 因此无需再做管理员上限/保底校验——这正是"原子"的含义。
 func (s *Service) TransferAdmin(ctx context.Context, fromID, toID string) (Member, error) {
 	if fromID == toID {
-		return Member{}, ErrInvalidInput
+		return Member{}, fmt.Errorf("%w: 只能把管理员身份转移给普通成员", ErrInvalidInput)
 	}
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
@@ -333,7 +333,7 @@ func (s *Service) TransferAdmin(ctx context.Context, fromID, toID string) (Membe
 		return Member{}, mapNoRows(err)
 	}
 	if target.Role != memberRoleMember {
-		return Member{}, ErrInvalidInput
+		return Member{}, fmt.Errorf("%w: 只能把管理员身份转移给普通成员", ErrInvalidInput)
 	}
 	if _, err := q.UpdateMemberRole(ctx, gen.UpdateMemberRoleParams{ID: toID, Role: memberRoleAdmin}); err != nil {
 		return Member{}, fmt.Errorf("更新成员角色失败: %w", err)

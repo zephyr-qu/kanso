@@ -49,6 +49,8 @@ const (
 	EventProjectDeleted    = "project.deleted"
 	EventProjectPinned     = "project.pinned"
 	EventProjectUnpinned   = "project.unpinned"
+	EventProjectArchived   = "project.archived"
+	EventProjectRestored   = "project.restored"
 )
 
 // Event 描述一次写操作发生了什么，是活动记录与实时广播的唯一输入。
@@ -131,7 +133,7 @@ func resourceTypeForAction(action string) string {
 		EventMemberKeyRotated, EventMemberKeyRevoked:
 		return "member"
 	case EventProjectCreated, EventProjectUpdated, EventProjectDeleted,
-		EventProjectPinned, EventProjectUnpinned:
+		EventProjectPinned, EventProjectUnpinned, EventProjectArchived, EventProjectRestored:
 		return "project"
 	case EventWorkspaceCreated, EventWorkspaceUpdated, EventWorkspaceDeleted:
 		return "workspace"

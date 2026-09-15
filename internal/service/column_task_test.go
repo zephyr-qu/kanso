@@ -75,8 +75,8 @@ func TestColumnLifecycle(t *testing.T) {
 	if updated.WipLimit != nil {
 		t.Fatalf("WIP 清空失败: %+v", updated.WipLimit)
 	}
-	if _, err := env.svc.UpdateColumnWIP(ctx, created.ID, ptr(int64(-1))); err == nil {
-		t.Fatal("负 WIP 应报错")
+	if _, err := env.svc.UpdateColumnWIP(ctx, created.ID, ptr(int64(-1))); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("负 WIP 应 ErrInvalidInput，实际 %v", err)
 	}
 	if _, err := env.svc.UpdateColumnWIP(ctx, "nope", ptr(int64(1))); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("WIP 不存在列应 ErrNotFound，实际 %v", err)

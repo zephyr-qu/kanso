@@ -94,6 +94,25 @@ func (q *Queries) DeleteMember(ctx context.Context, id string) (int64, error) {
 	return result.RowsAffected()
 }
 
+const getAdminMember = `-- name: GetAdminMember :one
+SELECT id, name, role, avatar_color, avatar, access_key_hash, created_at FROM member WHERE role = 'admin' ORDER BY created_at LIMIT 1
+`
+
+func (q *Queries) GetAdminMember(ctx context.Context) (Member, error) {
+	row := q.db.QueryRowContext(ctx, getAdminMember)
+	var i Member
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Role,
+		&i.AvatarColor,
+		&i.Avatar,
+		&i.AccessKeyHash,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getMember = `-- name: GetMember :one
 SELECT id, name, role, avatar_color, avatar, access_key_hash, created_at FROM member WHERE id = ?
 `
@@ -119,25 +138,6 @@ SELECT id, name, role, avatar_color, avatar, access_key_hash, created_at FROM me
 
 func (q *Queries) GetMemberByAccessKey(ctx context.Context, accessKeyHash *string) (Member, error) {
 	row := q.db.QueryRowContext(ctx, getMemberByAccessKey, accessKeyHash)
-	var i Member
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Role,
-		&i.AvatarColor,
-		&i.Avatar,
-		&i.AccessKeyHash,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const getAdminMember = `-- name: GetAdminMember :one
-SELECT id, name, role, avatar_color, avatar, access_key_hash, created_at FROM member WHERE role = 'admin' ORDER BY created_at LIMIT 1
-`
-
-func (q *Queries) GetAdminMember(ctx context.Context) (Member, error) {
-	row := q.db.QueryRowContext(ctx, getAdminMember)
 	var i Member
 	err := row.Scan(
 		&i.ID,

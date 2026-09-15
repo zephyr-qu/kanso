@@ -12,7 +12,9 @@
 ## 要点
 
 - `GET /api/workspaces`
-- `GET /api/workspaces/{id}/projects`（flag `--workspace` 必填）
+- `GET /api/workspaces/{id}/projects`（flag `--workspace` 必填；仅活跃项目）
+- `GET /api/workspaces/{id}/archived-projects`（`project archived --workspace`）
+- `POST /api/projects/{id}/archive|restore`（需无未完成活跃任务才能归档）
 - 默认表格输出；`--json` 方便脚本管道。
 
 ## 可运行命令
@@ -22,6 +24,9 @@
 ./kanso workspace list --json
 WS=$(./kanso workspace list --json | head -c 200)   # 自行取出 id
 ./kanso project list --workspace <workspace-id>
+./kanso project archived --workspace <workspace-id>
+./kanso project archive <project-id>
+./kanso project restore <project-id>
 ```
 
 ## 完成标准

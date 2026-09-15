@@ -74,6 +74,9 @@ func (s *Service) aggregateWorkspaceID(ctx context.Context, workspaceIDs ...stri
 
 // CreateWorkspace 创建新工作区。
 func (s *Service) CreateWorkspace(ctx context.Context, name string) (gen.Workspace, error) {
+	if name == "" {
+		return gen.Workspace{}, invalidInput("工作区名称不能为空")
+	}
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
 		return gen.Workspace{}, err
@@ -107,6 +110,9 @@ func (s *Service) CreateWorkspace(ctx context.Context, name string) (gen.Workspa
 
 // RenameWorkspace 重命名工作区；不存在时返回 ErrNotFound。
 func (s *Service) RenameWorkspace(ctx context.Context, workspaceID, name string) (gen.Workspace, error) {
+	if name == "" {
+		return gen.Workspace{}, invalidInput("工作区名称不能为空")
+	}
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
 		return gen.Workspace{}, err

@@ -355,6 +355,46 @@ it("reports milestone progress and non-empty completed trend", async () => {
 });
 
 // 0008：创建项目固定种子看板列，忽略 template 参数（后端不再接受模板）。
+it("analyzes pasted text into AI capture drafts then creates tasks", async () => {
+	const workspaces = await json<Array<{ id: string }>>("/api/workspaces");
+	const wsId = workspaces.body[0].id;
+	const projects = await json<Array<{ id: string }>>(
+		`/api/workspaces/${wsId}/projects`,
+	);
+	const projectId = projects.body[0].id;
+	const analyzed = await json<{
+		tasks: Array<{ title: string; projectId: string; columnId: string }>;
+	}>(`/api/workspaces/${wsId}/ai-capture/analyze`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			text: "写周报\n准备演示",
+			defaultProjectId: projectId,
+		}),
+	});
+	expect(analyzed.response.status).toBe(200);
+	expect(analyzed.body.tasks).toHaveLength(2);
+	expect(analyzed.body.tasks.map((t) => t.title)).toEqual([
+		"写周报",
+		"准备演示",
+	]);
+	expect(analyzed.body.tasks[0].projectId).toBe(projectId);
+	expect(analyzed.body.tasks[0].columnId).toBeTruthy();
+
+	for (const draft of analyzed.body.tasks) {
+		const created = await json<{ title: string }>(
+			`/api/columns/${draft.columnId}/tasks`,
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ title: draft.title, priority: "med" }),
+			},
+		);
+		expect(created.response.status).toBe(201);
+		expect(created.body.title).toBe(draft.title);
+	}
+});
+
 it("creates projects with fixed kanban columns, ignoring template", async () => {
 	const workspaces = await json<Array<{ id: string }>>("/api/workspaces");
 	const wsId = workspaces.body[0].id;
@@ -406,4 +446,64 @@ it("enforces workspace and admin permissions in the mock API", async () => {
 	expect(board.status).toBe(403);
 	const backup = await fetch("http://localhost/api/settings/backup", init);
 	expect(backup.status).toBe(403);
+});
+
+it("archives project only when incomplete tasks are cleared", async () => {
+	const workspaces = await json<Array<{ id: string }>>("/api/workspaces");
+	const wsId = workspaces.body[0].id;
+	const project = await json<{ id: string }>(`/api/workspaces/${wsId}/projects`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ name: "归档候选" }),
+	});
+	const board = await json<{ columns: Array<{ id: string }> }>(
+		`/api/projects/${project.body.id}`,
+	);
+	const task = await json<{ id: string }>(
+		`/api/columns/${board.body.columns[0].id}/tasks`,
+		{
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ title: "拦路任务" }),
+		},
+	);
+	const blocked = await fetch(`http://localhost/api/projects/${project.body.id}/archive`, {
+		method: "POST",
+	});
+	expect(blocked.status).toBe(409);
+
+	const last = board.body.columns.at(-1)!;
+	await json(`/api/tasks/${task.body.id}`, {
+		method: "PATCH",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ columnId: last.id, position: 0 }),
+	});
+	const archived = await json<{ archivedAt: string | null }>(
+		`/api/projects/${project.body.id}/archive`,
+		{ method: "POST" },
+	);
+	expect(archived.body.archivedAt).toBeTruthy();
+
+	const active = await json<Array<{ id: string }>>(`/api/workspaces/${wsId}/projects`);
+	expect(active.body.some((p) => p.id === project.body.id)).toBe(false);
+	const archivedList = await json<Array<{ id: string }>>(
+		`/api/workspaces/${wsId}/archived-projects`,
+	);
+	expect(archivedList.body.some((p) => p.id === project.body.id)).toBe(true);
+
+	const createDenied = await fetch(
+		`http://localhost/api/columns/${board.body.columns[0].id}/tasks`,
+		{
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ title: "应被拒绝" }),
+		},
+	);
+	expect(createDenied.status).toBe(409);
+
+	const restored = await json<{ archivedAt: string | null }>(
+		`/api/projects/${project.body.id}/restore`,
+		{ method: "POST" },
+	);
+	expect(restored.body.archivedAt).toBeNull();
 });

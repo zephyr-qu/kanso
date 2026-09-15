@@ -35,6 +35,12 @@ var ErrInvalidInput = errors.New("invalid input")
 // ErrConflict 表示请求与当前资源状态冲突。
 var ErrConflict = errors.New("conflict")
 
+// ErrProjectArchived 表示项目已归档，禁止修改其下内容。
+var ErrProjectArchived = errors.New("project archived")
+
+// ErrProjectHasIncompleteTasks 表示仍有未完成的活跃任务，不能归档项目。
+var ErrProjectHasIncompleteTasks = errors.New("project has incomplete tasks")
+
 type ErrorKind string
 
 const (
@@ -50,17 +56,23 @@ func ClassifyError(err error) ErrorKind {
 	switch {
 	case errors.Is(err, ErrNotFound):
 		return ErrorNotFound
-	case errors.Is(err, ErrForbidden), errors.Is(err, ErrLastAdmin):
+	case errors.Is(err, ErrForbidden):
 		return ErrorForbidden
 	case errors.Is(err, ErrInvalidInput), errors.Is(err, ErrInvalidBackup),
 		errors.Is(err, ErrCrossProjectMove), errors.Is(err, ErrLabelNotFound),
-		errors.Is(err, ErrReservedName):
+		errors.Is(err, ErrReservedName), errors.Is(err, ErrLastWorkspace),
+		errors.Is(err, ErrLastAdmin), errors.Is(err, ErrAdminLimit):
 		return ErrorInvalidInput
-	case errors.Is(err, ErrConflict), errors.Is(err, ErrMemberLimit), errors.Is(err, ErrAdminLimit):
+	case errors.Is(err, ErrConflict), errors.Is(err, ErrMemberLimit),
+		errors.Is(err, ErrProjectArchived), errors.Is(err, ErrProjectHasIncompleteTasks):
 		return ErrorConflict
 	default:
 		return ErrorInternal
 	}
+}
+
+func invalidInput(message string) error {
+	return fmt.Errorf("%w: %s", ErrInvalidInput, message)
 }
 
 // Broadcaster 是实时事件广播抽象（由 httpapi 注入 Hub）。

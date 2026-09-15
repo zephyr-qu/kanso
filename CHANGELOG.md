@@ -2,10 +2,34 @@
 
 ## Unreleased
 
+### 0.5.0（草案）
+
+项目归档：
+
+- 项目支持软归档 / 恢复（`archived_at`）；默认列表只显示活跃项目
+- 归档前须无未完成活跃任务（未归档且不在末列）；归档后看板只读，禁止改任务/列/标签等
+- API：`POST /api/projects/{id}/archive|restore`，`GET /api/workspaces/{id}/archived-projects`
+- CLI：`project archive|restore|archived`；MCP：`kanso_archive_project` / `kanso_restore_project` / `kanso_list_archived_projects`
+- 工作区页「已归档」入口；看板归档态提示与恢复
+
+AI 捕获：
+
+- Quick Capture 增加 **AI** 页签：粘贴文本 → 服务端调用 OpenAI 兼容 Chat Completions → 预览编辑后批量创建任务
+- 设置页「AI 捕获」：Base URL / Model / API Key（密钥不回传；空 key 表示保持原值）
+- 配置项：`aiBaseURL` / `aiAPIKey` / `aiModel`（写入 `kanso-config.json`）；环境变量 `KANSO_AI_BASE_URL` / `KANSO_AI_API_KEY` / `KANSO_AI_MODEL` 优先于文件
+- `POST /api/workspaces/{id}/ai-capture/analyze`（需编辑内容权限）；创建仍走既有 `POST /api/columns/{id}/tasks`
+
+结构化日志与认证限流：
+
+- 进程日志改为 `log/slog`（请求带 `request_id` / `method` / `uri`，密钥查询参数脱敏；错误带 `request_id` 与状态）
+- `KANSO_LOG_FORMAT=json|text`、`KANSO_LOG_LEVEL=debug|info|warn|error`
+- `/api/auth/verify` 与 WebSocket 握手按 IP 令牌桶限流（超限 429）
+
 命令行统一到单一 `kanso` 二进制：
 
 - 启动服务改为显式子命令：`kanso serve`（裸跑 `kanso` 不再启动 HTTP）
 - 同二进制提供 HTTP 客户端：`health` / `login` / `whoami` / `workspace` / `project` / `board` / `task` / `label` / `milestone`
+- `kanso mcp`：stdio MCP（官方 go-sdk），工具复用同一 HTTP Client；项目 Skill `.cursor/skills/kanso`
 - 任务支持 update、archive/restore、archived 列表与 delete；标签与里程碑支持 CRUD 及与任务的关联
 - 移除独立 `kansoctl`；Docker `ENTRYPOINT` 改为 `["/app/kanso", "serve"]`
 - 入门教程见 [tutorial/cli](tutorial/cli/README.md)

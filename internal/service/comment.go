@@ -57,6 +57,9 @@ type TaskActivity struct {
 
 // CreateComment 发表评论并记录活动（评论即活动，见 spec）。
 func (s *Service) CreateComment(ctx context.Context, taskID, content string) (TaskComment, error) {
+	if content == "" {
+		return TaskComment{}, invalidInput("评论内容不能为空")
+	}
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
 		return TaskComment{}, err
@@ -65,6 +68,9 @@ func (s *Service) CreateComment(ctx context.Context, taskID, content string) (Ta
 	task, err := q.GetTask(ctx, taskID)
 	if err != nil {
 		return TaskComment{}, mapNoRows(err)
+	}
+	if _, err := s.requireProjectWritableByID(ctx, q, task.ProjectID); err != nil {
+		return TaskComment{}, err
 	}
 	commentID, err := id.New()
 	if err != nil {
@@ -107,6 +113,9 @@ func (s *Service) CreateComment(ctx context.Context, taskID, content string) (Ta
 // UpdateComment edits a comment's content; comment editing is ordinary team
 // content work, while deletion remains an admin-only data operation.
 func (s *Service) UpdateComment(ctx context.Context, commentID, content string) (TaskComment, error) {
+	if content == "" {
+		return TaskComment{}, invalidInput("评论内容不能为空")
+	}
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
 		return TaskComment{}, err
@@ -119,6 +128,9 @@ func (s *Service) UpdateComment(ctx context.Context, commentID, content string) 
 	task, err := q.GetTask(ctx, comment.TaskID)
 	if err != nil {
 		return TaskComment{}, mapNoRows(err)
+	}
+	if _, err := s.requireProjectWritableByID(ctx, q, task.ProjectID); err != nil {
+		return TaskComment{}, err
 	}
 	updated, err := q.UpdateComment(ctx, gen.UpdateCommentParams{Content: content, ID: commentID})
 	if err != nil {
@@ -156,6 +168,9 @@ func (s *Service) DeleteComment(ctx context.Context, commentID string) error {
 	task, err := q.GetTask(ctx, comment.TaskID)
 	if err != nil {
 		return mapNoRows(err)
+	}
+	if _, err := s.requireProjectWritableByID(ctx, q, task.ProjectID); err != nil {
+		return err
 	}
 	n, err := q.DeleteComment(ctx, commentID)
 	if err != nil {

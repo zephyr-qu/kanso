@@ -29,6 +29,8 @@ import {
 	now,
 	persistAnd,
 	persistMockDb,
+	archivedProjectSummaries,
+	countIncompleteActiveTasks,
 	projectSummaries,
 	recordTaskActivity,
 	recordScopedActivity,
@@ -93,6 +95,16 @@ function requireProject(
 	return requireWorkspace(request, project.workspaceId);
 }
 
+function requireProjectWritable(
+	request: Request,
+	projectId: string,
+): Response | undefined {
+	const denied = requireProject(request, projectId);
+	if (denied) return denied;
+	const project = findProject(projectId);
+	if (project?.archivedAt) return error("项目已归档，无法修改", 409);
+}
+
 function activeTasks(column: BoardColumn): Task[] {
 	return column.tasks.filter((task) => !task.archivedAt);
 }
@@ -135,6 +147,7 @@ export const handlers = [
 			.filter(
 				(p) =>
 					pinnedProjectIds.includes(p.id) &&
+					!p.archivedAt &&
 					(!workspaceId || p.workspaceId === workspaceId),
 			)
 			.map((p) => ({ projectId: p.id, workspaceId: p.workspaceId, name: p.name }));
@@ -143,7 +156,7 @@ export const handlers = [
 
 	http.post(mswPattern("setProjectPinned"), async ({ params, request }) => {
 		const id = String(params.id);
-		const denied = requireProject(request, id);
+		const denied = requireProjectWritable(request, id);
 		if (denied) return denied;
 		const body = (await request.json()) as { pinned?: unknown };
 		const pinned = Boolean(body.pinned);
@@ -481,6 +494,11 @@ export const handlers = [
 		if (denied) return denied;
 		return HttpResponse.json(projectSummaries(textParam(params.workspaceId)));
 	}),
+	http.get(mswPattern("workspaceArchivedProjects"), async ({ params, request }) => {
+		const denied = requireWorkspace(request, textParam(params.workspaceId));
+		if (denied) return denied;
+		return HttpResponse.json(archivedProjectSummaries(textParam(params.workspaceId)));
+	}),
 	http.post(mswPattern("workspaceProjects"), async ({ params, request }) => {
 		const denied = requireAdmin(request);
 		if (denied) return denied;
@@ -536,6 +554,42 @@ export const handlers = [
 			recordScopedActivity("project", project.id, project.id, "project.updated", {
 				name: project.name,
 			});
+		return HttpResponse.json(persistAnd(project));
+	}),
+	http.post(mswPattern("projectArchive"), async ({ params, request }) => {
+		const projectId = textParam(params.id);
+		const denied = requireAdmin(request) ?? requireProject(request, projectId);
+		if (denied) return denied;
+		const project = findProject(projectId)!;
+		if (project.archivedAt) return HttpResponse.json(persistAnd(project));
+		if (countIncompleteActiveTasks(projectId) > 0) {
+			return error("请先完成或归档未完成任务后再归档项目", 409);
+		}
+		project.archivedAt = now();
+		project.updatedAt = now();
+		const currentBoard = getMockDb().boards[project.id];
+		if (currentBoard) currentBoard.project = project;
+		pinnedProjectIds = pinnedProjectIds.filter((id) => id !== projectId);
+		recordScopedActivity("project", project.id, project.id, "project.archived", {
+			name: project.name,
+			archivedAt: project.archivedAt,
+		});
+		return HttpResponse.json(persistAnd(project));
+	}),
+	http.post(mswPattern("projectRestore"), async ({ params, request }) => {
+		const projectId = textParam(params.id);
+		const denied = requireAdmin(request) ?? requireProject(request, projectId);
+		if (denied) return denied;
+		const project = findProject(projectId)!;
+		if (!project.archivedAt) return HttpResponse.json(persistAnd(project));
+		project.archivedAt = null;
+		project.updatedAt = now();
+		const currentBoard = getMockDb().boards[project.id];
+		if (currentBoard) currentBoard.project = project;
+		recordScopedActivity("project", project.id, project.id, "project.restored", {
+			name: project.name,
+			archivedAt: null,
+		});
 		return HttpResponse.json(persistAnd(project));
 	}),
 	http.delete(mswPattern("project"), async ({ params, request }) => {
@@ -654,7 +708,43 @@ export const handlers = [
 			autoArchiveEnabled: true,
 			autoArchiveAfterDays: 7,
 			configFile: "kanso-config.json",
+			aiBaseURL: "https://api.openai.com/v1",
+			aiModel: "gpt-4o-mini",
+			aiConfigured: true,
 		});
+	}),
+	http.post(mswPattern("aiCaptureAnalyze"), async ({ params, request }) => {
+		await mockDelay();
+		const workspaceId = textParam(params.id);
+		const denied = requireWorkspace(request, workspaceId);
+		if (denied) return denied;
+		const body = (await request.json()) as {
+			text?: string;
+			defaultProjectId?: string;
+		};
+		const text = (body.text ?? "").trim();
+		if (!text) return error("文本不能为空", 400);
+		const projects = getMockDb().projects[workspaceId] ?? [];
+		if (projects.length === 0) return error("工作区无项目", 400);
+		const preferred =
+			projects.find((p) => p.id === body.defaultProjectId) ?? projects[0];
+		const board = getMockDb().boards[preferred.id];
+		const columnId = board?.columns[0]?.id ?? "";
+		const lines = text
+			.split(/\r?\n/)
+			.map((line) => line.trim())
+			.filter(Boolean)
+			.slice(0, 20);
+		const tasks = lines.map((title) => ({
+			title,
+			priority: "med",
+			dueDate: null as string | null,
+			projectId: preferred.id,
+			columnId,
+			labelIds: [] as string[],
+			milestoneIds: [] as string[],
+		}));
+		return HttpResponse.json({ tasks });
 	}),
 	http.put(mswPattern("settingsConfig"), async ({ request }) => {
 		const denied = requireAdmin(request);
@@ -674,6 +764,8 @@ export const handlers = [
 
 	http.post(mswPattern("projectColumns"), async ({ params, request }) => {
 		const projectId = textParam(params.projectId);
+		const denied = requireProjectWritable(request, projectId);
+		if (denied) return denied;
 		const currentBoard = getMockDb().boards[projectId];
 		if (!currentBoard) return error("项目不存在", 404);
 		const body = (await request.json()) as {
@@ -761,6 +853,8 @@ export const handlers = [
 	http.post(mswPattern("columnTasks"), async ({ params, request }) => {
 		const hit = findColumn(textParam(params.columnId));
 		if (!hit) return error("列不存在", 404);
+		const denied = requireProjectWritable(request, hit.column.projectId);
+		if (denied) return denied;
 		const body = (await request.json()) as Partial<Task>;
 		return HttpResponse.json(persistAnd(createTask(hit.column, body)), {
 			status: 201,
@@ -769,6 +863,8 @@ export const handlers = [
 	http.patch(mswPattern("task"), async ({ params, request }) => {
 		const found = findTask(textParam(params.id));
 		if (!found) return error("任务不存在", 404);
+		const denied = requireProjectWritable(request, found.task.projectId);
+		if (denied) return denied;
 		const body = (await request.json()) as Partial<Task>;
 		const task = found.task;
 		const moved =

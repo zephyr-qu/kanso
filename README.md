@@ -5,9 +5,10 @@ Kanso 是一个轻量的看板项目管理工具，采用 Go 后端、React 前�
 ## 项目结构
 
 ```text
-cmd/kanso/          Go 应用入口（serve + CLI 客户端）
+cmd/kanso/          Go 应用入口（serve + CLI + mcp）
 internal/           后端业务代码和测试（含 internal/cli）
 tutorial/cli/       kanso 命令行入门教程（一步一篇）
+.cursor/skills/     项目 Agent Skill（含 kanso）
 web/src/            React 前端
 web/e2e/            Playwright E2E 测试
 Dockerfile          Docker 镜像构建文件
@@ -56,12 +57,17 @@ VERSION=1.2.0 ./build.sh
 - `KANSO_MODE`：`personal`（默认）或 `team`
 - `KANSO_WS_ORIGINS`：WebSocket 跨源白名单
 - `KANSO_CONFIG_FILE`：配置文件路径，默认 `./kanso-config.json`
+- `KANSO_AI_BASE_URL`：AI 捕获 OpenAI 兼容接口地址，默认 `https://api.openai.com/v1`（也可写在配置文件 `aiBaseURL`）
+- `KANSO_AI_API_KEY`：AI 捕获 API Key（也可写在配置文件 `aiAPIKey`；设置页可改，不回传明文）
+- `KANSO_AI_MODEL`：模型名，默认 `gpt-4o-mini`（也可写在配置文件 `aiModel`）
+- `KANSO_LOG_FORMAT`：日志格式，`text`（默认）或 `json`
+- `KANSO_LOG_LEVEL`：日志级别，`debug` / `info`（默认）/ `warn` / `error`
 
-运行模式仅由 `KANSO_MODE` 环境变量决定。二进制支持 `kanso --version`，健康检查接口为 `GET /api/health`。启动服务使用 `kanso serve`。
+运行模式仅由 `KANSO_MODE` 环境变量决定。二进制支持 `kanso --version`，健康检查接口为 `GET /api/health`。启动服务使用 `kanso serve`。AI 捕获在 Quick Capture 的 **AI** 页签中使用；需先配置 API Key。
 
 ## 命令行（kanso）
 
-`kanso serve` 启动服务；`health` / `login` / `workspace` / `task` / `label` / `milestone` 等通过 HTTP 操作已运行实例。逐步教程见 [tutorial/cli](tutorial/cli/README.md)。不做成员管理、备份与设置（继续用 Web）。
+`kanso serve` 启动服务；`health` / `login` / `workspace` / `task` / `label` / `milestone` 等通过 HTTP 操作已运行实例；`kanso mcp` 以 stdio 暴露同一套能力给 AI 代理。逐步教程见 [tutorial/cli](tutorial/cli/README.md)。项目 Skill：[`.cursor/skills/kanso`](.cursor/skills/kanso/SKILL.md)。MCP 配置示例：[`.cursor/mcp.json.example`](.cursor/mcp.json.example)。不做成员管理、备份与设置（继续用 Web）。
 
 ```sh
 # 终端 1：启动服务
@@ -74,6 +80,7 @@ go build -o kanso ./cmd/kanso
 ./kanso workspace list
 ./kanso label list --project <project-id>
 ./kanso milestone list --project <project-id>
+# Cursor 可配置 args: ["mcp"] 拉起 MCP（密钥走 login 或本机 env）
 ```
 
 ## Docker 部署

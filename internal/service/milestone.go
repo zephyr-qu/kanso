@@ -56,14 +56,17 @@ func (s *Service) ListMilestones(ctx context.Context, projectID string) ([]Miles
 // CreateMilestone 创建里程碑（名称必填）；项目不存在时返回 ErrNotFound。
 // dueDate 空串归一为 NULL（与任务口径一致）。
 func (s *Service) CreateMilestone(ctx context.Context, projectID, name string, dueDate *string) (gen.Milestone, error) {
+	if name == "" {
+		return gen.Milestone{}, invalidInput("里程碑名称不能为空")
+	}
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
 		return gen.Milestone{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := q.GetProject(ctx, projectID); err != nil {
-		return gen.Milestone{}, mapNoRows(err)
+	if _, err := s.requireProjectWritableByID(ctx, q, projectID); err != nil {
+		return gen.Milestone{}, err
 	}
 	milestoneID, err := id.New()
 	if err != nil {
@@ -103,8 +106,14 @@ func (s *Service) UpdateMilestone(ctx context.Context, id string, name *string, 
 	if err != nil {
 		return gen.Milestone{}, mapNoRows(err)
 	}
+	if _, err := s.requireProjectWritableByID(ctx, q, current.ProjectID); err != nil {
+		return gen.Milestone{}, err
+	}
 	newName := current.Name
 	if name != nil {
+		if *name == "" {
+			return gen.Milestone{}, invalidInput("里程碑名称不能为空")
+		}
 		newName = *name
 	}
 	// dueDate 为 nil 表示省略字段：保留现值；显式空串表示清空（nullableDueDate 归一 NULL）。
@@ -143,6 +152,9 @@ func (s *Service) DeleteMilestone(ctx context.Context, id string) error {
 	if err != nil {
 		return mapNoRows(err)
 	}
+	if _, err := s.requireProjectWritableByID(ctx, q, milestone.ProjectID); err != nil {
+		return err
+	}
 	if n, err := q.DeleteMilestone(ctx, id); err != nil {
 		return err
 	} else if n == 0 {
@@ -171,6 +183,9 @@ func (s *Service) SetTaskMilestone(ctx context.Context, taskID, milestoneID stri
 	task, err := q.GetTask(ctx, taskID)
 	if err != nil {
 		return mapNoRows(err)
+	}
+	if _, err := s.requireProjectWritableByID(ctx, q, task.ProjectID); err != nil {
+		return err
 	}
 	milestone, err := q.GetMilestone(ctx, milestoneID)
 	if err != nil {

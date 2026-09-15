@@ -8,7 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"time"
@@ -16,6 +16,7 @@ import (
 	"kanso/internal/config"
 	"kanso/internal/db"
 	"kanso/internal/httpapi"
+	"kanso/internal/logx"
 	"kanso/internal/realtime"
 	"kanso/internal/service"
 )
@@ -38,6 +39,7 @@ type dbHandle interface {
 // New 完成数据库、迁移、领域种子、路由和 HTTP Server 初始化。
 // spa / landing 可为 nil；生产环境分别传入嵌入式 SPA 与落地页资源。
 func New(ctx context.Context, cfg config.Config, version string, spa fs.FS, landing fs.FS) (*App, error) {
+	logx.ConfigureFromEnv()
 	if err := config.Validate(cfg); err != nil {
 		return nil, fmt.Errorf("启动配置校验失败: %w", err)
 	}
@@ -47,7 +49,8 @@ func New(ctx context.Context, cfg config.Config, version string, spa fs.FS, land
 			return nil, fmt.Errorf("生成访问密钥失败: %w", err)
 		}
 		cfg.AccessKey = key
-		log.Printf("🔑 未设置 KANSO_ACCESS_KEY，本次启动随机生成（前端登录用；Docker 下用 docker logs 查看）: %s", key)
+		slog.Warn("未设置 KANSO_ACCESS_KEY，本次启动随机生成（前端登录用；Docker 下用 docker logs 查看）",
+			slog.String("access_key", key))
 	}
 
 	database, err := db.Open(cfg.DataDir)
@@ -66,7 +69,9 @@ func New(ctx context.Context, cfg config.Config, version string, spa fs.FS, land
 	if err != nil {
 		return fail(fmt.Errorf("读取迁移状态失败: %w", err))
 	}
-	log.Printf("数据库已就绪: data_dir=%s migrations=%d", cfg.DataDir, migrationCount)
+	slog.Info("数据库已就绪",
+		slog.String("data_dir", cfg.DataDir),
+		slog.Int("migrations", migrationCount))
 
 	svc := service.New(database, cfg.Mode)
 	svc.SetAutoArchiveSettings(cfg.AutoArchiveEnabled, cfg.AutoArchiveAfterDays)
@@ -84,12 +89,16 @@ func New(ctx context.Context, cfg config.Config, version string, spa fs.FS, land
 	server := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           router,
+		ErrorLog:          slog.NewLogLogger(slog.Default().Handler(), slog.LevelError),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       60 * time.Second,
 		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
-	log.Printf("Kanso %s 已启动: http://%s （模式 %s, health=/api/health, ready=/api/ready）", version, cfg.Addr, cfg.Mode)
+	slog.Info("Kanso 已启动",
+		slog.String("version", version),
+		slog.String("addr", cfg.Addr),
+		slog.String("mode", string(cfg.Mode)))
 
 	return &App{database: database, server: server, service: svc}, nil
 }
@@ -118,7 +127,7 @@ func (a *App) Run(ctx context.Context) error {
 	case err := <-serverErr:
 		return err
 	case <-ctx.Done():
-		log.Println("收到退出信号，正在优雅关闭…")
+		slog.Info("收到退出信号，正在优雅关闭")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), defaultShutdownTimeout)
 		defer cancel()
 		if err := a.Shutdown(shutdownCtx); err != nil {
@@ -139,7 +148,7 @@ func (a *App) runAutoArchive(ctx context.Context) {
 			return
 		}
 		if _, err := a.service.ArchiveDueCompletedTasks(ctx, days); err != nil && ctx.Err() == nil {
-			log.Printf("⚠️ 自动归档失败: %v", err)
+			slog.Error("自动归档失败", slog.Any("err", err))
 		}
 	}
 	archive()

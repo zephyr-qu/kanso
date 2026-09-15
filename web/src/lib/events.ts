@@ -38,6 +38,8 @@ export const EVENT_TYPES = {
 	projectDeleted: "project.deleted",
 	projectPinned: "project.pinned",
 	projectUnpinned: "project.unpinned",
+	projectArchived: "project.archived",
+	projectRestored: "project.restored",
 } as const;
 
 // 活动 data 契约：按 action 键出形状（ADR-0006「字符串即合约」内——合约仍是字符串，这里是前端侧的类型化）。
@@ -90,6 +92,8 @@ export type ActivityDataByAction = {
 	[EVENT_TYPES.projectDeleted]: { name: string };
 	[EVENT_TYPES.projectPinned]: { name: string };
 	[EVENT_TYPES.projectUnpinned]: { name: string };
+	[EVENT_TYPES.projectArchived]: { name: string; archivedAt: string | null };
+	[EVENT_TYPES.projectRestored]: { name: string; archivedAt: string | null };
 };
 
 // 活动流的动作文案（未识别动作回退显示原始字符串）。
@@ -132,4 +136,6 @@ export const ACTION_LABELS: Record<string, string> = {
 	[EVENT_TYPES.projectDeleted]: "删除了项目",
 	[EVENT_TYPES.projectPinned]: "置顶了项目",
 	[EVENT_TYPES.projectUnpinned]: "取消置顶项目",
+	[EVENT_TYPES.projectArchived]: "归档了项目",
+	[EVENT_TYPES.projectRestored]: "恢复了项目",
 };

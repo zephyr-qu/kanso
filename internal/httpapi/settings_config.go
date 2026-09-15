@@ -1,5 +1,6 @@
 // 设置页配置端点：读取/保存服务端运行配置（kanso-config.json）。
 // addr/dataDir/wsOrigins 为启动参数，保存后重启生效；运行模式仅由 KANSO_MODE 环境变量在启动时决定（不可经设置页保存）。
+// AI 捕获凭据保存后热生效（无需重启）。
 package httpapi
 
 import (
@@ -16,6 +17,10 @@ type settingsConfigRequest struct {
 	// WSOrigins 逗号分隔白名单（可空）。运行模式不在其中：仅由 KANSO_MODE 启动时决定。
 	WSOrigins            string `json:"wsOrigins"`
 	AutoArchiveAfterDays *int   `json:"autoArchiveAfterDays"`
+	AIBaseURL            string `json:"aiBaseURL"`
+	// AIAPIKey 空串表示保持原密钥不变。
+	AIAPIKey string `json:"aiAPIKey"`
+	AIModel  string `json:"aiModel"`
 }
 
 // getSettingsConfig 返回当前生效配置（GET /api/settings/config）。
@@ -34,6 +39,9 @@ func (a *API) getSettingsConfig(w http.ResponseWriter, r *http.Request) {
 		"autoArchiveEnabled":   cfg.AutoArchiveEnabled,
 		"autoArchiveAfterDays": config.NormalizeAutoArchiveAfterDays(cfg.AutoArchiveAfterDays),
 		"configFile":           a.configFile,
+		"aiBaseURL":            cfg.AIBaseURL,
+		"aiModel":              cfg.AIModel,
+		"aiConfigured":         cfg.AIAPIKey != "",
 	})
 }
 
@@ -67,6 +75,26 @@ func (a *API) updateSettingsConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "自动归档时长无效，应为 1-3650 天")
 		return
 	}
+
+	aiBaseURL := strings.TrimRight(strings.TrimSpace(req.AIBaseURL), "/")
+	if aiBaseURL == "" {
+		aiBaseURL = a.cfg.AIBaseURL
+	}
+	if aiBaseURL == "" {
+		aiBaseURL = config.DefaultAIBaseURL
+	}
+	aiModel := strings.TrimSpace(req.AIModel)
+	if aiModel == "" {
+		aiModel = a.cfg.AIModel
+	}
+	if aiModel == "" {
+		aiModel = config.DefaultAIModel
+	}
+	aiAPIKey := a.cfg.AIAPIKey
+	if strings.TrimSpace(req.AIAPIKey) != "" {
+		aiAPIKey = strings.TrimSpace(req.AIAPIKey)
+	}
+
 	if err := config.SaveFile(a.configFile, config.FileConfig{
 		Addr:                 req.Addr,
 		DataDir:              req.DataDir,
@@ -74,6 +102,9 @@ func (a *API) updateSettingsConfig(w http.ResponseWriter, r *http.Request) {
 		WSOrigins:            req.WSOrigins,
 		AutoArchiveEnabled:   &autoArchiveEnabled,
 		AutoArchiveAfterDays: autoArchiveAfterDays,
+		AIBaseURL:            aiBaseURL,
+		AIAPIKey:             aiAPIKey,
+		AIModel:              aiModel,
 	}); err != nil {
 		writeServiceError(w, err, "写入配置文件失败")
 		return
@@ -81,6 +112,9 @@ func (a *API) updateSettingsConfig(w http.ResponseWriter, r *http.Request) {
 
 	a.cfg.AutoArchiveEnabled = autoArchiveEnabled
 	a.cfg.AutoArchiveAfterDays = autoArchiveAfterDays
+	a.cfg.AIBaseURL = aiBaseURL
+	a.cfg.AIAPIKey = aiAPIKey
+	a.cfg.AIModel = aiModel
 	a.svc.SetAutoArchiveSettings(autoArchiveEnabled, autoArchiveAfterDays)
 
 	writeJSON(w, http.StatusOK, map[string]any{

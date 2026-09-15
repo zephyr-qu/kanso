@@ -23,6 +23,8 @@ const ICONS: Record<string, LucideIcon> = {
 	[EVENT_TYPES.commentDeleted]: MessageSquareIcon,
 	[EVENT_TYPES.taskArchived]: ArchiveIcon,
 	[EVENT_TYPES.taskRestored]: ArchiveIcon,
+	[EVENT_TYPES.projectArchived]: ArchiveIcon,
+	[EVENT_TYPES.projectRestored]: ArchiveIcon,
 	[EVENT_TYPES.memberKeyRotated]: KeyRoundIcon,
 	[EVENT_TYPES.memberKeyRevoked]: KeyRoundIcon,
 };

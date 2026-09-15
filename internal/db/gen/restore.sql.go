@@ -160,16 +160,17 @@ func (q *Queries) ImportMilestones(ctx context.Context, arg ImportMilestonesPara
 }
 
 const importProjects = `-- name: ImportProjects :exec
-INSERT INTO project (id, workspace_id, name, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO project (id, workspace_id, name, position, created_at, updated_at, archived_at) VALUES (?, ?, ?, ?, ?, ?, ?)
 `
 
 type ImportProjectsParams struct {
-	ID          string `json:"id"`
-	WorkspaceID string `json:"workspaceId"`
-	Name        string `json:"name"`
-	Position    int64  `json:"position"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
+	ID          string  `json:"id"`
+	WorkspaceID string  `json:"workspaceId"`
+	Name        string  `json:"name"`
+	Position    int64   `json:"position"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
+	ArchivedAt  *string `json:"archivedAt"`
 }
 
 func (q *Queries) ImportProjects(ctx context.Context, arg ImportProjectsParams) error {
@@ -180,6 +181,7 @@ func (q *Queries) ImportProjects(ctx context.Context, arg ImportProjectsParams) 
 		arg.Position,
 		arg.CreatedAt,
 		arg.UpdatedAt,
+		arg.ArchivedAt,
 	)
 	return err
 }

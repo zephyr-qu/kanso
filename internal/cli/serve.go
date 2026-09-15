@@ -3,7 +3,7 @@ package cli
 import (
 	"context"
 	"io/fs"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,6 +12,7 @@ import (
 
 	"kanso/internal/app"
 	"kanso/internal/config"
+	"kanso/internal/logx"
 )
 
 // ServeAssets 是 serve 命令需要的嵌入式静态资源。
@@ -25,6 +26,7 @@ func newServeCmd(version string, assets ServeAssets) *cobra.Command {
 		Use:   "serve",
 		Short: "启动 HTTP 服务（SQLite + API + 前端）",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			logx.ConfigureFromEnv()
 			cfg := config.Load()
 			application, err := app.New(context.Background(), cfg, version, assets.SPA, assets.Landing)
 			if err != nil {
@@ -35,7 +37,7 @@ func newServeCmd(version string, assets ServeAssets) *cobra.Command {
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			if err := application.Run(ctx); err != nil {
-				log.Print(err)
+				slog.Error("服务退出", slog.Any("err", err))
 			}
 			return nil
 		},

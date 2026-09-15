@@ -5,9 +5,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -18,6 +19,7 @@ import (
 
 	"kanso/internal/auth"
 	"kanso/internal/config"
+	"kanso/internal/logx"
 	"kanso/internal/realtime"
 	"kanso/internal/service"
 )
@@ -62,10 +64,11 @@ func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.
 		})
 	})
 	r.Get("/api/ready", a.ready)
-	r.Post("/api/auth/verify", a.verify)
+	limitAuth := rateLimitByIP(newIPRateLimiter(authRatePerSecond, authRateBurst))
+	r.With(limitAuth).Post("/api/auth/verify", a.verify)
 
 	// WebSocket：密钥经查询参数（浏览器无法自定义 WS 请求头），单独注册。
-	r.Get("/api/ws", a.handleWS(hub))
+	r.With(limitAuth).Get("/api/ws", a.handleWS(hub))
 
 	// 其余 /api 路由全部要求密钥。认证按成员表反查密钥（personal = 单一 admin，
 	// admin 的凭证哈希由启动时 SeedAdminMember 根据 KANSO_ACCESS_KEY 写入，ADR-0013 修订）。
@@ -99,13 +102,17 @@ func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.
 		pr.Get("/api/workspaces/{id}/calendar", a.getCalendar)
 		pr.Get("/api/workspaces/{id}/activity", a.getActivity)
 		pr.Get("/api/workspaces/{id}/search", a.searchTasks)
+		pr.Post("/api/workspaces/{id}/ai-capture/analyze", a.analyzeAICapture)
 		pr.Get("/api/workspaces/{id}/pinned-projects", a.listPinnedProjects)
 		pr.Patch("/api/workspaces/{id}", a.renameWorkspace)
 		pr.Delete("/api/workspaces/{id}", a.deleteWorkspace)
 		pr.Get("/api/workspaces/{id}/projects", a.listProjects)
+		pr.Get("/api/workspaces/{id}/archived-projects", a.listArchivedProjects)
 		pr.Post("/api/workspaces/{id}/projects", a.createProject)
 		pr.Patch("/api/projects/{id}", a.renameProject)
 		pr.Post("/api/projects/{id}/pinned", a.setProjectPinned)
+		pr.Post("/api/projects/{id}/archive", a.archiveProject)
+		pr.Post("/api/projects/{id}/restore", a.restoreProject)
 		pr.Delete("/api/projects/{id}", a.deleteProject)
 		pr.Get("/api/projects/{id}", a.getBoard)
 		pr.Get("/api/projects/{id}/archived-tasks", a.listArchivedTasks)
@@ -180,7 +187,12 @@ func redactingLogger(next http.Handler) http.Handler {
 			query.Set("key", "[REDACTED]")
 			u.RawQuery = query.Encode()
 		}
-		log.Printf("request_id=%s %s %s", requestIDFromRequest(r), r.Method, u.RequestURI())
+		logx.With(
+			slog.String("request_id", requestIDFromRequest(r)),
+		).Info("http request",
+			slog.String("method", r.Method),
+			slog.String("uri", u.RequestURI()),
+		)
 		next.ServeHTTP(w, r)
 	})
 }
@@ -252,12 +264,35 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 
 // writeError 输出统一错误 JSON。
 func writeError(w http.ResponseWriter, status int, message string) {
+	id := w.Header().Get("X-Request-ID")
+	logHTTPError(id, status, message, nil)
+	writeErrorJSON(w, status, message, id)
+}
+
+func writeErrorJSON(w http.ResponseWriter, status int, message, requestID string) {
 	payload := map[string]string{"error": message}
-	if id := w.Header().Get("X-Request-ID"); id != "" {
-		payload["requestId"] = id
-		log.Printf("request_id=%s status=%d error=%s", id, status, message)
+	if requestID != "" {
+		payload["requestId"] = requestID
 	}
 	writeJSON(w, status, payload)
+}
+
+func logHTTPError(requestID string, status int, message string, err error) {
+	level := slog.LevelWarn
+	if status >= http.StatusInternalServerError {
+		level = slog.LevelError
+	}
+	attrs := []any{
+		slog.Int("status", status),
+		slog.String("error", message),
+	}
+	if requestID != "" {
+		attrs = append(attrs, slog.String("request_id", requestID))
+	}
+	if err != nil {
+		attrs = append(attrs, slog.Any("err", err))
+	}
+	slog.Log(context.Background(), level, "http error", attrs...)
 }
 
 func statusForServiceError(err error) int {
@@ -275,11 +310,73 @@ func statusForServiceError(err error) int {
 	}
 }
 
+// writeServiceError 把领域错误映射为 HTTP 状态与默认中文文案。
+// fallback 仅用于未分类的内部错误；已知 sentinel 使用固定文案，避免各 handler 重复 errors.Is。
 func writeServiceError(w http.ResponseWriter, err error, fallback string) {
-	if id := w.Header().Get("X-Request-ID"); id != "" {
-		log.Printf("request_id=%s service_error=%v", id, err)
+	id := w.Header().Get("X-Request-ID")
+	status := statusForServiceError(err)
+	msg := clientMessageForServiceError(err, fallback)
+	logHTTPError(id, status, msg, err)
+	writeErrorJSON(w, status, msg, id)
+}
+
+// writeAuthError 映射鉴权失败：当前成员不存在为 401，权限不足用调用方文案。
+func writeAuthError(w http.ResponseWriter, err error, forbiddenMsg, fallback string) {
+	switch {
+	case errors.Is(err, service.ErrNotFound):
+		writeError(w, http.StatusUnauthorized, "成员不存在")
+	case errors.Is(err, service.ErrForbidden):
+		writeError(w, http.StatusForbidden, forbiddenMsg)
+	default:
+		writeServiceError(w, err, fallback)
 	}
-	writeError(w, statusForServiceError(err), fallback)
+}
+
+func writeForbiddenOrService(w http.ResponseWriter, err error, forbiddenMsg, fallback string) {
+	if errors.Is(err, service.ErrForbidden) {
+		writeError(w, http.StatusForbidden, forbiddenMsg)
+		return
+	}
+	writeServiceError(w, err, fallback)
+}
+
+func clientMessageForServiceError(err error, fallback string) string {
+	switch {
+	case errors.Is(err, service.ErrNotFound):
+		return "资源不存在"
+	case errors.Is(err, service.ErrForbidden):
+		return "无权执行此操作"
+	case errors.Is(err, service.ErrCrossProjectMove):
+		return "不能跨项目操作"
+	case errors.Is(err, service.ErrLabelNotFound):
+		return "标签不存在"
+	case errors.Is(err, service.ErrInvalidBackup):
+		return "备份文件格式无效"
+	case errors.Is(err, service.ErrLastWorkspace):
+		return "至少保留一个工作区"
+	case errors.Is(err, service.ErrReservedName):
+		return "成员名称不能为 Admin（保留名）"
+	case errors.Is(err, service.ErrMemberLimit):
+		return "成员和管理员总数已达上限（6 人）"
+	case errors.Is(err, service.ErrLastAdmin):
+		return "至少保留一名管理员"
+	case errors.Is(err, service.ErrAdminLimit):
+		return "管理员数量最多为 2 名"
+	case errors.Is(err, service.ErrProjectArchived):
+		return "项目已归档，无法修改"
+	case errors.Is(err, service.ErrProjectHasIncompleteTasks):
+		return "请先完成或归档未完成任务后再归档项目"
+	case errors.Is(err, service.ErrConflict):
+		return "与当前状态冲突"
+	case errors.Is(err, service.ErrInvalidInput):
+		prefix := service.ErrInvalidInput.Error() + ": "
+		if msg, ok := strings.CutPrefix(err.Error(), prefix); ok && msg != "" {
+			return msg
+		}
+		return "请求参数无效"
+	default:
+		return fallback
+	}
 }
 
 // decodeBody 解析请求体；失败时已写入 400 响应并返回 false。
@@ -302,17 +399,12 @@ func decodeBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 	return true
 }
 
-// decodeNameBody 解析仅含必填 name 的请求体；解析失败或名称为空时已写 400 并返回 false。
-// 多字段 body（列 wipLimit / 里程碑 dueDate / 项目 template）各自保留显式结构。
-func decodeNameBody(w http.ResponseWriter, r *http.Request, name string) (string, bool) {
+// decodeNameBody 解析仅含 name 的请求体；JSON 非法时已写 400。空名称由 service 校验。
+func decodeNameBody(w http.ResponseWriter, r *http.Request) (string, bool) {
 	var body struct {
 		Name string `json:"name"`
 	}
 	if !decodeBody(w, r, &body) {
-		return "", false
-	}
-	if body.Name == "" {
-		writeError(w, http.StatusBadRequest, name+"不能为空")
 		return "", false
 	}
 	return body.Name, true

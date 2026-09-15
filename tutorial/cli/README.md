@@ -6,6 +6,7 @@
 | --- | --- |
 | `kanso serve` | 启动 HTTP + SQLite + 前端 |
 | `kanso health` / `login` / `workspace` … | 客户端：打已运行实例的 API |
+| `kanso mcp` | stdio MCP，供 AI 代理调用同一套能力 |
 
 刻意不做：成员管理、备份、设置（继续用 Web / API）。
 
@@ -40,11 +41,13 @@ go build -o kanso ./cmd/kanso
 | [09-label.md](09-label.md) | 标签 CRUD 与贴标 |
 | [10-milestone.md](10-milestone.md) | 里程碑 CRUD 与关联 |
 | [11-test.md](11-test.md) | `httptest` 契约测试 |
+| [12-mcp.md](12-mcp.md) | `kanso mcp` + 项目 Skill |
 
 ## 命令速查（完整版）
 
 ```text
 kanso serve
+kanso mcp
 kanso health
 kanso login --key <access-key>
 kanso whoami

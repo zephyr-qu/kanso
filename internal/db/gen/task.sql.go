@@ -363,6 +363,7 @@ INNER JOIN column AS c ON t.column_id = c.id
 INNER JOIN project AS p ON c.project_id = p.id
 INNER JOIN workspace AS w ON p.workspace_id = w.id
 WHERE p.workspace_id = ?
+  AND p.archived_at IS NULL
   AND (
     t.title LIKE '%' || ? || '%'
     OR COALESCE(t.description, '') LIKE '%' || ? || '%'

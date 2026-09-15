@@ -27,6 +27,9 @@ describe("formatUpdated", () => {
 	it("非法时间回退今天", () => {
 		expect(formatUpdated("not-a-date", NOW)).toBe("更新于今天");
 	});
+	it("自定义前缀归档于", () => {
+		expect(formatUpdated("2026-08-09T08:00:00Z", NOW, "归档于")).toBe("归档于今天");
+	});
 });
 
 describe("formatDateTime / formatClock（本地日历日边界）", () => {

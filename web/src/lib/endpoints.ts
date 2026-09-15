@@ -10,6 +10,7 @@ export const ENDPOINT_TEMPLATES = {
 	workspaces: "/api/workspaces",
 	workspace: "/api/workspaces/:id",
 	workspaceProjects: "/api/workspaces/:workspaceId/projects",
+	workspaceArchivedProjects: "/api/workspaces/:workspaceId/archived-projects",
 	workspaceMembers: "/api/workspaces/:id/members",
 	workspaceMember: "/api/workspaces/:id/members/:memberId",
 	// 成员
@@ -21,6 +22,8 @@ export const ENDPOINT_TEMPLATES = {
 	// 项目
 	project: "/api/projects/:id",
 	setProjectPinned: "/api/projects/:id/pinned",
+	projectArchive: "/api/projects/:id/archive",
+	projectRestore: "/api/projects/:id/restore",
 	pinnedProjects: "/api/workspaces/:workspaceId/pinned-projects",
 	projectArchivedTasks: "/api/projects/:id/archived-tasks",
 	projectColumns: "/api/projects/:projectId/columns",
@@ -45,6 +48,7 @@ export const ENDPOINT_TEMPLATES = {
 	calendar: "/api/workspaces/:workspaceId/calendar",
 	activity: "/api/workspaces/:workspaceId/activity",
 	search: "/api/workspaces/:workspaceId/search",
+	aiCaptureAnalyze: "/api/workspaces/:id/ai-capture/analyze",
 	health: "/api/health",
 	settingsBackup: "/api/settings/backup",
 	settingsConfig: "/api/settings/config",

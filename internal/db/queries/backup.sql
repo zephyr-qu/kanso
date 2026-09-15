@@ -1,5 +1,5 @@
 -- name: ListAllProjects :many
-SELECT id, workspace_id, name, position, created_at, updated_at FROM project
+SELECT id, workspace_id, name, position, created_at, updated_at, archived_at FROM project
 ORDER BY created_at;
 
 -- name: ListAllColumns :many

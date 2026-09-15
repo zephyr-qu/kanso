@@ -29,23 +29,52 @@ type ProjectSummary struct {
 // storage-only pinned field. Keep that persistence detail out of the service
 // API by normalizing those rows at the boundary.
 func projectFromListRow(row gen.ListProjectsByWorkspaceRow) gen.Project {
-	return gen.Project{ID: row.ID, WorkspaceID: row.WorkspaceID, Name: row.Name, Position: row.Position, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+	return gen.Project{ID: row.ID, WorkspaceID: row.WorkspaceID, Name: row.Name, Position: row.Position, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, ArchivedAt: row.ArchivedAt}
+}
+
+func projectFromArchivedListRow(row gen.ListArchivedProjectsByWorkspaceRow) gen.Project {
+	return gen.Project{ID: row.ID, WorkspaceID: row.WorkspaceID, Name: row.Name, Position: row.Position, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, ArchivedAt: row.ArchivedAt}
 }
 
 func projectFromCreateRow(row gen.CreateProjectRow) gen.Project {
-	return gen.Project{ID: row.ID, WorkspaceID: row.WorkspaceID, Name: row.Name, Position: row.Position, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+	return gen.Project{ID: row.ID, WorkspaceID: row.WorkspaceID, Name: row.Name, Position: row.Position, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, ArchivedAt: row.ArchivedAt}
 }
 
 func projectFromUpdateRow(row gen.UpdateProjectNameRow) gen.Project {
-	return gen.Project{ID: row.ID, WorkspaceID: row.WorkspaceID, Name: row.Name, Position: row.Position, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+	return gen.Project{ID: row.ID, WorkspaceID: row.WorkspaceID, Name: row.Name, Position: row.Position, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, ArchivedAt: row.ArchivedAt}
 }
 
 func projectFromGetRow(row gen.GetProjectRow) gen.Project {
-	return gen.Project{ID: row.ID, WorkspaceID: row.WorkspaceID, Name: row.Name, Position: row.Position, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+	return gen.Project{ID: row.ID, WorkspaceID: row.WorkspaceID, Name: row.Name, Position: row.Position, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, ArchivedAt: row.ArchivedAt}
+}
+
+func projectFromArchiveRow(row gen.ArchiveProjectRow) gen.Project {
+	return gen.Project{ID: row.ID, WorkspaceID: row.WorkspaceID, Name: row.Name, Position: row.Position, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, ArchivedAt: row.ArchivedAt}
 }
 
 func projectFromBackupRow(row gen.ListAllProjectsRow) gen.Project {
-	return gen.Project{ID: row.ID, WorkspaceID: row.WorkspaceID, Name: row.Name, Position: row.Position, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+	return gen.Project{ID: row.ID, WorkspaceID: row.WorkspaceID, Name: row.Name, Position: row.Position, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, ArchivedAt: row.ArchivedAt}
+}
+
+// requireProjectWritable 在项目已归档时返回 ErrProjectArchived。
+func requireProjectWritable(project gen.Project) error {
+	if project.ArchivedAt != nil {
+		return ErrProjectArchived
+	}
+	return nil
+}
+
+// requireProjectWritableByID 查询项目并校验可写；不存在时返回 ErrNotFound。
+func (s *Service) requireProjectWritableByID(ctx context.Context, q *gen.Queries, projectID string) (gen.Project, error) {
+	row, err := q.GetProject(ctx, projectID)
+	if err != nil {
+		return gen.Project{}, mapNoRows(err)
+	}
+	project := projectFromGetRow(row)
+	if err := requireProjectWritable(project); err != nil {
+		return gen.Project{}, err
+	}
+	return project, nil
 }
 
 // listProjectStatsSQL 一次聚合工作区下全部项目的统计（避免 N+1）。
@@ -111,6 +140,48 @@ func (s *Service) ListProjects(ctx context.Context, workspaceID string) ([]Proje
 	return summaries, nil
 }
 
+// ListArchivedProjects 返回工作区下已归档项目（按归档时间倒序），附带看板统计。
+func (s *Service) ListArchivedProjects(ctx context.Context, workspaceID string) ([]ProjectSummary, error) {
+	q := gen.New(s.db)
+	projects, err := q.ListArchivedProjectsByWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if projects == nil {
+		return []ProjectSummary{}, nil
+	}
+
+	stats := make(map[string][3]int64, len(projects))
+	rows, err := s.db.QueryContext(ctx, listProjectStatsSQL, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("查询项目统计失败: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var projectID string
+		var columnCount, taskCount, inProgressCount int64
+		if err := rows.Scan(&projectID, &columnCount, &taskCount, &inProgressCount); err != nil {
+			return nil, fmt.Errorf("扫描项目统计失败: %w", err)
+		}
+		stats[projectID] = [3]int64{columnCount, taskCount, inProgressCount}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("遍历项目统计失败: %w", err)
+	}
+
+	summaries := make([]ProjectSummary, 0, len(projects))
+	for _, p := range projects {
+		st := stats[p.ID]
+		summaries = append(summaries, ProjectSummary{
+			Project:         projectFromArchivedListRow(p),
+			ColumnCount:     st[0],
+			TaskCount:       st[1],
+			InProgressCount: st[2],
+		})
+	}
+	return summaries, nil
+}
+
 // PinnedProject 是当前工作区侧边栏"置顶"分组的项目条目。
 type PinnedProject struct {
 	ProjectID   string `json:"projectId"`
@@ -122,7 +193,7 @@ type PinnedProject struct {
 const listPinnedProjectsSQL = `
 SELECT p.id, p.workspace_id, p.name
 FROM project p
-WHERE p.pinned = 1 AND p.workspace_id = ?
+WHERE p.pinned = 1 AND p.workspace_id = ? AND p.archived_at IS NULL
 ORDER BY p.created_at DESC
 `
 
@@ -161,6 +232,9 @@ func (s *Service) SetProjectPinned(ctx context.Context, projectID string, pinned
 	project, err := q.GetProject(ctx, projectID)
 	if err != nil {
 		return mapNoRows(err)
+	}
+	if err := requireProjectWritable(projectFromGetRow(project)); err != nil {
+		return err
 	}
 	res, err := tx.ExecContext(ctx, setProjectPinnedSQL, pinned, projectID)
 	if err != nil {
@@ -220,6 +294,9 @@ func createProjectInTx(ctx context.Context, q *gen.Queries, workspaceID, name st
 
 // CreateProject 创建项目并在同一事务内种子固定看板默认列（0008：模板已移除）。
 func (s *Service) CreateProject(ctx context.Context, workspaceID, name string) (gen.Project, error) {
+	if name == "" {
+		return gen.Project{}, invalidInput("项目名称不能为空")
+	}
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
 		return gen.Project{}, err
@@ -239,6 +316,9 @@ func (s *Service) CreateProject(ctx context.Context, workspaceID, name string) (
 
 // RenameProject 重命名项目；不存在时返回 ErrNotFound。
 func (s *Service) RenameProject(ctx context.Context, projectID, name string) (gen.Project, error) {
+	if name == "" {
+		return gen.Project{}, invalidInput("项目名称不能为空")
+	}
 	tx, q, err := beginTx(ctx, s.db)
 	if err != nil {
 		return gen.Project{}, err
@@ -255,6 +335,61 @@ func (s *Service) RenameProject(ctx context.Context, projectID, name string) (ge
 	}
 	project := projectFromUpdateRow(projectRow)
 	if err := s.commitEvents(ctx, tx, q, Event{Action: EventProjectUpdated, ProjectID: project.ID, WorkspaceID: project.WorkspaceID, EntityID: project.ID, Data: map[string]string{"name": project.Name}, RecordActivity: true}); err != nil {
+		return gen.Project{}, err
+	}
+	return project, nil
+}
+
+// SetProjectArchived 归档或恢复项目。
+// 归档前要求无未完成活跃任务（未归档且不在末列）；归档时自动取消置顶。
+func (s *Service) SetProjectArchived(ctx context.Context, projectID string, archived bool) (gen.Project, error) {
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return gen.Project{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	currentRow, err := q.GetProject(ctx, projectID)
+	if err != nil {
+		return gen.Project{}, mapNoRows(err)
+	}
+	current := projectFromGetRow(currentRow)
+	if (current.ArchivedAt != nil) == archived {
+		return current, nil
+	}
+
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	var archivedAt *string
+	action := EventProjectRestored
+	if archived {
+		incomplete, err := q.CountIncompleteActiveTasks(ctx, projectID)
+		if err != nil {
+			return gen.Project{}, fmt.Errorf("检查未完成任务失败: %w", err)
+		}
+		if incomplete > 0 {
+			return gen.Project{}, ErrProjectHasIncompleteTasks
+		}
+		archivedAt = &updatedAt
+		action = EventProjectArchived
+	}
+
+	row, err := q.ArchiveProject(ctx, gen.ArchiveProjectParams{
+		ArchivedAt: archivedAt,
+		UpdatedAt:  updatedAt,
+		ID:         projectID,
+	})
+	if err != nil {
+		return gen.Project{}, mapNoRows(err)
+	}
+	project := projectFromArchiveRow(row)
+	if err := s.commitEvents(ctx, tx, q, Event{
+		Action:         action,
+		ProjectID:      project.ID,
+		WorkspaceID:    project.WorkspaceID,
+		EntityID:       project.ID,
+		Data:           map[string]any{"archivedAt": archivedAt, "name": project.Name},
+		RecordActivity: true,
+	}); err != nil {
 		return gen.Project{}, err
 	}
 	return project, nil

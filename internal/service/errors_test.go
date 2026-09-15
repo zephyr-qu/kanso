@@ -15,11 +15,15 @@ func TestClassifyError(t *testing.T) {
 		{name: "not found", err: fmt.Errorf("wrapped: %w", ErrNotFound), want: ErrorNotFound},
 		{name: "forbidden", err: ErrForbidden, want: ErrorForbidden},
 		{name: "invalid backup", err: ErrInvalidBackup, want: ErrorInvalidInput},
+		{name: "last workspace", err: ErrLastWorkspace, want: ErrorInvalidInput},
 		{name: "cross project", err: ErrCrossProjectMove, want: ErrorInvalidInput},
 		{name: "member limit", err: ErrMemberLimit, want: ErrorConflict},
-		{name: "admin limit", err: ErrAdminLimit, want: ErrorConflict},
-		{name: "last admin", err: ErrLastAdmin, want: ErrorForbidden},
+		{name: "admin limit", err: ErrAdminLimit, want: ErrorInvalidInput},
+		{name: "last admin", err: ErrLastAdmin, want: ErrorInvalidInput},
+		{name: "project archived", err: ErrProjectArchived, want: ErrorConflict},
+		{name: "project incomplete", err: ErrProjectHasIncompleteTasks, want: ErrorConflict},
 		{name: "unknown", err: errors.New("database down"), want: ErrorInternal},
+		{name: "wrapped invalid input", err: invalidInput("任务标题不能为空"), want: ErrorInvalidInput},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
