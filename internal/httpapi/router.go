@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 
 	"kanso/internal/auth"
 	"kanso/internal/config"
@@ -52,8 +51,8 @@ func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.
 	svc.SetBroadcaster(hub)
 	r := chi.NewRouter()
 	r.Use(requestIDMiddleware)
+	r.Use(slogRecoverer)
 	r.Use(redactingLogger)
-	r.Use(middleware.Recoverer)
 
 	r.Get("/api/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
@@ -64,7 +63,8 @@ func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.
 		})
 	})
 	r.Get("/api/ready", a.ready)
-	limitAuth := rateLimitByIP(newIPRateLimiter(authRatePerSecond, authRateBurst))
+	authLimiter := newIPRateLimiter(authRatePerSecond, authRateBurst)
+	limitAuth := rateLimitByIP(authLimiter)
 	r.With(limitAuth).Post("/api/auth/verify", a.verify)
 
 	// WebSocket：密钥经查询参数（浏览器无法自定义 WS 请求头），单独注册。
@@ -72,9 +72,10 @@ func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.
 
 	// 其余 /api 路由全部要求密钥。认证按成员表反查密钥（personal = 单一 admin，
 	// admin 的凭证哈希由启动时 SeedAdminMember 根据 KANSO_ACCESS_KEY 写入，ADR-0013 修订）。
+	// Bearer 失败与 verify/WS 共用 IP 令牌桶，成功请求不消耗额度。
 	memberLookup := svc.MemberIDByKey
 	r.Group(func(pr chi.Router) {
-		pr.Use(auth.Middleware(memberLookup))
+		pr.Use(auth.MiddlewareWithReject(memberLookup, unauthorizedOrRateLimit(authLimiter)))
 		// actor 中间件：把执行者名与角色写入 ctx（dispatch/能力判断共用）。
 		pr.Use(a.actorMiddleware)
 		// 所有工作区及资源路由在进入 handler 前统一解析并校验工作区访问权。
@@ -177,21 +178,26 @@ func (a *API) actorMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// redactedRequestURI 复制查询串并把 key 脱敏，不改动原始请求（WS 仍用明文 key）。
+func redactedRequestURI(r *http.Request) string {
+	u := *r.URL
+	query := u.Query()
+	if query.Has("key") {
+		query.Set("key", "[REDACTED]")
+		u.RawQuery = query.Encode()
+	}
+	return u.RequestURI()
+}
+
 // redactingLogger keeps credentials out of request logs while preserving the
 // original query string for the handler (WebSocket clients cannot set headers).
 func redactingLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		u := *r.URL
-		query := u.Query()
-		if query.Has("key") {
-			query.Set("key", "[REDACTED]")
-			u.RawQuery = query.Encode()
-		}
 		logx.With(
 			slog.String("request_id", requestIDFromRequest(r)),
 		).Info("http request",
 			slog.String("method", r.Method),
-			slog.String("uri", u.RequestURI()),
+			slog.String("uri", redactedRequestURI(r)),
 		)
 		next.ServeHTTP(w, r)
 	})

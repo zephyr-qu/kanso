@@ -22,8 +22,9 @@ AI 捕获：
 结构化日志与认证限流：
 
 - 进程日志改为 `log/slog`（请求带 `request_id` / `method` / `uri`，密钥查询参数脱敏；错误带 `request_id` 与状态）
+- panic 由 slog Recoverer 记录 `request_id` / `method` / `uri` / `panic` / `stack`，响应 500，不再走 chi 默认 `log`
 - `KANSO_LOG_FORMAT=json|text`、`KANSO_LOG_LEVEL=debug|info|warn|error`
-- `/api/auth/verify` 与 WebSocket 握手按 IP 令牌桶限流（超限 429）
+- `/api/auth/verify`、WebSocket 握手与 Bearer 失败按同一 IP 令牌桶限流（超限 429）；Bearer 成功不消耗额度
 
 命令行统一到单一 `kanso` 二进制：
 
