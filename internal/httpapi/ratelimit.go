@@ -10,7 +10,8 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// 认证探测限流：按客户端 IP 令牌桶，只挂在 /api/auth/verify 与 WebSocket 握手。
+// 认证探测限流：按客户端 IP 令牌桶。
+// /api/auth/verify 与 WebSocket 握手每次请求消耗额度；Bearer 仅在查找失败时消耗。
 const (
 	authRatePerSecond = 2
 	authRateBurst     = 10
@@ -58,6 +59,18 @@ func (l *ipRateLimiter) evictLocked(now time.Time) {
 		if now.Sub(v.last) > authVisitorTTL {
 			delete(l.vis, ip)
 		}
+	}
+}
+
+// unauthorizedOrRateLimit 供 Bearer 失败路径：额度耗尽写 429，否则写 401。成功认证不调用。
+func unauthorizedOrRateLimit(lim *ipRateLimiter) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !lim.allow(clientIP(r)) {
+			w.Header().Set("Retry-After", "1")
+			writeError(w, http.StatusTooManyRequests, "请求过于频繁，请稍后再试")
+			return
+		}
+		writeError(w, http.StatusUnauthorized, "unauthorized")
 	}
 }
 

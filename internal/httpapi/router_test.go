@@ -104,6 +104,41 @@ func TestAuthRequired(t *testing.T) {
 	}
 }
 
+func TestBearerAuthFailureRateLimit(t *testing.T) {
+	e := newTestEnv(t)
+	const burst = 10 // 与内部 authRateBurst 一致
+	for i := 0; i < burst; i++ {
+		res, _ := e.doAuth(t, "wrong-key", http.MethodGet, "/api/workspaces", "")
+		if res.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("第 %d 次错误密钥应 401，实际 %d", i+1, res.StatusCode)
+		}
+	}
+	res, _ := e.doAuth(t, "wrong-key", http.MethodGet, "/api/workspaces", "")
+	if res.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("突发用尽后错误密钥应 429，实际 %d", res.StatusCode)
+	}
+
+	res, _ = e.do(t, http.MethodGet, "/api/workspaces", "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("正确密钥不应被失败限流挡住，实际 %d", res.StatusCode)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, e.srv.URL+"/api/workspaces", nil)
+	if err != nil {
+		t.Fatalf("构造请求失败: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer wrong-key")
+	req.Header.Set("X-Forwarded-For", "203.0.113.9")
+	other, err := e.srv.Client().Do(req)
+	if err != nil {
+		t.Fatalf("请求失败: %v", err)
+	}
+	defer other.Body.Close()
+	if other.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("其他 IP 错误密钥应 401，实际 %d", other.StatusCode)
+	}
+}
+
 // TestWorkspaceLifecycle 覆盖工作区列表/创建/重命名/删除。
 func TestWorkspaceLifecycle(t *testing.T) {
 	e := newTestEnv(t)

@@ -39,6 +39,27 @@ func TestMiddlewareRejectsUnknownKey(t *testing.T) {
 	}
 }
 
+func TestMiddlewareWithReject(t *testing.T) {
+	lookup := func(_ context.Context, _ string) (string, bool) { return "", false }
+	called := false
+	reject := func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusTeapot)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer x")
+	MiddlewareWithReject(lookup, reject)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("错误密钥不应进入后续 handler")
+	})).ServeHTTP(rec, req)
+	if !called {
+		t.Fatal("查找失败应调用 reject")
+	}
+	if rec.Code != http.StatusTeapot {
+		t.Fatalf("自定义 reject 应 418，实际 %d", rec.Code)
+	}
+}
+
 func TestMemberIDEmptyWithoutAuth(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces", nil)
 	if got := MemberID(req); got != "" {
