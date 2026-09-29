@@ -1,8 +1,6 @@
 # Changelog
 
-## Unreleased
-
-### 0.5.0（草案）
+## 0.5.0 - 2026-09-29
 
 项目归档：
 
@@ -35,7 +33,10 @@ AI 捕获：
 - 移除独立 `kansoctl`；Docker `ENTRYPOINT` 改为 `["/app/kanso", "serve"]`
 - 入门教程见 [tutorial/cli](tutorial/cli/README.md)
 
-**升级注意**：本地脚本、Compose 外的手工启动、以及文档中的 `go run ./cmd/kanso` / `./kanso` 需改为带 `serve`。
+**升级注意**：
+
+- 本地脚本、Compose 外的手工启动、以及文档中的 `go run ./cmd/kanso` / `./kanso` 需改为带 `serve`（统一 `kanso` CLI）。
+- 首次启动自动执行 0015–0017 迁移：成员由「单一工作区归属」改为全局身份 + `workspace_member` 授权，新增项目归档字段。
 
 ## 0.4.0 - 2026-09-09
 
