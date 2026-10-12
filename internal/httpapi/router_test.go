@@ -1239,6 +1239,44 @@ func TestRealtimeQueryErrors(t *testing.T) {
 	}
 }
 
+// TestWSHandshakeSuccessDoesNotConsumeRateLimit 校验 WS 握手的成功路径不消耗 IP 令牌桶。
+// 回归背景：/api/ws 曾挂全局限流中间件，成功握手也扣额度，断线重连/多标签页会把额度打满
+// （E2E 实测同一秒两次握手 429）。这里连续握手 2×burst 次，都应通过密钥校验而非被限流。
+func TestWSHandshakeSuccessDoesNotConsumeRateLimit(t *testing.T) {
+	e := newTestEnv(t)
+	project := createProject(t, e, "WS成功握手不限流")
+	const burst = 10 // 与内部 authRateBurst 一致
+
+	for i := range burst * 2 {
+		res, _ := e.doAuth(t, "", http.MethodGet, "/api/ws?project="+project+"&key="+testKey, "")
+		if res.StatusCode == http.StatusTooManyRequests {
+			t.Fatalf("第 %d 次成功握手不应被限流，实际 429", i+1)
+		}
+	}
+}
+
+// TestWSHandshakeFailureConsumesRateLimit 校验 WS 握手的失败路径仍按 IP 消耗额度：
+// burst 次错误密钥 → 401，随后额度耗尽 → 429（与 Bearer 失败路径同桶）。
+func TestWSHandshakeFailureConsumesRateLimit(t *testing.T) {
+	e := newTestEnv(t)
+	project := createProject(t, e, "WS失败握手限流")
+	const burst = 10 // 与内部 authRateBurst 一致
+
+	for i := range burst {
+		res, _ := e.doAuth(t, "", http.MethodGet, "/api/ws?project="+project+"&key=wrong", "")
+		if res.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("第 %d 次错误密钥应 401，实际 %d", i+1, res.StatusCode)
+		}
+	}
+	res, _ := e.doAuth(t, "", http.MethodGet, "/api/ws?project="+project+"&key=wrong", "")
+	if res.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("WS 失败额度用尽后应 429，实际 %d", res.StatusCode)
+	}
+	if got := res.Header.Get("Retry-After"); got != "1" {
+		t.Fatalf("429 应带 Retry-After: 1，实际 %q", got)
+	}
+}
+
 // TestRealtimeDisconnectNoPanic 校验客户端断开后广播不 panic、服务存活、可重连。
 func TestRealtimeDisconnectNoPanic(t *testing.T) {
 	e := newTestEnv(t)
