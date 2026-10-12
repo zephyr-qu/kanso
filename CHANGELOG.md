@@ -1,5 +1,12 @@
 # Changelog
 
+## 未发布
+
+认证限流口径修正（修正 0.5.0 中「WebSocket 握手与 Bearer 失败按同一 IP 令牌桶限流」的口径）：
+
+- `/api/ws` 不再挂全局限流中间件：WebSocket 握手仅在**密钥查找失败**时消耗 IP 令牌桶（与 Bearer 失败同桶），成功握手不占额度。此前成功握手也扣额度，与「成功认证不消耗额度」矛盾——断线重连（前端 `onclose` 后 2s 重试）与多标签页会持续打满 burst（10）并被 429 拒绝，E2E 日志实测同秒 `/api/ws` 429。
+- 回归测试：`TestWSHandshakeSuccessDoesNotConsumeRateLimit`（连续 2×burst 次成功握手不被限流）、`TestWSHandshakeFailureConsumesRateLimit`（burst 次 401 后 429，带 `Retry-After: 1`）。
+
 ## 0.5.0 - 2026-09-29
 
 项目归档：
