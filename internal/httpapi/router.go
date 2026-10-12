@@ -68,11 +68,12 @@ func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.
 	r.With(limitAuth).Post("/api/auth/verify", a.verify)
 
 	// WebSocket：密钥经查询参数（浏览器无法自定义 WS 请求头），单独注册。
-	r.With(limitAuth).Get("/api/ws", a.handleWS(hub))
+	// 限流在 handler 内按「密钥查找失败」触发：正常握手（含重连/多标签页）不消耗额度。
+	r.Get("/api/ws", a.handleWS(hub, authLimiter))
 
 	// 其余 /api 路由全部要求密钥。认证按成员表反查密钥（personal = 单一 admin，
 	// admin 的凭证哈希由启动时 SeedAdminMember 根据 KANSO_ACCESS_KEY 写入，ADR-0013 修订）。
-	// Bearer 失败与 verify/WS 共用 IP 令牌桶，成功请求不消耗额度。
+	// Bearer 失败与 verify/WS 失败共用 IP 令牌桶，成功请求不消耗额度。
 	memberLookup := svc.MemberIDByKey
 	r.Group(func(pr chi.Router) {
 		pr.Use(auth.MiddlewareWithReject(memberLookup, unauthorizedOrRateLimit(authLimiter)))

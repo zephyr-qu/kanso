@@ -11,7 +11,8 @@ import (
 )
 
 // 认证探测限流：按客户端 IP 令牌桶。
-// /api/auth/verify 与 WebSocket 握手每次请求消耗额度；Bearer 仅在查找失败时消耗。
+// 仅失败路径消耗额度：/api/auth/verify 每次请求消耗（请求本身除密钥外无可校验信息）；
+// WebSocket 握手与 Bearer 均在密钥查找失败时消耗，成功认证不占额度（断线重连/多标签页不受影响）。
 const (
 	authRatePerSecond = 2
 	authRateBurst     = 10

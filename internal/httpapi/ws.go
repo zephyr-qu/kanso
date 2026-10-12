@@ -14,7 +14,8 @@ import (
 // 浏览器 WebSocket 无法自定义请求头，因此密钥经查询参数传入（仅本端点；
 // 其余端点仍走 Authorization 头，见 auth.Middleware）。
 // 连接按 project 订阅，服务端写操作经 hub 广播，客户端收到后 invalidate 查询。
-func (a *API) handleWS(hub *realtime.Hub) http.HandlerFunc {
+// lim：密钥查找失败时与 Bearer 失败路径共用同一 IP 令牌桶（成功握手不消耗额度）。
+func (a *API) handleWS(hub *realtime.Hub, lim *ipRateLimiter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		projectID := r.URL.Query().Get("project")
 		workspaceID := r.URL.Query().Get("workspace")
@@ -29,7 +30,8 @@ func (a *API) handleWS(hub *realtime.Hub) http.HandlerFunc {
 		key := r.URL.Query().Get("key")
 		memberID, ok := a.svc.MemberIDByKey(r.Context(), key)
 		if !ok {
-			writeError(w, http.StatusUnauthorized, "unauthorized")
+			// 与 Bearer 失败同一路径：额度耗尽写 429，否则写 401；成功握手不调用这里。
+			unauthorizedOrRateLimit(lim)(w, r)
 			return
 		}
 		if workspaceID == "" {
