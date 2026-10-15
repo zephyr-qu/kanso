@@ -37,8 +37,9 @@ type dbHandle interface {
 }
 
 // New 完成数据库、迁移、领域种子、路由和 HTTP Server 初始化。
-// spa / landing 可为 nil；生产环境分别传入嵌入式 SPA 与落地页资源。
-func New(ctx context.Context, cfg config.Config, version string, spa fs.FS, landing fs.FS) (*App, error) {
+// New 完成数据库、迁移、领域种子、路由和 HTTP Server 初始化。
+// spa 可为 nil；生产环境传入嵌入式 SPA。落地页是独立站点，不经这里。
+func New(ctx context.Context, cfg config.Config, version string, spa fs.FS) (*App, error) {
 	logx.ConfigureFromEnv()
 	if err := config.Validate(cfg); err != nil {
 		return nil, fmt.Errorf("启动配置校验失败: %w", err)
@@ -85,7 +86,7 @@ func New(ctx context.Context, cfg config.Config, version string, spa fs.FS, land
 
 	hub := realtime.NewHub()
 	httpapi.Version = version
-	router := httpapi.NewRouterWithAssets(cfg, svc, hub, spa, landing)
+	router := httpapi.NewRouterWithAssets(cfg, svc, hub, spa)
 	server := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           router,
