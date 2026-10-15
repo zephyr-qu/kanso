@@ -4,8 +4,7 @@
 .scratch
 .impeccable
 .vscode
-.gocache
-.gocache-e2e/
+.gocache*
 .codex-go-cache/
 designs
 docs
@@ -13,7 +12,11 @@ skills-lock.json
 kanso
 kanso-new
 kanso.exe
+# 本地运行配置：可能含访问密钥 / AI API Key，不该进构建上下文与层缓存
+kanso-config.json
 data
+.dev-data
+*.log
 temp
 web/node_modules
 web/.pnpm-store
