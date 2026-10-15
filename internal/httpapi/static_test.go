@@ -11,18 +11,19 @@ import (
 
 func testSPA() *fstest.MapFS {
 	return &fstest.MapFS{
-		"index.html":  &fstest.MapFile{Data: []byte("<html>kanso spa</html>")},
-		"favicon.ico": &fstest.MapFile{Data: []byte("fake-ico")},
+		"index.html":    &fstest.MapFile{Data: []byte("<html>kanso spa</html>")},
+		"favicon.ico":   &fstest.MapFile{Data: []byte("fake-ico")},
 		"assets/app.js": &fstest.MapFile{Data: []byte("console.log(1)")},
 	}
 }
 
 func testLanding() *fstest.MapFS {
 	return &fstest.MapFS{
-		"index.html": &fstest.MapFile{Data: []byte("<html>kanso landing</html>")},
-		"style.css":  &fstest.MapFile{Data: []byte("body{}")},
-		"favicon.svg": &fstest.MapFile{Data: []byte("<svg/>")},
-		"fonts/a.woff2": &fstest.MapFile{Data: []byte("font")},
+		"index.html":     &fstest.MapFile{Data: []byte("<html>kanso landing</html>")},
+		"style.css":      &fstest.MapFile{Data: []byte("body{}")},
+		"favicon.svg":    &fstest.MapFile{Data: []byte("<svg/>")},
+		"fonts/a.woff2":  &fstest.MapFile{Data: []byte("font")},
+		"media/shot.png": &fstest.MapFile{Data: []byte("png")},
 	}
 }
 
@@ -47,6 +48,7 @@ func TestStaticHandlerServesLandingAssets(t *testing.T) {
 		{"/style.css", "body{}"},
 		{"/favicon.svg", "<svg/>"},
 		{"/fonts/a.woff2", "font"},
+		{"/media/shot.png", "png"},
 	}
 	for _, tc := range cases {
 		rec := httptest.NewRecorder()
@@ -122,5 +124,20 @@ func TestStaticHandlerNilAssets(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("nil assets 应 404，实际 %d", rec.Code)
+	}
+}
+
+// 落地页不得抢占 SPA 的构建产物路径：SPA 用 /assets/*，落地页用 /media/*。
+// 回归：白名单曾放行 "assets/"，导致 /assets/index-*.js 被落地页判定为「自己的资源」
+// 而直接 404，应用整个白屏。
+func TestStaticHandlerDoesNotShadowSPAAssets(t *testing.T) {
+	h := staticHandler(testSPA(), testLanding())
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/assets/app.js", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /assets/app.js 应落到 SPA（200），实际 %d", rec.Code)
+	}
+	if rec.Body.String() != "console.log(1)" {
+		t.Fatalf("应返回 SPA 的 assets 内容，实际 %q", rec.Body.String())
 	}
 }

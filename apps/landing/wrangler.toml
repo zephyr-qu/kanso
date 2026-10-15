@@ -1,0 +1,32 @@
+# 落地页作为 Cloudflare Workers 静态资源，挂在 https://www.zephyrqu.top/kanso/。
+# 形态与 wisp 的落地页一致（见 zephyr_english/designs/wisp-landing），只换名字与路径。
+#
+#   wrangler deploy     # 上传本目录（按 .assetsignore 过滤），再挂上路由
+#
+# Worker 用 route 挂在 zone 上，所以页面位于 /kanso/ 而不是 zone 根；本目录的文件仍在自己
+# 的根目录，前缀由 _redirects 代理掉，页面里的路径因此能保持相对——同一份文件既能双击本地
+# 打开，也能原样部署。
+#
+# 这里不用 `wrangler dev`：assets.directory 指向配置所在目录时，wrangler 写进 .wrangler/tmp
+# 的产物落在被监听的目录里，会反复触发重建（wisp 那边实测 15 秒 36 次重载且从未响应请求）。
+# 本地预览就是打开 index.html——这页是纯 HTML/CSS，本意就是能当本地文件用。真要 dev server，
+# 把配置上移一层并写 directory = "./landing"。
+#
+# 没有 Worker 脚本：部署的全是文件，这份配置就是部署本身。
+
+name = "kanso"
+compatibility_date = "2026-10-15"
+
+# 两个 pattern：`*` 不覆盖裸路径，少了第二条，https://www.zephyrqu.top/kanso（无斜杠）到不了这个 Worker。
+[[routes]]
+pattern = "www.zephyrqu.top/kanso/*"
+zone_name = "zephyrqu.top"
+
+[[routes]]
+pattern = "www.zephyrqu.top/kanso"
+zone_name = "zephyrqu.top"
+
+[assets]
+directory = "./"
+
+# 故意不设 not_found_handling：这页没有客户端路由，未知路径应当 404，而不是回落到首页。

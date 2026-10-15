@@ -2,12 +2,11 @@ import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
-import { kansoLanding } from "./vite.landing";
 
 const apiTarget = process.env.VITE_API_TARGET ?? "http://localhost:8080";
 
 export default defineConfig({
-	plugins: [kansoLanding(), react(), tailwindcss()],
+	plugins: [react(), tailwindcss()],
 	resolve: {
 		alias: { "@": path.resolve(import.meta.dirname, "src") },
 	},

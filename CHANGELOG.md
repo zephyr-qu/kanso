@@ -7,6 +7,20 @@
 - `/api/ws` 不再挂全局限流中间件：WebSocket 握手仅在**密钥查找失败**时消耗 IP 令牌桶（与 Bearer 失败同桶），成功握手不占额度。此前成功握手也扣额度，与「成功认证不消耗额度」矛盾——断线重连（前端 `onclose` 后 2s 重试）与多标签页会持续打满 burst（10）并被 429 拒绝，E2E 日志实测同秒 `/api/ws` 429。
 - 回归测试：`TestWSHandshakeSuccessDoesNotConsumeRateLimit`（连续 2×burst 次成功握手不被限流）、`TestWSHandshakeFailureConsumesRateLimit`（burst 次 401 后 429，带 `Retry-After: 1`）。
 
+落地页与项目前端解耦：
+
+- 落地页迁至 `apps/landing`（自带 `embed`，只被服务端引用）；新增独立预览服务 `cmd/landing`（`go run ./cmd/landing`，默认 `127.0.0.1:4173`，不读配置、不连数据库）。
+- `web/` 不再读取落地页任何文件（移除 Vite `kansoLanding` 中间件）；前端落地页入口改为 `VITE_LANDING_URL`（默认同源 `/`），开发环境入口仍为 `/` 时只提示不跳转，避免 SPA 自我跳转死循环。
+
+落地页改版（`apps/landing`）：
+
+- 展示字从 Noto Serif SC 换成系统无衬线，删掉两个自托管衬线字体（嵌入体积 -330KB）；同一套 CSS 变量原生支持 `prefers-color-scheme` 深色。
+- 首屏不再手搓看板界面，改用真实应用截图；新增 `web/tools/capture-landing-shots.mjs` 抓图（可展示的种子数据、真实后端），产物提交在 `apps/landing/media/`。
+- 去掉「1,284 个小项目」这类编造数据、分节编号眉标、滚动提示、装饰文字条等模板化痕迹；补上 GitHub 入口，去掉「进入工作区」应用入口（落地页独立部署时它是死链），主按钮统一为「查看源码」。
+- 修正不实文案：当前没有列表视图，改为如实的「列与泳道切换」（泳道按标签分组）。
+- 落地页图片放在 `media/`，`static.go` 白名单只放行 `media/` 与 `fonts/`：SPA 的构建产物同样在 `/assets/*`，落地页占了这个前缀会把应用的 JS/CSS 全部 404（本次回归已修复，并补了「不得抢占 SPA assets」的测试）。
+- 补 `og:*` 与 `twitter:*` 分享卡，分享图 1200×630 由 `web/tools/build-og-card.mjs` 生成；`og:image` 目前是相对路径，发布到独立站点后需换成站点域名下的完整地址（爬虫不解析相对地址；部署到 Cloudflare 后已改为绝对地址，见下一条）。
+- 落地页按 wisp 的形态部署为 Cloudflare Workers 静态资源，公开地址 `https://www.zephyrqu.top/kanso/`：新增 `apps/landing/{wrangler.toml,_redirects,_headers,.assetsignore,NOTES.md}`，`_redirects` 把 `/kanso` 前缀代理掉，页面路径因此能保持相对（同一份文件双击本地打开也成立）；`og:image` / `twitter:image` / `og:url` 换成该绝对地址。
 ## 0.5.0 - 2026-09-29
 
 项目归档：

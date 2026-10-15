@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"kanso/apps/landing"
 	"kanso/internal/cli"
-	"kanso/landing"
 	"kanso/web"
 )
 

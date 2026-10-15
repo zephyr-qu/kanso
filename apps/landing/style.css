@@ -1,0 +1,870 @@
+/* Kanso 落地页样式：自包含单文件，不引用 SPA 的任何 token。改版说明见 apps/landing/README 注释区块。
+ *
+ * 形状规则（唯一一套，别处不再出现第三种圆角）：控件 8px，容器与图片框 16px。
+ * 主题：默认暖纸浅色，prefers-color-scheme: dark 时切到石墨深色，同页不翻主题。
+ * 字体：展示字用系统无衬线（PingFang / 微软雅黑 / Noto Sans），等宽用自托管 IBM Plex Mono。 */
+@font-face {
+	font-family: "IBM Plex Mono";
+	src: url("./fonts/ibm-plex-mono-400.woff2") format("woff2");
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+	border-width: 0;
+	border-style: solid;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+	scroll-behavior: smooth;
+}
+
+body {
+	margin: 0;
+	/* 变量定义在 .landing-page 上，body 取不到，这里给纸色兜底（含深色）。 */
+	background: #f7f5f0;
+}
+
+@media (prefers-color-scheme: dark) {
+	body {
+		background: #1b1917;
+	}
+}
+
+h1,
+h2,
+h3,
+p,
+figure,
+pre {
+	margin: 0;
+}
+
+ul {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+a {
+	color: inherit;
+}
+
+img {
+	display: block;
+	max-width: 100%;
+	height: auto;
+}
+
+svg {
+	display: block;
+}
+
+button {
+	font: inherit;
+	cursor: pointer;
+	background: none;
+	color: inherit;
+	border: 0;
+}
+
+.landing-page {
+	--font-sans:
+		"PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Noto Sans CJK SC",
+		ui-sans-serif, system-ui, sans-serif;
+	--font-mono:
+		"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+	--paper: #f7f5f0;
+	--surface: #fffdf9;
+	--surface-soft: #f2efe7;
+	--ink: #292722;
+	--ink-soft: #6d675e;
+	--ink-faint: #a29c93;
+	--line: rgba(55, 53, 47, 0.14);
+	--line-strong: rgba(55, 53, 47, 0.24);
+	--accent: #c2410c;
+	--accent-soft: rgba(194, 65, 12, 0.1);
+	--accent-ink: #fff8f0;
+	--code-bg: #2a2724;
+	--code-ink: #efe8dd;
+	--code-line: rgba(255, 255, 255, 0.12);
+	--shadow: 0 18px 40px rgba(55, 53, 47, 0.1);
+	--shadow-lift: 0 10px 24px rgba(55, 53, 47, 0.12);
+	--grain-opacity: 0.035;
+	--ease: cubic-bezier(0.23, 1, 0.32, 1);
+
+	position: relative;
+	min-height: 100vh;
+	overflow-x: clip; /* 不能用 hidden：会给 sticky 顶栏造出滚动容器 */
+	background: var(--paper);
+	color: var(--ink);
+	font-family: var(--font-sans);
+	font-size: 15px;
+	line-height: 1.75;
+}
+
+@media (prefers-color-scheme: dark) {
+	.landing-page {
+		--paper: #1b1917;
+		--surface: #232019;
+		--surface-soft: #2a2620;
+		--ink: #f1ece3;
+		--ink-soft: #a9a196;
+		--ink-faint: #7d766c;
+		--line: rgba(241, 236, 227, 0.14);
+		--line-strong: rgba(241, 236, 227, 0.26);
+		--accent: #ef7130;
+		--accent-soft: rgba(239, 113, 48, 0.14);
+		--accent-ink: #1d1611;
+		--code-bg: #100f0e;
+		--code-ink: #e8e1d6;
+		--code-line: rgba(255, 255, 255, 0.1);
+		--shadow: 0 20px 44px rgba(0, 0, 0, 0.46);
+		--shadow-lift: 0 12px 26px rgba(0, 0, 0, 0.5);
+		--grain-opacity: 0.024;
+	}
+}
+
+/* 纸纹颗粒：固定在视口、不吃指针事件，只做质感。 */
+.landing-grain {
+	position: fixed;
+	inset: 0;
+	z-index: 20;
+	pointer-events: none;
+	opacity: var(--grain-opacity);
+	background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E");
+}
+
+/* 版面基元：唯一容器宽度与节间距，避免每节各自为政。 */
+.wrap {
+	width: min(1200px, 100% - 96px);
+	margin-inline: auto;
+}
+
+.section {
+	padding-block: 104px;
+	border-top: 1px solid var(--line);
+}
+
+.section-head h2 {
+	font-size: clamp(28px, 3.1vw, 44px);
+	font-weight: 700;
+	letter-spacing: -0.022em;
+	line-height: 1.2;
+	text-wrap: balance;
+}
+
+.section-lede {
+	max-width: 46ch;
+	margin-top: 18px;
+	color: var(--ink-soft);
+}
+
+
+.landing-mark {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	/* 「簡」是内联轮廓路径（见 index.html 的 <symbol id="kanso-mark">），不是文字：
+	   轮廓取自 Noto Serif SC，与应用字体里合并进去的是同一套，所以不再依赖字体回退，
+	   在任何平台都是同一个字形。圆角与应用内 mark（5/22）和 favicon（14/64）同比例。 */
+	border-radius: 6px;
+	background: var(--accent);
+	color: var(--accent-ink);
+	box-shadow: 0 1px 3px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* 品牌轮廓的 <symbol> 容器：只做定义，不占版面。 */
+.mark-defs {
+	position: absolute;
+	width: 0;
+	height: 0;
+	overflow: hidden;
+}
+
+/* 图形与 mark 同大：路径已按 64 格定位居中，fill 跟随 mark 的文字色。 */
+.landing-mark-glyph {
+	width: 26px;
+	height: 26px;
+	fill: currentColor;
+}
+
+/* 按钮：primary 用品牌橙、quiet 用描边；两处对比度都过 AA。 */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 44px;
+	padding-inline: 18px;
+	border-radius: 8px;
+	font-size: 14px;
+	font-weight: 500;
+	text-decoration: none;
+	white-space: nowrap;
+	transition:
+		transform 180ms var(--ease),
+		box-shadow 180ms var(--ease),
+		background-color 180ms var(--ease),
+		border-color 180ms var(--ease),
+		color 180ms var(--ease);
+}
+
+.btn-primary {
+	background: var(--accent);
+	color: var(--accent-ink);
+	box-shadow: 0 4px 0 rgba(154, 52, 18, 0.16);
+}
+
+.btn-primary:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 7px 16px rgba(154, 52, 18, 0.26);
+}
+
+.btn-quiet {
+	border: 1px solid var(--line);
+	background: var(--surface);
+	color: var(--ink);
+}
+
+.btn-quiet:hover {
+	border-color: var(--accent);
+	color: var(--accent);
+	transform: translateY(-2px);
+}
+
+.btn:active {
+	transform: translateY(0);
+}
+
+.btn:focus-visible,
+a:focus-visible,
+button:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+/* 顶栏：单行，高度 68px。 */
+.site-header {
+	position: sticky;
+	top: 0;
+	z-index: 10;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 24px;
+	height: 68px;
+	padding-inline: 48px;
+	border-bottom: 1px solid var(--line);
+	background: color-mix(in srgb, var(--paper) 88%, transparent);
+	backdrop-filter: blur(10px);
+}
+
+.brand {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	color: var(--ink);
+	font-size: 16px;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	text-decoration: none;
+}
+
+.site-nav {
+	display: flex;
+	align-items: center;
+	gap: 28px;
+	margin-left: auto;
+}
+
+.site-nav a {
+	color: var(--ink-soft);
+	font-size: 13px;
+	text-decoration: none;
+	transition: color 160ms var(--ease);
+}
+
+.site-nav a:hover {
+	color: var(--accent);
+}
+
+.nav-github,
+.footer-links a {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+}
+
+.nav-cta {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	min-height: 38px;
+	padding-inline: 14px;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	background: var(--surface);
+	font-size: 13px;
+	font-weight: 500;
+	text-decoration: none;
+	transition:
+		border-color 160ms var(--ease),
+		color 160ms var(--ease),
+		transform 160ms var(--ease);
+}
+
+.nav-cta:hover {
+	border-color: var(--accent);
+	color: var(--accent);
+	transform: translateY(-1px);
+}
+
+.nav-toggle {
+	display: none;
+	align-items: center;
+	justify-content: center;
+	width: 38px;
+	height: 38px;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+}
+
+
+/* Hero：非对称分栏，无眉标、无信任条、无假数据。 */
+.hero {
+	display: grid;
+	grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+	align-items: center;
+	gap: 56px;
+	padding-block: 72px 88px;
+}
+
+.hero-copy {
+	animation: landing-rise 640ms var(--ease) both;
+}
+
+.hero h1 {
+	max-width: 22ch;
+	font-size: clamp(36px, 4.4vw, 58px);
+	font-weight: 700;
+	letter-spacing: -0.028em;
+	line-height: 1.16;
+	text-wrap: balance;
+}
+
+.hero-lede {
+	max-width: 32ch;
+	margin-top: 22px;
+	color: var(--ink-soft);
+	font-size: 16px;
+	line-height: 1.8;
+}
+
+.hero-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin-top: 32px;
+}
+
+/* 产品截图外框：容器 16px 圆角，浅色截图在深色主题里保持“纸面内嵌”的观感。 */
+.shot {
+	overflow: hidden;
+	border: 1px solid var(--line);
+	border-radius: 16px;
+	background: var(--surface);
+	box-shadow: var(--shadow);
+}
+
+.shot-hero {
+	animation: landing-shot-in 720ms 80ms var(--ease) both;
+}
+
+/* 事实条：真事、无编造数字、无客户 logo 墙（没有真实客户就不放）。 */
+.facts {
+	border-top: 1px solid var(--line);
+	/* 上下对称：这块文案夹在两条分隔线之间，之前 40/8 让它贴死在下面那条线上。 */
+	padding-block: 36px;
+}
+
+.facts ul {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 28px 40px;
+}
+
+.facts li {
+	font-size: 13px;
+	line-height: 1.7;
+	color: var(--ink-soft);
+}
+
+.facts b {
+	display: block;
+	margin-bottom: 6px;
+	color: var(--ink);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+/* 工作方式：非对称 bento（大格 4 列 2 行 + 右侧上下两格），不是三张等宽卡片。 */
+.bento {
+	display: grid;
+	grid-template-columns: repeat(6, minmax(0, 1fr));
+	gap: 14px;
+	margin-top: 44px;
+}
+
+.cell {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 24px;
+	border: 1px solid var(--line);
+	border-radius: 16px;
+	background: var(--surface);
+	transition:
+		border-color 200ms var(--ease),
+		transform 200ms var(--ease),
+		box-shadow 200ms var(--ease);
+}
+
+.cell:hover {
+	border-color: var(--line-strong);
+	transform: translateY(-3px);
+	box-shadow: var(--shadow-lift);
+}
+
+.cell h3 {
+	font-size: 19px;
+	font-weight: 600;
+	letter-spacing: -0.015em;
+}
+
+.cell p {
+	color: var(--ink-soft);
+	font-size: 13.5px;
+	line-height: 1.8;
+}
+
+.cell-shot {
+	grid-column: span 4;
+	grid-row: span 2;
+	padding: 14px;
+	gap: 18px;
+}
+
+.cell-shot .shot {
+	box-shadow: none;
+	border-radius: 12px;
+}
+
+.cell-shot-body {
+	/* 文案与截图左边缘对齐（此前多缩进 10px，与右侧两格的文字对齐方式不一致），
+	   下边距收到与上边距同量级（图→文案 20px，文案→容器底 22px）。 */
+	padding: 2px 0 8px;
+}
+
+.cell-swim {
+	grid-column: span 2;
+	background: var(--surface-soft);
+}
+
+.cell-live {
+	grid-column: span 2;
+	background: var(--accent-soft);
+	border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+/* 右侧两格比大格矮，把文字沉到底部，让多出来的空白看着是刻意的。 */
+.cell-swim h3,
+.cell-live h3 {
+	margin-top: auto;
+}
+
+.cell-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 8px;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	color: var(--accent);
+}
+
+/* 自部署：左侧说明 + 右侧代码面板（等宽、真实命令，没有假终端窗口装饰）。 */
+.deploy-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+	align-items: start;
+	gap: 56px;
+	margin-top: 40px;
+}
+
+.points {
+	margin-top: 26px;
+	display: grid;
+	gap: 12px;
+}
+
+.points li {
+	display: flex;
+	gap: 10px;
+	color: var(--ink-soft);
+	font-size: 14px;
+}
+
+.points svg {
+	flex: 0 0 auto;
+	margin-top: 5px;
+	color: var(--accent);
+}
+
+.code-panel {
+	overflow: hidden;
+	border: 1px solid var(--line);
+	border-radius: 16px;
+	background: var(--code-bg);
+	color: var(--code-ink);
+}
+
+.code-panel-title {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 18px;
+	border-bottom: 1px solid var(--code-line);
+	color: rgba(232, 225, 214, 0.62);
+	font-family: var(--font-mono);
+	font-size: 11px;
+	letter-spacing: 0.04em;
+}
+
+/* 末行是脚注，分隔线画在上方，避免与面板底边叠成双线。 */
+.code-panel-title:last-child {
+	border-bottom: 0;
+	border-top: 1px solid var(--code-line);
+}
+
+.code-panel pre {
+	overflow-x: auto;
+	padding: 20px 18px;
+	font-family: var(--font-mono);
+	font-size: 12.5px;
+	line-height: 1.9;
+}
+
+.code-panel code {
+	white-space: pre;
+}
+
+.code-panel .code-note {
+	color: rgba(232, 225, 214, 0.6);
+}
+
+.code-panel .code-key {
+	color: #f0a06a;
+}
+
+/* 能力清单：三组带软分隔的短列表，不做长表格。 */
+.caps {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 40px;
+	margin-top: 40px;
+}
+
+.cap-group {
+	padding-top: 20px;
+	border-top: 1px solid var(--line);
+}
+
+.cap-group h3 {
+	margin-bottom: 14px;
+	color: var(--ink);
+	font-family: var(--font-mono);
+	font-size: 12px;
+	font-weight: 400;
+	letter-spacing: 0.06em;
+}
+
+.cap-group li {
+	padding-block: 5px;
+	color: var(--ink-soft);
+	font-size: 13.5px;
+}
+
+/* 收尾：品牌色浅底面板，不整节反色（同页不翻主题）。 */
+.closing-panel {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 14px;
+	padding: 56px 32px;
+	border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+	border-radius: 16px;
+	background: var(--accent-soft);
+	text-align: center;
+}
+
+.closing-panel h2 {
+	font-size: clamp(26px, 3vw, 40px);
+	font-weight: 700;
+	letter-spacing: -0.022em;
+	text-wrap: balance;
+}
+
+.closing-panel p {
+	color: var(--ink-soft);
+}
+
+.closing-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 12px;
+	margin-top: 12px;
+}
+
+.site-footer {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 18px;
+	padding-block: 36px 44px;
+	border-top: 1px solid var(--line);
+	color: var(--ink-soft);
+	font-size: 12.5px;
+}
+
+.footer-brand {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	color: var(--ink);
+	font-size: 15px;
+	font-weight: 700;
+}
+
+.footer-tagline {
+	color: var(--ink-soft);
+	font-size: 12px;
+	font-weight: 400;
+}
+
+.footer-links {
+	display: flex;
+	gap: 22px;
+}
+
+.footer-links a {
+	color: var(--ink-soft);
+	text-decoration: none;
+	transition: color 160ms var(--ease);
+}
+
+.footer-links a:hover {
+	color: var(--accent);
+}
+
+/* 滚动进场：只在 JS 可用时先隐藏，脚本失效则内容照常可见。 */
+.js [data-reveal] {
+	opacity: 0;
+	transform: translateY(14px);
+}
+
+.js [data-reveal].is-visible {
+	opacity: 1;
+	transform: none;
+	/* --d 让同一块里的多个元素依次亮起，而不是一次全跳出来。 */
+	transition:
+		opacity 560ms var(--ease) calc(var(--d, 0) * 70ms),
+		transform 560ms var(--ease) calc(var(--d, 0) * 70ms);
+}
+
+@keyframes landing-rise {
+	from {
+		opacity: 0;
+		transform: translateY(14px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@keyframes landing-shot-in {
+	from {
+		opacity: 0;
+		transform: translateY(18px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@media (max-width: 1080px) {
+	.wrap {
+		width: min(1200px, 100% - 56px);
+	}
+
+	.hero {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 40px;
+		padding-block: 56px 72px;
+	}
+
+	.hero h1,
+	.hero-lede {
+		max-width: 30ch;
+	}
+
+	.bento {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.cell-shot {
+		grid-column: span 2;
+		grid-row: auto;
+	}
+
+	.cell-swim,
+	.cell-live {
+		grid-column: span 1;
+	}
+
+	.deploy-grid {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 32px;
+	}
+
+	.caps {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 720px) {
+	.wrap {
+		width: min(1200px, 100% - 40px);
+	}
+
+	.section {
+		padding-block: 64px;
+	}
+
+	.site-header {
+		height: 60px;
+		padding-inline: 20px;
+	}
+
+	.nav-toggle {
+		display: inline-flex;
+	}
+
+	.site-nav {
+		position: absolute;
+		inset-inline: 20px;
+		top: 60px;
+		z-index: 12;
+		display: none;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0;
+		margin: 0;
+		padding: 8px;
+		border: 1px solid var(--line);
+		border-radius: 16px;
+		background: var(--surface);
+		box-shadow: var(--shadow);
+	}
+
+	.site-nav.is-open {
+		display: flex;
+	}
+
+	.site-nav a {
+		padding: 13px 10px;
+		border-bottom: 1px solid var(--line);
+	}
+
+	.site-nav a:last-child {
+		border-bottom: 0;
+	}
+
+	.nav-cta {
+		border: 0;
+		background: var(--accent-soft);
+		color: var(--accent);
+	}
+
+
+	.hero-actions .btn {
+		flex: 1 1 auto;
+	}
+
+
+	.bento {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.cell-shot,
+	.cell-swim,
+	.cell-live {
+		grid-column: span 1;
+	}
+
+	.caps {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 28px;
+	}
+
+	.closing-panel {
+		padding: 40px 20px;
+	}
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+	html {
+		scroll-behavior: auto;
+	}
+
+	.hero-copy,
+	.shot-hero {
+		animation: none;
+	}
+
+	.js [data-reveal],
+	.js [data-reveal].is-visible {
+		opacity: 1;
+		transform: none;
+		transition: none;
+	}
+
+	.btn,
+	.cell,
+	.nav-cta,
+	.site-nav a,
+	.footer-links a {
+		transition: none;
+	}
+
+	.btn:hover,
+	.cell:hover,
+	.nav-cta:hover {
+		transform: none;
+	}
+}
