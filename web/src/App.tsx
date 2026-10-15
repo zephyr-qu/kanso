@@ -20,7 +20,6 @@ const BoardPage = lazy(routeLoaders.board);
 const CalendarPage = lazy(routeLoaders.calendar);
 const DashboardPage = lazy(routeLoaders.dashboard);
 const LoginPage = lazy(routeLoaders.login);
-const WorkspaceSwitcherPrototype = lazy(routeLoaders.workspaceSwitcherPrototype);
 const ProfilePage = lazy(routeLoaders.profile);
 const RedirectHome = lazy(routeLoaders.redirectHome);
 const SettingsPage = lazy(routeLoaders.settings);
@@ -47,7 +46,6 @@ function RequireAuth() {
 
 const router = createBrowserRouter([
 	{ path: "/", element: <Navigate to="/app" replace /> },
-	{ path: "/prototype/workspace-switcher", element: <WorkspaceSwitcherPrototype /> },
 	{ path: "/login", element: <LoginPage /> },
 	{
 		element: <RequireAuth />,
