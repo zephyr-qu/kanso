@@ -7,7 +7,7 @@ import (
 	"io/fs"
 )
 
-//go:embed index.html style.css favicon.svg fonts
+//go:embed index.html style.css favicon.svg fonts media
 var files embed.FS
 
 // FS returns the embedded landing filesystem.

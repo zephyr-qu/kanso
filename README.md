@@ -6,6 +6,8 @@ Kanso 是一个轻量的看板项目管理工具，采用 Go 后端、React 前�
 
 ```text
 cmd/kanso/          Go 应用入口（serve + CLI + mcp）
+cmd/landing/        落地页独立预览服务（无配置、无数据库）
+apps/landing/       独立静态落地页（自带 embed，只被服务端引用）
 internal/           后端业务代码和测试（含 internal/cli）
 tutorial/cli/       kanso 命令行入门教程（一步一篇）
 .cursor/skills/     项目 Agent Skill（含 kanso）
@@ -33,6 +35,16 @@ pnpm --dir web dev
 ```
 
 前端通过 Vite 代理访问 `http://localhost:8080`。未设置 `KANSO_ACCESS_KEY` 时，访问密钥会打印在后端日志中。
+
+落地页（`apps/landing`）与前端完全独立，可脱离后端和前端单独预览：
+
+```bash
+go run ./cmd/landing   # http://127.0.0.1:4173
+```
+
+页面里的产品截图取自真实应用：先 `pnpm --dir web build` 并起后端，再跑 `pnpm --dir web exec node tools/capture-landing-shots.mjs`，产物写入 `apps/landing/media/`。分享图另由 `pnpm --dir web exec node tools/build-og-card.mjs` 生成。
+
+前端里的落地页入口由 `VITE_LANDING_URL` 决定，默认同源根路径 `/`。
 
 ## 本地构建
 

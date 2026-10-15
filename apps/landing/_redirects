@@ -1,0 +1,15 @@
+# 页面挂在 zone 的子路径上（见 wrangler.toml 的 routes），而本目录的文件在自己根目录。
+# 前缀在这里被代理掉，页面因此能继续用相对路径，也能作为本地文件直接打开——不需要再维护
+# 一份镜像的 kanso/ 目录。
+#
+# 两个路径不能代理、只能跳转：
+#
+#   /kanso            代理之后浏览器停在目录为 `/` 的 URL 上，页面里所有相对路径都会解析到前缀之外。
+#   /kanso/index.html 资源层把 /index.html 规范化成 `/`，代理之后那意味着 zone 根，而不是这一页。
+#
+# 静态规则放在通配之前，免得被吞掉。
+/kanso /kanso/ 308
+/kanso/index.html /kanso/ 308
+
+# 其余全部去前缀：/kanso/style.css -> /style.css、/kanso/media/app-board.png -> /media/app-board.png
+/kanso/* /:splat 200

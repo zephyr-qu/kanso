@@ -89,5 +89,12 @@ func serveLanding(w http.ResponseWriter, r *http.Request, landing fs.FS, files h
 }
 
 func isLandingAsset(name string) bool {
-	return name == "style.css" || name == "favicon.svg" || strings.HasPrefix(name, "fonts/")
+	// 落地页资源放在自己的命名空间里：SPA 的构建产物也在 /assets/*，
+	// 落地页若占这个前缀，会把应用的 JS/CSS 全部变成 404（见 static_test 的抢占回归测试）。
+	for _, prefix := range []string{"media/", "fonts/"} {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+	return name == "style.css" || name == "favicon.svg"
 }

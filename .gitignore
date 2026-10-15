@@ -38,6 +38,8 @@ CONTEXT.md
 *.exe
 /nul
 temp/
+# Cloudflare Workers 的本地构建状态（apps/landing 用它部署落地页）
+.wrangler/
 .gocache/
 .gocache-*/
 .e2e-review-data*/
