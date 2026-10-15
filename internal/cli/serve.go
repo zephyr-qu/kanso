@@ -17,8 +17,7 @@ import (
 
 // ServeAssets 是 serve 命令需要的嵌入式静态资源。
 type ServeAssets struct {
-	SPA     fs.FS
-	Landing fs.FS
+	SPA fs.FS
 }
 
 func newServeCmd(version string, assets ServeAssets) *cobra.Command {
@@ -28,7 +27,7 @@ func newServeCmd(version string, assets ServeAssets) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			logx.ConfigureFromEnv()
 			cfg := config.Load()
-			application, err := app.New(context.Background(), cfg, version, assets.SPA, assets.Landing)
+			application, err := app.New(context.Background(), cfg, version, assets.SPA)
 			if err != nil {
 				return err
 			}

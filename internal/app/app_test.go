@@ -21,7 +21,7 @@ func testConfig(t *testing.T) config.Config {
 }
 
 func TestNewBuildsReadyHandlerAndSeedsAdmin(t *testing.T) {
-	application, err := New(context.Background(), testConfig(t), "test-version", nil, nil)
+	application, err := New(context.Background(), testConfig(t), "test-version", nil)
 	if err != nil {
 		t.Fatalf("New 失败: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestNewBuildsReadyHandlerAndSeedsAdmin(t *testing.T) {
 }
 
 func TestRunStopsWhenContextIsCancelled(t *testing.T) {
-	application, err := New(context.Background(), testConfig(t), "test-version", nil, nil)
+	application, err := New(context.Background(), testConfig(t), "test-version", nil)
 	if err != nil {
 		t.Fatalf("New 失败: %v", err)
 	}

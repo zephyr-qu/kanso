@@ -1,9 +1,8 @@
 // 路由（react-router v7，library 模式）：/login 公开，其余路由经 RequireAuth 守卫。
 // 守卫依据 zustand 登录态；401 事件（api.ts 广播）使登录态失效并重定向回登录页。
-// "/" 由完全独立的静态站点承担（apps/landing：单独构建、单独预览、单独部署，web 不再读取
-// 它的任何文件）；SPA 内再导航到 "/" 时做整页跳转，避免 React Router 接管营销页。
-// 落地页入口由 VITE_LANDING_URL 指定，默认同源根路径 "/"。
-import { lazy, Suspense, useEffect, useLayoutEffect } from "react";
+// 根路径就是应用本身：未登录时 "/" 直接送到 /login。落地页是另一个独立站点
+// （apps/landing，单独预览与单独部署），前端不再有任何指向它的跳转。
+import { lazy, Suspense, useEffect } from "react";
 import {
 	createBrowserRouter,
 	Navigate,
@@ -29,24 +28,6 @@ const TeamPage = lazy(routeLoaders.team);
 const TaskDetailPage = lazy(routeLoaders.taskDetail);
 const WorkspacePage = lazy(routeLoaders.workspace);
 
-// 落地页入口：独立站点，默认与 SPA 同源根路径；跨端口/跨域部署时用 VITE_LANDING_URL 指定。
-const LANDING_URL: string = import.meta.env.VITE_LANDING_URL ?? "/";
-// 开发时 Vite dev server 把 "/" 直接交给 SPA 承载，此刻再整页跳转 "/" 只会无限刷新：
-// 入口仍是同源根路径时只提示、不跳转。生产 "/" 由独立站点承担，照常整页跳转。
-const CAN_REDIRECT = !import.meta.env.DEV || LANDING_URL !== "/";
-
-function ExitToLanding() {
-	useLayoutEffect(() => {
-		if (CAN_REDIRECT) window.location.replace(LANDING_URL);
-	}, []);
-	return (
-		<div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-			{CAN_REDIRECT
-				? "正在返回落地页…"
-				: "落地页是独立站点（apps/landing）：go run ./cmd/landing 可单独预览"}
-		</div>
-	);
-}
 
 function RequireAuth() {
 	const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -65,7 +46,7 @@ function RequireAuth() {
 }
 
 const router = createBrowserRouter([
-	{ path: "/", element: <ExitToLanding /> },
+	{ path: "/", element: <Navigate to="/app" replace /> },
 	{ path: "/prototype/workspace-switcher", element: <WorkspaceSwitcherPrototype /> },
 	{ path: "/login", element: <LoginPage /> },
 	{

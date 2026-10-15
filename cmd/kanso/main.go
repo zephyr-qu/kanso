@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"kanso/apps/landing"
 	"kanso/internal/cli"
 	"kanso/web"
 )
@@ -13,10 +12,7 @@ import (
 var version = "dev"
 
 func main() {
-	if err := cli.Execute(version, cli.ServeAssets{
-		SPA:     web.DistFS(),
-		Landing: landing.FS(),
-	}); err != nil {
+	if err := cli.Execute(version, cli.ServeAssets{SPA: web.DistFS()}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

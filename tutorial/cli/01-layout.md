@@ -21,10 +21,7 @@
 `main` 注入嵌入资源并交给 `cli.Execute`：
 
 ```go
-if err := cli.Execute(version, cli.ServeAssets{
-    SPA:     web.DistFS(),
-    Landing: landing.FS(),
-}); err != nil {
+if err := cli.Execute(version, cli.ServeAssets{SPA: web.DistFS()}); err != nil {
     fmt.Fprintln(os.Stderr, err)
     os.Exit(1)
 }

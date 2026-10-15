@@ -9,8 +9,8 @@
 
 落地页与项目前端解耦：
 
-- 落地页迁至 `apps/landing`（自带 `embed`，只被服务端引用）；新增独立预览服务 `cmd/landing`（`go run ./cmd/landing`，默认 `127.0.0.1:4173`，不读配置、不连数据库）。
-- `web/` 不再读取落地页任何文件（移除 Vite `kansoLanding` 中间件）；前端落地页入口改为 `VITE_LANDING_URL`（默认同源 `/`），开发环境入口仍为 `/` 时只提示不跳转，避免 SPA 自我跳转死循环。
+- 落地页迁至 `apps/landing`（自带 `embed`，由 `cmd/landing` 与 Cloudflare 部署各自使用）；新增独立预览服务 `cmd/landing`（`go run ./cmd/landing`，默认 `127.0.0.1:4173`，不读配置、不连数据库）。
+- `web/` 不再读取落地页任何文件（移除 Vite `kansoLanding` 中间件）。
 
 落地页改版（`apps/landing`）：
 
@@ -21,6 +21,7 @@
 - 落地页图片放在 `media/`，`static.go` 白名单只放行 `media/` 与 `fonts/`：SPA 的构建产物同样在 `/assets/*`，落地页占了这个前缀会把应用的 JS/CSS 全部 404（本次回归已修复，并补了「不得抢占 SPA assets」的测试）。
 - 补 `og:*` 与 `twitter:*` 分享卡，分享图 1200×630 由 `web/tools/build-og-card.mjs` 生成；`og:image` 目前是相对路径，发布到独立站点后需换成站点域名下的完整地址（爬虫不解析相对地址；部署到 Cloudflare 后已改为绝对地址，见下一条）。
 - 落地页按 wisp 的形态部署为 Cloudflare Workers 静态资源，公开地址 `https://www.zephyrqu.top/kanso/`：新增 `apps/landing/{wrangler.toml,_redirects,_headers,.assetsignore,NOTES.md}`，`_redirects` 把 `/kanso` 前缀代理掉，页面路径因此能保持相对（同一份文件双击本地打开也成立）；`og:image` / `twitter:image` / `og:url` 换成该绝对地址。
+- 应用不再提供落地页：Go 把 `/` 交还给应用（未登录由前端路由送到 `/login`），移除落地页的 embed 与路由分支、`ServeAssets` 的 `Landing` 资源参数；SPA 的 `ExitToLanding` 与 `VITE_LANDING_URL` 一并删除。落地页只由独立站点承载（Cloudflare + `cmd/landing` 本地预览）。
 ## 0.5.0 - 2026-09-29
 
 项目归档：

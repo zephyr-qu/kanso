@@ -36,12 +36,12 @@ type API struct {
 }
 
 func NewRouter(cfg config.Config, svc *service.Service, hub *realtime.Hub) http.Handler {
-	return NewRouterWithAssets(cfg, svc, hub, nil, nil)
+	return NewRouterWithAssets(cfg, svc, hub, nil)
 }
 
-// NewRouterWithAssets builds the application router and optionally serves the
-// embedded landing page and SPA for non-API paths.
-func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.Hub, spa fs.FS, landing fs.FS) http.Handler {
+// NewRouterWithAssets builds the application router and serves the embedded SPA
+// for non-API paths. 落地页不在其中：它是独立站点（apps/landing），与应用各自部署。
+func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.Hub, spa fs.FS) http.Handler {
 	a := &API{
 		cfg:        cfg,
 		configFile: config.ConfigFilePath(),
@@ -143,7 +143,7 @@ func NewRouterWithAssets(cfg config.Config, svc *service.Service, hub *realtime.
 		pr.Patch("/api/comments/{id}", a.updateComment)
 		pr.Delete("/api/comments/{id}", a.deleteComment)
 	})
-	r.NotFound(staticHandler(spa, landing).ServeHTTP)
+	r.NotFound(staticHandler(spa).ServeHTTP)
 
 	return r
 }
