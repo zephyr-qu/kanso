@@ -1,0 +1,23 @@
+#!/bin/sh
+# 剥掉 AI agent（Cursor）自动附加的 Co-authored-by trailer。
+#
+# GitHub 的 Contributors 列表会把 Co-authored-by 的邮箱解析成账号并计入贡献，
+# 所以这行会让 Cursor 出现在仓库贡献者里，而它无法在 GitHub 端删除。
+#
+# 生效方式：core.hooksPath 指向 .githooks（该设置会完全取代 .git/hooks，
+# 当前 .git/hooks 里没有其它 hook）。
+# 需要临时绕过时：git commit --no-verify
+
+if [ -z "$1" ] || [ ! -f "$1" ]; then
+  exit 0
+fi
+
+before=$(cat "$1")
+sed -i '/^[Cc]o-[Aa]uthored-[Bb]y:[[:space:]]*Cursor/d' "$1"
+after=$(cat "$1")
+
+if [ "$before" != "$after" ]; then
+  printf 'commit-msg hook: 已移除 Co-authored-by: Cursor trailer\n' >&2
+fi
+
+exit 0

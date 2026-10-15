@@ -22,6 +22,7 @@
 - 补 `og:*` 与 `twitter:*` 分享卡，分享图 1200×630 由 `web/tools/build-og-card.mjs` 生成；`og:image` 目前是相对路径，发布到独立站点后需换成站点域名下的完整地址（爬虫不解析相对地址；部署到 Cloudflare 后已改为绝对地址，见下一条）。
 - 落地页按 wisp 的形态部署为 Cloudflare Workers 静态资源，公开地址 `https://www.zephyrqu.top/kanso/`：新增 `apps/landing/{wrangler.toml,_redirects,_headers,.assetsignore,NOTES.md}`，`_redirects` 把 `/kanso` 前缀代理掉，页面路径因此能保持相对（同一份文件双击本地打开也成立）；`og:image` / `twitter:image` / `og:url` 换成该绝对地址。
 - 应用不再提供落地页：Go 把 `/` 交还给应用（未登录由前端路由送到 `/login`），移除落地页的 embed 与路由分支、`ServeAssets` 的 `Landing` 资源参数；SPA 的 `ExitToLanding` 与 `VITE_LANDING_URL` 一并删除。落地页只由独立站点承载（Cloudflare + `cmd/landing` 本地预览）。
+- `.dockerignore` 补上 `kanso-config.json`（本地运行配置，可能含访问密钥）、`.dev-data`、`*.log`，并把 `.gocache` 收成 `.gocache*`：此前 `.gocache-e2e` 与 `.gocache-task` 两个 Go 缓存（约 430MB）会随每次 `docker build` 进入构建上下文与层缓存。
 ## 0.5.0 - 2026-09-29
 
 项目归档：
