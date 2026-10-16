@@ -1,6 +1,6 @@
 # Changelog
 
-## 未发布
+## 0.5.1 - 2026-10-16
 
 认证限流口径修正（修正 0.5.0 中「WebSocket 握手与 Bearer 失败按同一 IP 令牌桶限流」的口径）：
 
@@ -29,6 +29,10 @@ MCP 依赖升到 `go-sdk` v1.8.0（无新协议版本，主体是传输层加固
 - `tools/list` 带缓存提示：`ttlMs` 1 小时、`cacheScope: public`（工具清单只在发版时变化）；其余可缓存结果保持默认的立即过期。
 - 不再声明已弃用的 `logging` 能力（SEP-2577）；`tools` 能力仍由 SDK 按已注册工具自动推断。
 - 回归测试：`TestMCPCapabilitiesAndToolListCache`。
+
+**升级注意**：
+
+- 应用不再提供落地页：`/` 由应用接管（未登录会被送到 `/login`），落地页改为独立站点承载 `https://www.zephyrqu.top/kanso/`。此前把落地页挂在应用根路径的部署需改为指向该独立站点。
 
 ## 0.5.0 - 2026-09-29
 
