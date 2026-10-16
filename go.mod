@@ -6,7 +6,7 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/coder/websocket v1.8.15
 	github.com/go-chi/chi/v5 v5.2.3
-	github.com/modelcontextprotocol/go-sdk v1.7.0
+	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/time v0.15.0
 	modernc.org/sqlite v1.56.0

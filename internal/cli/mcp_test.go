@@ -188,3 +188,38 @@ func TestMCPBoardCreateLabelMilestone(t *testing.T) {
 		t.Fatalf("详情应含标签与里程碑: %s", out)
 	}
 }
+
+// 覆盖 go-sdk v1.8.0 的两个 ServerOptions：显式能力（去掉已弃用的 logging，
+// 但不得影响 tools 的自动推断）与 tools/list 的缓存提示。
+func TestMCPCapabilitiesAndToolListCache(t *testing.T) {
+	session := connectMCP(t, &cli.Options{
+		ConfigPath: filepath.Join(t.TempDir(), "cli.json"),
+		Version:    "test",
+	})
+
+	init := session.InitializeResult()
+	if init == nil || init.Capabilities == nil {
+		t.Fatal("缺少 initialize 结果")
+	}
+	// 断言的就是这个已弃用字段「没有」被声明，deprecation 提示在此处是预期的。
+	if init.Capabilities.Logging != nil {
+		t.Error("不应声明已弃用的 logging 能力（SEP-2577）")
+	}
+	if init.Capabilities.Tools == nil {
+		t.Error("tools 能力应仍由 SDK 按已注册工具自动推断")
+	}
+
+	res, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("list tools: %v", err)
+	}
+	if res.TTLMs != 3_600_000 {
+		t.Errorf("tools/list 应带 1 小时缓存提示，实际 ttlMs=%d", res.TTLMs)
+	}
+	if res.CacheScope != "public" {
+		t.Errorf("cacheScope 应为 public，实际 %q", res.CacheScope)
+	}
+	if len(res.Tools) != 18 {
+		t.Errorf("工具数量应为 18，实际 %d", len(res.Tools))
+	}
+}

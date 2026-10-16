@@ -25,7 +25,12 @@ func newMCPServer(opts *Options) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "kanso",
 		Version: opts.Version,
-	}, nil)
+	}, &mcp.ServerOptions{
+		// 显式给出能力：SDK 的历史默认会额外声明已弃用的 logging（SEP-2577），
+		// kanso 从不发送日志通知。空结构不覆盖 tools 的自动推断。
+		Capabilities: &mcp.ServerCapabilities{},
+		SetCacheable: setCacheable,
+	})
 	h := &mcpHandlers{opts: opts}
 	h.register(server)
 	return server
@@ -34,6 +39,20 @@ func newMCPServer(opts *Options) *mcp.Server {
 // NewMCPServerForTest 导出给包外测试（in-memory transport）。
 func NewMCPServerForTest(opts *Options) *mcp.Server {
 	return newMCPServer(opts)
+}
+
+// toolListCacheTTLMs 是 tools/list 的缓存有效期（毫秒）。工具清单只在发版时变化，
+// 给客户端一个缓存窗口可以少拉几次；服务端升级二进制后最多陈旧一小时。
+const toolListCacheTTLMs = 60 * 60 * 1000
+
+// setCacheable 只给 tools/list 打缓存提示：其余可缓存结果（server/discover、
+// 资源列表与读取）我们没有注册，保持 SDK 默认的立即过期。
+func setCacheable(_ context.Context, req mcp.Request, c *mcp.Cacheable) {
+	if _, ok := req.(*mcp.ListToolsRequest); !ok {
+		return
+	}
+	c.TTLMs = toolListCacheTTLMs
+	c.CacheScope = "public"
 }
 
 type mcpHandlers struct {

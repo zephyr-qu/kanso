@@ -23,6 +23,13 @@
 - 落地页按 wisp 的形态部署为 Cloudflare Workers 静态资源，公开地址 `https://www.zephyrqu.top/kanso/`：新增 `apps/landing/{wrangler.toml,_redirects,_headers,.assetsignore,NOTES.md}`，`_redirects` 把 `/kanso` 前缀代理掉，页面路径因此能保持相对（同一份文件双击本地打开也成立）；`og:image` / `twitter:image` / `og:url` 换成该绝对地址。
 - 应用不再提供落地页：Go 把 `/` 交还给应用（未登录由前端路由送到 `/login`），移除落地页的 embed 与路由分支、`ServeAssets` 的 `Landing` 资源参数；SPA 的 `ExitToLanding` 与 `VITE_LANDING_URL` 一并删除。落地页只由独立站点承载（Cloudflare + `cmd/landing` 本地预览）。
 - `.dockerignore` 补上 `kanso-config.json`（本地运行配置，可能含访问密钥）、`.dev-data`、`*.log`，并把 `.gocache` 收成 `.gocache*`：此前 `.gocache-e2e` 与 `.gocache-task` 两个 Go 缓存（约 430MB）会随每次 `docker build` 进入构建上下文与层缓存。
+
+MCP 依赖升到 `go-sdk` v1.8.0（无新协议版本，主体是传输层加固），并用上其新增的服务端选项：
+
+- `tools/list` 带缓存提示：`ttlMs` 1 小时、`cacheScope: public`（工具清单只在发版时变化）；其余可缓存结果保持默认的立即过期。
+- 不再声明已弃用的 `logging` 能力（SEP-2577）；`tools` 能力仍由 SDK 按已注册工具自动推断。
+- 回归测试：`TestMCPCapabilitiesAndToolListCache`。
+
 ## 0.5.0 - 2026-09-29
 
 项目归档：
