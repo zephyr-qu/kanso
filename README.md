@@ -46,12 +46,6 @@ go run ./cmd/landing   # http://127.0.0.1:4173
 
 页面里的产品截图取自真实应用：先 `pnpm --dir web build` 并起后端，再跑 `pnpm --dir web exec node tools/capture-landing-shots.mjs`，产物写入 `apps/landing/media/`。分享图另由 `pnpm --dir web exec node tools/build-og-card.mjs` 生成。
 
-仓库带一个 `commit-msg` 钩子（`.githooks/commit-msg`），作用是剥掉 AI 工具自动附加的 `Co-authored-by` trailer——GitHub 会把它解析成账号计入贡献者列表，而那里删不掉。钩子不会自动生效，克隆后执行一次：
-
-```sh
-git config core.hooksPath .githooks
-```
-
 ## 本地构建
 
 ```sh
