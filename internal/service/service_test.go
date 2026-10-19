@@ -106,6 +106,15 @@ func TestSeedDefaultWorkspace(t *testing.T) {
 	if ws[0].Name != "默认工作区" {
 		t.Fatalf("默认工作区名不符: %q", ws[0].Name)
 	}
+	// 首启也要带一个默认项目：否则全新安装（含桌面版首启向导）打开后看板是空的。
+	projects, err := env.svc.ListProjects(ctx, ws[0].ID)
+	requireNoErr(t, err)
+	if len(projects) != 1 || projects[0].Name != defaultProjectName {
+		t.Fatalf("默认工作区应带 1 个默认项目，实际 %+v", projects)
+	}
+	if projects[0].ColumnCount != 4 {
+		t.Fatalf("默认项目应带 4 个看板默认列，实际 %d", projects[0].ColumnCount)
+	}
 }
 
 func TestWorkspaceLifecycle(t *testing.T) {
@@ -187,9 +196,8 @@ func TestProjectLifecycle(t *testing.T) {
 		t.Fatalf("重命名不存在项目应 ErrNotFound，实际 %v", err)
 	}
 
-	// 列表统计。
-	summaries, err := env.svc.ListProjects(ctx, wsID)
-	requireNoErr(t, err)
+	// 列表统计（工作区里还有首启种子的「默认项目」，过滤掉只看这个）。
+	summaries := projectsWithoutDefault(t, env, wsID)
 	if len(summaries) != 1 {
 		t.Fatalf("应有 1 个项目，实际 %d", len(summaries))
 	}
@@ -270,8 +278,7 @@ func TestListProjectsInProgressUsesTaskColumn(t *testing.T) {
 	// 已完成任务位于末列；项目虽然有中间列，但它不应被统计为进行中。
 	_, _, err = env.svc.CreateTask(ctx, board.Columns[len(board.Columns)-1].ID, "已完成任务", "", "", nil, nil)
 	requireNoErr(t, err)
-	summaries, err := env.svc.ListProjects(ctx, wsID)
-	requireNoErr(t, err)
+	summaries := projectsWithoutDefault(t, env, wsID)
 	if len(summaries) != 1 || summaries[0].InProgressCount != 0 {
 		t.Fatalf("已完成任务不应计入进行中: %+v", summaries)
 	}
@@ -279,8 +286,7 @@ func TestListProjectsInProgressUsesTaskColumn(t *testing.T) {
 	// 放入中间列后，只有这一个任务应计入进行中。
 	_, _, err = env.svc.CreateTask(ctx, board.Columns[1].ID, "进行中任务", "", "", nil, nil)
 	requireNoErr(t, err)
-	summaries, err = env.svc.ListProjects(ctx, wsID)
-	requireNoErr(t, err)
+	summaries = projectsWithoutDefault(t, env, wsID)
 	if len(summaries) != 1 || summaries[0].InProgressCount != 1 {
 		t.Fatalf("中间列任务应计入进行中一次: %+v", summaries)
 	}
@@ -359,4 +365,20 @@ func defaultWorkspaceID(t *testing.T, env *testService) string {
 		t.Fatalf("应有 1 个工作区，实际 %d", len(ws))
 	}
 	return ws[0].ID
+}
+
+// projectsWithoutDefault 列出工作区里的项目并去掉首启种子种下的「默认项目」
+// （见 SeedDefaultWorkspace），只留测试自己造的数据，免得每处断言都去算这个 +1。
+func projectsWithoutDefault(t *testing.T, env *testService, workspaceID string) []ProjectSummary {
+	t.Helper()
+	summaries, err := env.svc.ListProjects(context.Background(), workspaceID)
+	requireNoErr(t, err)
+	out := make([]ProjectSummary, 0, len(summaries))
+	for _, s := range summaries {
+		if s.Name == defaultProjectName {
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
 }

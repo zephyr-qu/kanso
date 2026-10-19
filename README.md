@@ -96,7 +96,7 @@ go run github.com/egoist/mygo/cmd/mygo@v0.5.5 build
 
 - **安装**：`Kanso Setup <版本> amd64.exe` 装到 `%LOCALAPPDATA%\Programs\Kanso`，不需要管理员；卸载用系统设置的「应用」或安装目录里的 `Uninstall.exe`。
 - **数据**：`%LOCALAPPDATA%\kanso`（可用 `KANSO_DATA_DIR` 覆盖）。卸载**不删**数据目录。
-- **首次启动**：先弹「Kanso 首次设置」——选「个人使用 / 团队协作」，确认或改写访问密钥（默认随机生成一把，可点「重新生成」）。向导是 HTML 页面，样式表复用主界面那一份，所以外观与 app 一致。选择记在 `%LOCALAPPDATA%\kanso\desktop.json`，密钥存进 Windows 凭据管理器（服务 `kanso`、键 `access-key`，没有凭据管理器时落数据目录的 `access-key` 文件）。想重新设置就删掉 `desktop.json`；`KANSO_MODE` 环境变量仍然优先。
+- **首次启动**：先弹「Kanso 首次设置」——选「个人使用 / 团队协作」，确认或改写访问密钥（默认随机生成一把，可点「重新生成」）。向导是 HTML 页面，样式表复用主界面那一份，所以外观与 app 一致。选择记在 `%LOCALAPPDATA%\kanso\desktop.json`，密钥存进 Windows 凭据管理器（服务 `kanso`、键 `access-key`，没有凭据管理器时落数据目录的 `access-key` 文件）。想重新设置就删掉 `desktop.json`；`KANSO_MODE` 环境变量仍然优先。首次启动会建库并自动创建「默认工作区」与「默认项目」（4 个看板列），不是空白页。
 - **登录**：设置完成后再启动即打开即用，没有登录页。
 - **更新**：安装包尚未签名，所以是「设置 → 关于 → 检查更新」打开 GitHub Releases，手动下载新安装包覆盖安装；覆盖安装不影响数据目录。
 - **WebView2**：Windows 11 自带；Windows 10 需装一次 Microsoft Edge WebView2 运行时，缺了会弹出说明窗口而不是空白窗。
