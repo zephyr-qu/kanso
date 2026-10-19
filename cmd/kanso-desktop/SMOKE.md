@@ -65,25 +65,43 @@ Stop-Process -Id $p.Id
 第一次启动先弹「Kanso 首次设置」：选「个人使用 / 团队协作」、确认或改写访问密钥（默认预填一把新生成的
 64 位十六进制）。**点「开始使用」之前不监听端口、不建数据库**，数据目录保持空；点完才起服务并进 dashboard。
 
-这条路径用 UI 自动化就能跑（WebView2 的可访问性树里能看到两个单选、密钥输入框与两个按钮），
-下面是实测用过的写法：
+界面是 HTML 页面而不是 MyGo 的自绘控件（`cmd/kanso-desktop/wizard.go`）：页面由只在向导期间监听的回环服务
+提供，样式表直接引用 `web/dist` 里 **app 自己编译出来的那一份**，所以配色、字体、圆角与主界面完全一致，
+深浅色跟随系统。窗口约 620×660 DIP。别按「系统原生控件」的观感验收——它就是一张产品页面。
+
+两条自动化路径都实测过：
 
 ```powershell
 # 前置：KANSO_DATA_DIR 指向空目录、KANSO_CONFIG_FILE 指向不存在的文件（否则配置文件里的密钥会算作已配置）
-Start-Sleep -Seconds 9
+Start-Sleep -Seconds 7
+$url = ([regex]::Match((Get-Content $log -Raw), 'url=(http://[0-9.:]+/)')).Groups[1].Value  # 日志里的向导地址
+
+# (a) HTTP 直投：页面里带一次性令牌，抽出来提交即可（脚本化最省事）
+$html  = (Invoke-WebRequest -Uri $url -UseBasicParsing).Content
+$token = [regex]::Match($html, 'data-token="([0-9a-f]{64})"').Groups[1].Value
+$key   = [regex]::Match($html, 'id="access-key"[^>]*value="([0-9a-f]{64})"').Groups[1].Value
+Invoke-WebRequest -Uri ($url + "__submit") -Method POST -ContentType 'application/json' `
+  -Headers @{ 'X-Kanso-Setup' = $token } -Body (@{ mode = 'team'; key = $key } | ConvertTo-Json)
+
+# (b) 或者用 UI 自动化点真控件（WebView2 的可访问性树里能看到两个单选、密钥输入框与两个按钮）
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 $cond = New-Object System.Windows.Automation.PropertyCondition(
   [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $p.Id)
-$win = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst(
+$win  = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst(
   [System.Windows.Automation.TreeScope]::Children, $cond)          # Current.Name = "Kanso 首次设置"
-$all = $win.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+$all  = $win.FindAll([System.Windows.Automation.TreeScope]::Descendants,
   [System.Windows.Automation.Condition]::TrueCondition)
-
 $team.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
 $start.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
-# 断言：desktop.json = {"mode":"team","setupDone":true}；/api/health 报 mode=team；
-#       窗口标题变成 "Kanso"；用向导里那把密钥请求 /api/me 返回 200；日志无 401
+
+# 断言（两种方式一样）：desktop.json = {"mode":"team","setupDone":true}；/api/health 报 mode=team；
+#   窗口标题变成 "Kanso"；用向导里那把密钥请求 /api/me 返回 200；日志无 401
 ```
+
+样式是否真接上了 app：截窗口图按像素抽查——页面底色 `#f7f5f0`、卡片 `#fdfcf9`、主按钮焦橙 `#c2410c`
+（截图经显示色彩配置后略有偏移，实测是 `rgb(185,66,12)`）、选中的方式卡片是橙色 9% 叠色
+`rgb(242,228,219)`。这些都没有，说明 `web/dist` 里没有构建产物（启动日志 `appStyles=false`），
+先 `pnpm --dir web build`。
 
 要重新看到向导：删掉数据目录里的 `desktop.json`（并在向导里给一把服务端会接受的密钥，见下条）。
 `KANSO_DESKTOP_FORCE_SETUP=1` 可以在已配置的机器上强制弹出（调试用）。
@@ -93,7 +111,7 @@ $start.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Inv
 
 ## 3. 手动清单（只能在真窗口里点）
 
-1. 首启向导观感：文字不溢出、分段控件可点、密钥输入框可编辑、「重新生成」换成另一把 64 位十六进制。
+1. 首启向导观感：**与主界面同一套外观**（纸色背景、焦橙主按钮、圆角卡片、思源/Plex Mono 字体），文字不溢出、两种使用方式可点、密钥输入框可编辑、「重新生成」换成另一把 64 位十六进制；系统切深色后重开，向导应跟着变暗。
 2. 免登录（已配置机器）：`desktop.json` 与密钥都在时启动应直接进 dashboard，不出现登录页。
 3. 重启保留：关掉再开，工作区/数据/登录态都在，不再弹向导。
 4. 实时同步：同一实例开两个窗口（或用 `kanso serve` 的浏览器页面），A 改任务，B 立刻变。
