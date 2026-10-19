@@ -51,8 +51,12 @@ Stop-Process -Id $p.Id
 | `foreignObjectPng` | `data:image/png;base64,`（分享卡依赖的渲染可用） |
 | `blobDownload` | `clicked`，且 `<冒烟目录>` 下出现 `kanso-smoke-blob.json` |
 | `savedPath` | `<冒烟目录>/kanso-smoke-ipc.json` 存在（IPC 导出可用） |
+| `pdfPath` | `<冒烟目录>/kanso-*.pdf` 存在且以 `%PDF-` 开头（当前页打印成 PDF） |
 
 日志里不应有 `status=401`。
+
+若 `href` 停在 `/`、`theme.ring` 为空、PDF 只有几百字节：说明桌面壳内嵌的是占位 `web/dist/index.html`
+（在 `pnpm --dir web build` 之前就 `go build` 了）。先构建前端，再打包/构建桌面壳。
 
 ## 2. 手动清单（只能在真窗口里点）
 
@@ -67,6 +71,9 @@ Stop-Process -Id $p.Id
 9. 单实例：重复启动 exe，只聚焦已有窗口，不新开。
 10. 无 WebView2 提示：`$env:KANSO_DESKTOP_FORCE_NO_WEBVIEW = "1"` 后启动，应出现原生提示窗口（**没有** WebView2 进程、不监听 8080、不建数据库）。
 11. 安装/卸载：`Kanso Setup <ver> amd64.exe /S` → 应用能从开始菜单启动 → `Uninstall.exe /S` → 安装目录、卸载项、快捷方式都清除（数据目录与 WebView 配置按设计保留）。
+12. 窗口尺寸记忆：把窗口拖到别处、改个大小，正常关闭再启动，应回到那个位置和尺寸（状态记在 `%APPDATA%\Kanso\window-state.json`，正常关闭或退出时才写）。
+13. 拖入导入：把一个 `kanso-backup-*.json` 从资源管理器拖进窗口，应导入并自动重载页面；拖入非 `.json` 应只记日志、不动数据。
+14. 菜单：窗口菜单栏的「Kanso → 导出当前页为 PDF…」（`Ctrl+Shift+E`）应弹「另存为」并写出可读 PDF；「检查更新…」应在系统浏览器打开 releases 页。
 
 ## 3. 已知未验证
 

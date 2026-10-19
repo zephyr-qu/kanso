@@ -67,6 +67,9 @@ try {
 try {
   out.savedPath = await window.mygo.call('` + exporterService + `.SaveFile', 'kanso-smoke-ipc.json', btoa('{"smoke":true}'));
 } catch (e) { out.savedPath = 'FAIL: ' + String(e); }
+try {
+  out.pdfPath = await window.mygo.call('` + exporterService + `.SavePDF');
+} catch (e) { out.pdfPath = 'FAIL: ' + String(e); }
 return JSON.stringify(out);
 `
 

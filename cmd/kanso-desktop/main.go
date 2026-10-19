@@ -159,8 +159,11 @@ func run() error {
 		// 冒烟模式：最前面装 CSP 违规收集器（必须早于页面脚本）。
 		preload = smokeCollector + preload
 	}
-	// 页面导出文件交给 Go 写（弹系统「另存为」），不依赖各平台 WebView 的下载行为。
-	mygo.BindAs(exporterService, exporter{smokeDir: dir})
+	// 页面导出文件交给 Go 写（弹系统「另存为」），不依赖各平台 WebView 的下载行为；
+	// 同一个 exporter 也给菜单项用（导出当前页 PDF）。
+	save := exporter{smokeDir: dir}
+	mygo.BindAs(exporterService, save)
+	applyMenu(save)
 
 	mygo.App.WhenReady(func() {
 		mainWindow = mygo.NewWindow(mygo.WindowOptions{
@@ -168,6 +171,8 @@ func run() error {
 			URL:    pageURL,
 			Width:  windowWidth,
 			Height: windowHeight,
+			// 记住窗口大小、位置与最大化状态，下次启动还原（M6-8）。
+			StateKey: "main",
 			Page: mygo.PageOptions{
 				// 页面来自回环 HTTP，不是 MyGo 的「自家 origin」（只有 mygo dev 下的
 				// 回环 dev server 默认可信），所以要显式信任，页面才调得到 Go。
@@ -177,6 +182,8 @@ func run() error {
 		})
 		keepOnOwnPages(mainWindow, addr)
 		handleDownloads(mainWindow, dir)
+		// 把 .json 备份拖进窗口即可导入（M6-8）。
+		handleFileDrop(mainWindow, pageURL, cfg.AccessKey)
 		if dir != "" {
 			attachSmoke(mainWindow, dir)
 		}
