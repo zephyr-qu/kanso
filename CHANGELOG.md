@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.6.0 - 2026-10-19
+
+Windows 桌面客户端（新入口，可选）：
+
+- 新增 `cmd/kanso-desktop`：MyGo v0.5.5 壳 + 系统 WebView2，进程内装配现有应用（`internal/app` + 内嵌 SPA），把 HTTP 绑在回环地址、窗口直接加载该地址——前端零改动，`/api` 与 WebSocket 天然同源。`kanso serve`、CLI、MCP、Docker 四条既有入口行为不变，桌面壳可整体撤下。
+- 免登录：访问密钥只生成一次，存进系统凭据管理器（服务 `kanso`、键 `access-key`；没有凭据管理器时落数据目录 `access-key` 文件，0600），启动时先以 `GET /api/me` 确认服务端认这把密钥，再用 preload 注入页面。
+- 数据目录默认 `%LOCALAPPDATA%\kanso`（不进漫游配置；`KANSO_DATA_DIR` / 配置文件仍优先）；端口沿用配置，被占用则回落到空闲端口并打警告。
+- 首启向导（`wizard.go` + `setup.go`）：第一次启动先弹「Kanso 首次设置」——选「个人使用 / 团队协作」、确认或改写访问密钥（预填一把 64 位十六进制，可「重新生成」）。**点「开始使用」之前不监听端口、不建数据库**。选择记在数据目录的 `desktop.json`（0600），`KANSO_MODE` 环境变量仍优先；删掉 `desktop.json` 会再次触发，`KANSO_DESKTOP_FORCE_SETUP=1` 可强制弹出。升级用户已有密钥会被预填，不会被动换掉。
+- 向导界面是 HTML 页面而不是自绘控件，样式表直接引用 `web/dist` 里 app 编译出的那一份（同一套 token / 字体 / 组件皮肤，深浅色跟随系统）——第一版用 MyGo `ui` 自绘控件，观感与产品完全不搭，已推翻重做。
+- 桌面交互补齐：窗口大小/位置/最大化按 DIP 记忆（`%APPDATA%\Kanso\window-state.json`）；单实例（第二次启动把命令行转交给已有窗口）；把 `kanso-backup-*.json` 拖进窗口即导入；菜单「导出当前页为 PDF…」（`Ctrl+Shift+E`）与「检查更新…」；页面里的导出走 Go 侧弹系统「另存为」（浏览器仍回退 blob 下载）；外链交给系统浏览器；系统缺 WebView2 时弹原生说明窗口而不是空白窗。
+- 桌面适配：字号统一改成 rem（82 处 `text-[Npx]`），`html` 跟随 `--mygo-text-scale` 缩放；焦点环改跟随系统强调色（`--ring` / `--sidebar-ring`），品牌主色与选区保持焦橙。
+- 静态层安全基线：`/` 与前端资源加 CSP（`script-src 'self'`）、`nosniff`、`no-referrer`、`X-Frame-Options: DENY`（`/api` 不带 CSP）。
+- 打包：`go run github.com/egoist/mygo/cmd/mygo@v0.5.5 build` 产出 `build/windows-amd64/Kanso.exe` 与 `Kanso Setup 0.6.0 amd64.exe`（NSIS），装到 `%LOCALAPPDATA%\Programs\Kanso`、不需要管理员，卸载走系统「应用」或安装目录的 `Uninstall.exe`；卸载不删数据目录。安装包未签名（首次运行会有 SmartScreen 提示），更新目前是「设置 → 关于 → 检查更新」打开 GitHub Releases 手动覆盖安装。
+- 验收清单（无人值守探针 + 手动项）：`cmd/kanso-desktop/SMOKE.md`。
+
+服务端首启种子：
+
+- `SeedDefaultWorkspace` 现在在同一事务里建「默认工作区」+「默认项目」（含 4 个看板默认列），与「新建工作区」的行为对齐。此前首启只种工作区，全新安装（含桌面版走完向导）打开后侧边栏与看板都是空的。守卫仍是「一个工作区都没有」，所以把项目删光后重启不会被重新塞回来。
+
+工程：
+
+- Go 升到 `go 1.27.1`（`go.mod`、`Dockerfile` 的 `golang:1.27.1-alpine`、README 构建说明）；新增依赖 `github.com/egoist/mygo v0.5.5`。
+- 应用图标由 `pnpm --dir web exec node tools/build-app-icon.mjs` 生成（`resources/icon.png`，1024×1024，见 `mygo.json`）。
+
+**升级注意**：
+
+- 桌面客户端本版只交付 Windows；macOS（WKWebView）与 Linux（WebKitGTK）未打包、未测，推迟到后续版本。
+- 想重置桌面版的首次设置：删掉数据目录里的 `desktop.json`，并把凭据条目一起删掉（`cmdkey /delete:kanso`），否则向导会预填旧密钥。
+- 已有部署（`kanso serve` / Docker）行为不变，唯一差异是**空库首启会多出一个「默认项目」**；已有数据的实例不受影响。
+
 ## 0.5.1 - 2026-10-16
 
 认证限流口径修正（修正 0.5.0 中「WebSocket 握手与 Bearer 失败按同一 IP 令牌桶限流」的口径）：
