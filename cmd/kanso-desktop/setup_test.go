@@ -161,13 +161,27 @@ func TestCompleteSetup(t *testing.T) {
 	}
 }
 
-// TestModeForIndex 校验分段控件的下标与模式的对应关系（顺序变了必须一起改）。
-func TestModeForIndex(t *testing.T) {
-	if got := modeForIndex(0); got != config.ModePersonal {
-		t.Fatalf("下标 0 = %q，期望 personal", got)
-	}
-	if got := modeForIndex(1); got != config.ModeTeam {
-		t.Fatalf("下标 1 = %q，期望 team", got)
+// TestParseSetupMode 校验向导提交的模式串：只认 personal / team，其余一律拒绝。
+func TestParseSetupMode(t *testing.T) {
+	for _, tc := range []struct {
+		value string
+		want  config.Mode
+		ok    bool
+	}{
+		{value: "personal", want: config.ModePersonal, ok: true},
+		{value: "team", want: config.ModeTeam, ok: true},
+		{value: " team ", want: config.ModeTeam, ok: true},
+		{value: "", ok: false},
+		{value: "Personal", ok: false},
+		{value: "teams", ok: false},
+	} {
+		got, ok := parseSetupMode(tc.value)
+		if ok != tc.ok {
+			t.Fatalf("parseSetupMode(%q) ok = %v，期望 %v", tc.value, ok, tc.ok)
+		}
+		if ok && got != tc.want {
+			t.Fatalf("parseSetupMode(%q) = %q，期望 %q", tc.value, got, tc.want)
+		}
 	}
 }
 
