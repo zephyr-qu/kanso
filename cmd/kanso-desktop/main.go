@@ -1,12 +1,12 @@
 // Command kanso-desktop 是 kanso 的桌面客户端入口（0.6.0 / M6）。
 //
-// 形态（路线 A，见 docs/adr/0021-desktop-client-mygo.md）：进程内装配现有 kanso
+// 形态（路线 A，ADR-0021；设计文档在本地 docs/，按仓库约定不入版本管理）：进程内装配现有 kanso
 // 应用（internal/app + web 内嵌 SPA），把 HTTP 服务绑在回环地址，再让 MyGo 的窗口
 // 直接加载该地址。前端零改动：/api 天然同源、WebSocket 握手同源自动放行。
 //
 // 现有入口不受影响：kanso serve / CLI / mcp / Docker 仍是原样。
 //
-// 已实现（docs/specs/0010 的 M6-1、M6-2、M6-3、M6-4）：
+// 已实现（规格 0010 的 M6-1、M6-2、M6-3、M6-4）：
 //   - 数据目录默认到系统用户数据目录（KANSO_DATA_DIR、配置文件仍优先）；
 //   - 访问密钥只生成一次：系统凭据存储（macOS 钥匙串 / Windows 凭据管理器 /
 //     Linux libsecret）优先，没有凭据存储时落数据目录的 access-key 文件（0600）；

@@ -1,7 +1,8 @@
 # 桌面客户端 smoke 清单（Windows）
 
-`cmd/kanso-desktop` 是 kanso 的桌面客户端入口（MyGo 壳，见 [docs/specs/0010](../../docs/specs/0010-m6-desktop-client.md)
-与 [docs/adr/0021](../../docs/adr/0021-desktop-client-mygo.md)）。本文件是它的验收清单：
+`cmd/kanso-desktop` 是 kanso 的桌面客户端入口（MyGo 壳）。设计记录在本地文档 `docs/specs/0010-m6-desktop-client.md`
+（规格）与 `docs/adr/0021-desktop-client-mygo.md`（决策）——`docs/` 按仓库约定不入版本管理，克隆后本地没有。
+本文件是它的验收清单：
 能自动跑的先用自动化探针跑，跑不了的在真窗口里手动过一遍。
 
 ## 0. 准备
