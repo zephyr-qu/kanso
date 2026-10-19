@@ -6,19 +6,21 @@
 //
 // 现有入口不受影响：kanso serve / CLI / mcp / Docker 仍是原样。
 //
-// 已实现（规格 0010 的 M6-1、M6-2、M6-3、M6-4）：
+// 已实现（规格 0010 的 M6-1 ~ M6-9）：
 //   - 数据目录默认到系统用户数据目录（KANSO_DATA_DIR、配置文件仍优先）；
-//   - 访问密钥只生成一次：系统凭据存储（macOS 钥匙串 / Windows 凭据管理器 /
-//     Linux libsecret）优先，没有凭据存储时落数据目录的 access-key 文件（0600）；
-//   - 密钥由 preload 交给页面，桌面版不弹登录页；
-//   - 端口沿用配置，被占用则回落到空闲端口并打警告。
-//   - 导出交给 Go 弹系统「另存为」对话框（exporter.go）；外链交给系统浏览器（links.go）；
-//     静态层带 CSP（internal/httpapi/static.go）。
+//   - 首次启动先弹向导（setup.go）：选个人/团队、确认或改写访问密钥。选择落数据目录下的
+//     desktop.json，密钥进系统凭据存储（macOS 钥匙串 / Windows 凭据管理器 / Linux libsecret），
+//     没有凭据存储时落 access-key 文件（0600）；
+//   - 之后每次启动由 preload 把密钥交给页面，桌面版不弹登录页；
+//   - 端口沿用配置，被占用则回落到空闲端口并打警告；
+//   - 导出交给 Go 弹系统「另存为」对话框（exporter.go），菜单可导出当前页 PDF（menu.go），
+//     拖入 .json 备份即导入（drop.go），外链交给系统浏览器（links.go），
+//     静态层带 CSP（internal/httpapi/static.go）；
+//   - 窗口大小/位置/最大化按 DIP 记住（StateKey），单实例：第二次启动转交给已运行实例（M6-2、M6-8）；
 //   - KANSO_DESKTOP_SMOKE=<目录> 时注入无人值守冒烟探针（smoke.go）。
-//   - 单实例 + 应用身份：第二次启动把命令行转交给已运行实例后退出（M6-2）。
 //
-// 尚未实现：打包与自动更新（M6-6、M6-7）。`mygo.json` 已就位（`main: cmd/kanso-desktop`、
-// 图标 `resources/icon.png`），`mygo build` 的签名/安装器/更新配置留给 M6-6。
+// 打包：`mygo build`（配置见 mygo.json，图标 resources/icon.png），产物在 build/windows-amd64。
+// 尚未实现：自动更新（只有「检查更新」跳 GitHub Releases）与代码签名。
 package main
 
 import (
@@ -37,6 +39,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -118,75 +121,61 @@ func run() error {
 	}
 	cfg.Addr = addr
 
-	if cfg.AccessKey == "" {
-		key, source, err := desktopAccessKey(mygo.Secrets.Service(secretService), cfg.DataDir)
-		if err != nil {
-			return err
-		}
-		cfg.AccessKey = key
-		// 只记来源，不记密钥本身。
-		slog.Info("桌面壳已就绪访问密钥", slog.String("source", source))
-	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	application, err := app.New(ctx, cfg, version, web.DistFS())
+	// 桌面设置（M6-9）：使用方式取自 desktop.json；KANSO_MODE 环境变量仍然优先。
+	settings, hasSettings, err := loadDesktopSettings(cfg.DataDir)
 	if err != nil {
-		return err
+		slog.Warn("读取桌面设置失败，按默认继续", slog.Any("err", err))
 	}
-	defer application.Close()
+	applyDesktopSettings(&cfg, settings, hasSettings)
 
-	// 复用 App.Run：它带自动归档等后台任务，也负责收到信号后的优雅关闭。
-	serveErr := make(chan error, 1)
-	go func() { serveErr <- application.Run(ctx) }()
-
-	pageURL := "http://" + addr + "/"
-	if err := waitForReady(ctx, pageURL+"api/health"); err != nil {
-		return err
-	}
-
-	// 注入前先问服务端：只有它认的密钥才注入，免得过期密钥把用户挡在登录页外。
-	preload, err := pagePreload(ctx, pageURL+"api/me", cfg.AccessKey)
-	if err != nil {
-		return err
-	}
 	dir, err := smokeDir()
 	if err != nil {
 		return err
 	}
-	if dir != "" {
-		// 冒烟模式：最前面装 CSP 违规收集器（必须早于页面脚本）。
-		preload = smokeCollector + preload
-	}
+
 	// 页面导出文件交给 Go 写（弹系统「另存为」），不依赖各平台 WebView 的下载行为；
 	// 同一个 exporter 也给菜单项用（导出当前页 PDF）。
 	save := exporter{smokeDir: dir}
 	mygo.BindAs(exporterService, save)
 	applyMenu(save)
 
-	mygo.App.WhenReady(func() {
-		mainWindow = mygo.NewWindow(mygo.WindowOptions{
-			Title:  "Kanso",
-			URL:    pageURL,
-			Width:  windowWidth,
-			Height: windowHeight,
-			// 记住窗口大小、位置与最大化状态，下次启动还原（M6-8）。
-			StateKey: "main",
-			Page: mygo.PageOptions{
-				// 页面来自回环 HTTP，不是 MyGo 的「自家 origin」（只有 mygo dev 下的
-				// 回环 dev server 默认可信），所以要显式信任，页面才调得到 Go。
-				TrustedOrigins: []string{"http://" + addr},
-				PreloadScript:  preload,
-			},
-		})
-		keepOnOwnPages(mainWindow, addr)
-		handleDownloads(mainWindow, dir)
-		// 把 .json 备份拖进窗口即可导入（M6-8）。
-		handleFileDrop(mainWindow, pageURL, cfg.AccessKey)
-		if dir != "" {
-			attachSmoke(mainWindow, dir)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	store := mygo.Secrets.Service(secretService)
+	rt := &runtimeState{cfg: cfg, dir: dir, version: version}
+	setup := needsSetup(hasSettings, cfg.AccessKey != "", dir)
+
+	// 已配置过（有密钥或走过向导）就直接解析密钥；需要向导时把选择权留给用户。
+	if !setup {
+		key := cfg.AccessKey
+		if key == "" {
+			resolved, source, err := desktopAccessKey(store, cfg.DataDir)
+			if err != nil {
+				return err
+			}
+			key = resolved
+			// 只记来源，不记密钥本身。
+			slog.Info("桌面壳已就绪访问密钥", slog.String("source", source))
 		}
+		rt.cfg.AccessKey = key
+	}
+
+	// 首启向导要把启动推迟到用户点「开始使用」，所以启动一律放在循环里。
+	mygo.App.WhenReady(func() {
+		if setup {
+			// 已经存过密钥（旧版本升级上来）就在向导里预填，别让用户白白换掉一把在用的密钥。
+			initialKey := existingAccessKey(store, rt.cfg.DataDir)
+			showSetupWindow(rt.cfg.DataDir, store, initialKey, func(res setupResult) {
+				rt.mu.Lock()
+				rt.cfg.Mode = res.Mode
+				rt.cfg.AccessKey = res.Key
+				rt.mu.Unlock()
+				rt.startAsync(ctx)
+			})
+			return
+		}
+		rt.startAsync(ctx)
 	})
 
 	// 第二次启动时把已有窗口拉回前台（单实例，M6-2）。
@@ -202,12 +191,111 @@ func run() error {
 		slog.Info("第二次启动已转交到当前窗口")
 	})
 
-	if err := mygo.App.Run(); err != nil {
+	runErr := mygo.App.Run()
+	// 窗口全部关闭后 MyGo 的循环退出：先停服务，再关数据库。
+	stop()
+	rt.shutdown()
+	return runErr
+}
+
+// runtimeState 持有要活到进程退出的东西：应用实例与其服务错误通道。
+// 首启向导会把启动推迟到用户点「开始使用」，所以它们不能是 run() 的局部变量。
+type runtimeState struct {
+	mu          sync.Mutex
+	cfg         config.Config
+	dir         string
+	version     string
+	application *app.App
+	serveErr    chan error
+}
+
+// startAsync 在后台启动服务与主窗口；失败就记日志并退出应用。
+func (rt *runtimeState) startAsync(ctx context.Context) {
+	go func() {
+		if err := rt.start(ctx); err != nil {
+			slog.Error("桌面壳启动失败", slog.Any("err", err))
+			mygo.App.Quit()
+		}
+	}()
+}
+
+// start 启动 HTTP 服务、等它就绪、按服务端确认过的密钥注入页面，再创建主窗口。
+func (rt *runtimeState) start(ctx context.Context) error {
+	rt.mu.Lock()
+	if rt.application != nil {
+		rt.mu.Unlock()
+		return errors.New("已经启动过了")
+	}
+	cfg := rt.cfg
+	rt.mu.Unlock()
+
+	application, err := app.New(ctx, cfg, rt.version, web.DistFS())
+	if err != nil {
 		return err
 	}
-	// 窗口全部关闭后 MyGo 的循环退出：收掉服务与数据库。
-	stop()
-	return <-serveErr
+	serveErr := make(chan error, 1)
+	// 复用 App.Run：它带自动归档等后台任务，也负责收到信号后的优雅关闭。
+	go func() { serveErr <- application.Run(ctx) }()
+
+	rt.mu.Lock()
+	rt.application, rt.serveErr = application, serveErr
+	rt.mu.Unlock()
+
+	pageURL := "http://" + cfg.Addr + "/"
+	if err := waitForReady(ctx, pageURL+"api/health"); err != nil {
+		return err
+	}
+
+	// 注入前先问服务端：只有它认的密钥才注入，免得过期密钥把用户挡在登录页外。
+	preload, err := pagePreload(ctx, pageURL+"api/me", cfg.AccessKey)
+	if err != nil {
+		return err
+	}
+	if rt.dir != "" {
+		// 冒烟模式：最前面装 CSP 违规收集器（必须早于页面脚本）。
+		preload = smokeCollector + preload
+	}
+
+	mainWindow = mygo.NewWindow(mygo.WindowOptions{
+		Title:  "Kanso",
+		URL:    pageURL,
+		Width:  windowWidth,
+		Height: windowHeight,
+		// 记住窗口大小、位置与最大化状态，下次启动还原（M6-8）。
+		StateKey: "main",
+		Page: mygo.PageOptions{
+			// 页面来自回环 HTTP，不是 MyGo 的「自家 origin」（只有 mygo dev 下的
+			// 回环 dev server 默认可信），所以要显式信任，页面才调得到 Go。
+			TrustedOrigins: []string{"http://" + cfg.Addr},
+			PreloadScript:  preload,
+		},
+	})
+	keepOnOwnPages(mainWindow, cfg.Addr)
+	handleDownloads(mainWindow, rt.dir)
+	// 把 .json 备份拖进窗口即可导入（M6-8）。
+	handleFileDrop(mainWindow, pageURL, cfg.AccessKey)
+	if rt.dir != "" {
+		attachSmoke(mainWindow, rt.dir)
+	}
+	return nil
+}
+
+// shutdown 等服务优雅退出后关闭数据库（首启向导未提交时什么也不做）。
+func (rt *runtimeState) shutdown() {
+	rt.mu.Lock()
+	application, serveErr := rt.application, rt.serveErr
+	rt.mu.Unlock()
+	if application == nil {
+		return
+	}
+	if serveErr != nil {
+		if err := <-serveErr; err != nil {
+			slog.Warn("服务退出时报错", slog.Any("err", err))
+		}
+	}
+	if err := application.Close(); err != nil {
+		slog.Warn("关闭数据库失败", slog.Any("err", err))
+	}
 }
 
 // desktopDataDir 返回桌面版的数据目录默认值：系统用户数据目录下的 kanso。
