@@ -84,3 +84,34 @@ func TestStaticHandlerNilAssets(t *testing.T) {
 		t.Fatalf("nil assets 应 404，实际 %d", rec.Code)
 	}
 }
+
+// 桌面壳与浏览器一样需要安全基线：静态响应带 CSP 等头（M6-4）。
+func TestStaticHandlerSetsSecurityHeaders(t *testing.T) {
+	h := staticHandler(testSPA())
+	for _, path := range []string{"/", "/assets/app.js", "/w/abc/p/def"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if got := rec.Header().Get("Content-Security-Policy"); !strings.Contains(got, "script-src 'self'") {
+			t.Fatalf("%s 应带 CSP，实际 %q", path, got)
+		}
+		if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+			t.Fatalf("%s 应带 nosniff，实际 %q", path, got)
+		}
+		if got := rec.Header().Get("X-Frame-Options"); got != "DENY" {
+			t.Fatalf("%s 应带 X-Frame-Options: DENY，实际 %q", path, got)
+		}
+	}
+}
+
+// /api 的 JSON 响应不经过静态层，也不该带 CSP。
+func TestStaticHandlerLeavesAPIWithoutCSP(t *testing.T) {
+	h := staticHandler(testSPA())
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("/api/health 应 404（API 路由在别处），实际 %d", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Security-Policy"); got != "" {
+		t.Fatalf("/api 响应不应带 CSP，实际 %q", got)
+	}
+}

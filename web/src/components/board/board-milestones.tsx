@@ -71,13 +71,13 @@ export function BoardMilestones({
 										className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
 									/>
 									<span className="truncate pr-4 text-sm font-medium">{milestone.name}</span>
-									<span className="text-[11px] text-muted-foreground">
+									<span className="text-[0.6875rem] text-muted-foreground">
 										{milestone.dueDate ? `截止 ${milestone.dueDate}` : "未设截止"}
 									</span>
 									<span className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
 										<span className="block h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
 									</span>
-									<span className="text-[11px] text-muted-foreground">{pct}% 完成</span>
+									<span className="text-[0.6875rem] text-muted-foreground">{pct}% 完成</span>
 								</div>
 							);
 						})}

@@ -54,12 +54,12 @@ export function BoardToolbar({
 						{workspaceName}
 					</Link>
 					<span className="kanso-board-breadcrumb__separator">/</span>
-					<h1 className="truncate text-[17px] font-[650] tracking-tight">{board?.project.name ?? "看板"}</h1>
+					<h1 className="truncate text-[1.0625rem] font-[650] tracking-tight">{board?.project.name ?? "看板"}</h1>
 					{board && !archived ? (
 						<PinToggleButton workspaceId={board.project.workspaceId} projectId={projectId} name={board.project.name} />
 					) : null}
 					{archived ? (
-						<span className="rounded border px-1.5 py-0.5 text-[11px] text-muted-foreground">已归档</span>
+						<span className="rounded border px-1.5 py-0.5 text-[0.6875rem] text-muted-foreground">已归档</span>
 					) : null}
 				</div>
 				<div className="kanso-board-toolbar flex gap-2">

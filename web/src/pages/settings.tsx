@@ -18,7 +18,11 @@ import {
 	getAccessKey,
 } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
+import { saveBlobInDesktop } from "@/lib/desktop-save";
 import { THEMES, getTheme, setTheme, type Theme } from "@/lib/theme";
+
+// 更新入口：桌面壳尚未签名安装包，所以不做自动更新，统一引导到 GitHub Releases。
+const RELEASES_URL = "https://github.com/zephyr-qu/kanso/releases/latest";
 
 type SettingsConfig = {
 	addr: string;
@@ -138,14 +142,24 @@ export default function SettingsPage() {
 				throw new Error(`导出备份失败（HTTP ${res.status}）`);
 			}
 			const blob = await res.blob();
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement("a");
-			a.href = url;
-			a.download = `kanso-backup-${new Date().toISOString().slice(0, 10)}.json`;
-			document.body.appendChild(a);
-			a.click();
-			a.remove();
-			URL.revokeObjectURL(url);
+			const name = `kanso-backup-${new Date().toISOString().slice(0, 10)}.json`;
+			// 桌面壳里由 Go 弹「另存为」并写盘；浏览器里走原来的 blob 下载。
+			let savedInDesktop = false;
+			try {
+				savedInDesktop = await saveBlobInDesktop(name, blob);
+			} catch (error) {
+				console.error("桌面壳保存失败，改用浏览器下载", error);
+			}
+			if (!savedInDesktop) {
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement("a");
+				a.href = url;
+				a.download = name;
+				document.body.appendChild(a);
+				a.click();
+				a.remove();
+				URL.revokeObjectURL(url);
+			}
 			toastManager.add({ title: "备份已导出", type: "success" });
 		} catch (error) {
 			toastManager.add({
@@ -196,8 +210,8 @@ export default function SettingsPage() {
 	return (
 		<div className="flex h-full flex-col">
 			<PageHeader>
-				<h1 className="text-[17px] font-[650] tracking-tight">设置</h1>
-				<span className="text-[13px] text-muted-foreground">
+				<h1 className="text-[1.0625rem] font-[650] tracking-tight">设置</h1>
+				<span className="text-[0.8125rem] text-muted-foreground">
 					外观 · 服务配置 · AI · 数据 · 关于
 				</span>
 			</PageHeader>
@@ -386,6 +400,17 @@ export default function SettingsPage() {
 					</div>
 					<div className="mt-1 text-xs text-muted-foreground/70">
 						作者：Zephyr
+					</div>
+					<div className="mt-3 text-xs text-muted-foreground/70">
+						<a
+							className="underline underline-offset-2 hover:text-foreground"
+							href={RELEASES_URL}
+							target="_blank"
+							rel="noreferrer"
+						>
+							检查更新
+						</a>
+						<span className="ml-1">（打开 GitHub Releases 下载新安装包）</span>
 					</div>
 				</SurfaceCard>
 			</PageContent>

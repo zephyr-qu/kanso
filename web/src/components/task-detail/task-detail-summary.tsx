@@ -105,7 +105,7 @@ export function TaskDetailSummary({
 									value={normalizePriority(data.task.priority)}
 									onChange={(priority) => onUpdate({ priority })}
 									titlePrefix="设为"
-									size="px-1.5 py-0.5 text-[11px]"
+									size="px-1.5 py-0.5 text-[0.6875rem]"
 								/>
 							</PopoverPopup>
 						</Popover>
@@ -133,7 +133,7 @@ export function TaskDetailSummary({
 						<span className="kanso-due-badge">临期</span>
 					) : null}
 				</div>
-				<span className="flex items-center gap-2 text-[13px] text-muted-foreground">
+				<span className="flex items-center gap-2 text-[0.8125rem] text-muted-foreground">
 					<MessageSquareIcon className="size-3.5 opacity-70" />
 					评论 <strong className="font-semibold text-foreground">{data.comments.length}</strong>
 				</span>
@@ -142,7 +142,7 @@ export function TaskDetailSummary({
 						render={
 							<button
 								type="button"
-								className="flex items-center gap-2 text-[13px] text-muted-foreground hover:text-foreground"
+								className="flex items-center gap-2 text-[0.8125rem] text-muted-foreground hover:text-foreground"
 								aria-label="选择标签"
 							>
 								<TagIcon className="size-3.5 opacity-70" />
@@ -180,7 +180,7 @@ export function TaskDetailSummary({
 						render={
 							<button
 								type="button"
-								className="flex items-center gap-2 text-[13px] text-muted-foreground hover:text-foreground"
+								className="flex items-center gap-2 text-[0.8125rem] text-muted-foreground hover:text-foreground"
 							>
 								<MilestoneIcon className="size-3.5 opacity-70" />
 								里程碑 <strong className="font-semibold text-foreground">{(data.milestones ?? []).length}</strong>
@@ -212,7 +212,7 @@ export function TaskDetailSummary({
 						)}
 					</PopoverPopup>
 				</Popover>
-				<span className="flex items-center gap-2 text-[13px] text-muted-foreground">
+				<span className="flex items-center gap-2 text-[0.8125rem] text-muted-foreground">
 					<FlagIcon className="size-3.5 opacity-70" />
 					状态 <strong className="font-semibold text-foreground">{data.columnName || "未设列"}</strong>
 				</span>

@@ -161,27 +161,27 @@ export function CommandPalette({
 						onChange={(e) => setQ(e.target.value)}
 						onKeyDown={onKeyDown}
 						placeholder="搜索任务标题、描述…"
-						className="flex-1 bg-transparent text-[15px] text-foreground outline-none placeholder:text-muted-foreground/60"
+						className="flex-1 bg-transparent text-[0.9375rem] text-foreground outline-none placeholder:text-muted-foreground/60"
 					/>
-					<span className="shrink-0 font-mono text-[10.5px] tracking-wide text-muted-foreground/70">
+					<span className="shrink-0 font-mono text-[0.65625rem] tracking-wide text-muted-foreground/70">
 						ESC
 					</span>
 				</div>
 
 				<div className="max-h-[380px] overflow-y-auto p-2">
 					{q !== debounced ? (
-						<div className="py-7 text-center text-[13px] text-muted-foreground">
+						<div className="py-7 text-center text-[0.8125rem] text-muted-foreground">
 							搜索中…
 						</div>
 					) : hits.length === 0 && debounced !== "" ? (
-						<div className="py-7 text-center text-[13px] text-muted-foreground">
+						<div className="py-7 text-center text-[0.8125rem] text-muted-foreground">
 							未找到匹配的任务
 						</div>
 					) : (
 						<>
 							{hits.length > 0 ? (
 								<>
-									<p className="px-2.5 pb-1 pt-2 font-mono text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
+									<p className="px-2.5 pb-1 pt-2 font-mono text-[0.65625rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
 										任务
 									</p>
 									{hits.map((t, i) => (
@@ -191,7 +191,7 @@ export function CommandPalette({
 											onMouseEnter={() => setSel(i)}
 											onClick={() => openTask(t)}
 											className={cn(
-												"flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13.5px] transition-colors",
+												"flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[0.84375rem] transition-colors",
 												i === sel
 													? "bg-accent text-accent-foreground"
 													: "text-foreground",
@@ -208,7 +208,7 @@ export function CommandPalette({
 												<CheckIcon className="size-3" />
 											</span>
 											<span className="min-w-0 flex-1 truncate">{t.title}</span>
-											<span className="shrink-0 text-[11px] text-muted-foreground/70">
+											<span className="shrink-0 text-[0.6875rem] text-muted-foreground/70">
 												{t.projectName}
 											</span>
 										</button>
@@ -216,7 +216,7 @@ export function CommandPalette({
 								</>
 							) : null}
 
-							<p className="px-2.5 pb-1 pt-2 font-mono text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
+							<p className="px-2.5 pb-1 pt-2 font-mono text-[0.65625rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
 								页面
 							</p>
 							{pages.map((p, i) => {
@@ -231,7 +231,7 @@ export function CommandPalette({
 											onClose();
 										}}
 										className={cn(
-											"flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13.5px] transition-colors",
+											"flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[0.84375rem] transition-colors",
 											idx === sel
 												? "bg-accent text-accent-foreground"
 												: "text-foreground",

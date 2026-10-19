@@ -1,4 +1,4 @@
-# 注意：base 镜像为浮动 tag（node:22-alpine / golang:1.26-alpine / alpine:3.22）。
+# 注意：base 镜像为浮动 tag（node:22-alpine / golang:1.27.1-alpine / alpine:3.22）。
 # 正式发布建议按 digest 锁定（--platform 下 digest 一致），保证镜像位级可复现；
 # 因发布环境无 docker CLI，digest 未在此锁定——见发布审查记录。
 FROM node:22-alpine AS web-build
@@ -10,7 +10,7 @@ RUN pnpm install --frozen-lockfile
 COPY web/ ./
 RUN pnpm build
 
-FROM golang:1.26-alpine AS go-build
+FROM golang:1.27.1-alpine AS go-build
 
 # 构建时注入版本：docker build --build-arg VERSION=1.0.0
 ARG VERSION=dev

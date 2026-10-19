@@ -69,7 +69,9 @@
   --destructive-foreground: #ffffff;
   --border: var(--semantic-border-default);
   --input: var(--semantic-border-strong);
-  --ring: var(--semantic-action-primary);
+  /* 桌面壳（MyGo）把系统强调色注入 --mygo-accent：焦点环跟随桌面；
+     浏览器里没有这个变量，退回品牌色，与改动前完全一致。 */
+  --ring: var(--mygo-accent, var(--semantic-action-primary));
   --sidebar: var(--semantic-surface-sidebar);
   --sidebar-foreground: var(--semantic-content-primary);
   --sidebar-primary: var(--semantic-action-primary);
@@ -77,7 +79,7 @@
   --sidebar-accent: var(--semantic-sidebar-active);
   --sidebar-accent-foreground: var(--semantic-action-primary-hover);
   --sidebar-border: var(--semantic-border-sidebar);
-  --sidebar-ring: var(--semantic-action-primary);
+  --sidebar-ring: var(--mygo-accent, var(--semantic-action-primary));
 }
 
 /* 暗色：semantic 变量引用 primitive，随 html.dark 暗色集自动切换；

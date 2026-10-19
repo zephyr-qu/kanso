@@ -145,8 +145,8 @@ export default function DashboardPage() {
 	return (
 		<div className="kanso-dashboard flex h-full flex-col">
 			<PageHeader>
-				<h1 className="text-[17px] font-[650] tracking-tight">仪表盘</h1>
-				<span className="text-[13px] text-muted-foreground">当前工作区 · 汇总</span>
+				<h1 className="text-[1.0625rem] font-[650] tracking-tight">仪表盘</h1>
+				<span className="text-[0.8125rem] text-muted-foreground">当前工作区 · 汇总</span>
 			</PageHeader>
 
 			<PageContent className="px-[30px] pb-7 pt-[26px]">
@@ -180,21 +180,21 @@ export default function DashboardPage() {
 								}}
 							>
 								<div className="absolute inset-3 flex flex-col items-center justify-center rounded-full bg-card">
-									<span className="text-[26px] font-bold tracking-tight tabular-nums">
+									<span className="text-[1.625rem] font-bold tracking-tight tabular-nums">
 										{data.completionPercent}%
 									</span>
-									<span className="text-[11px] text-muted-foreground">
+									<span className="text-[0.6875rem] text-muted-foreground">
 										{data.doneTasks} / {data.totalTasks}
 									</span>
 								</div>
 							</div>
 							<div>
 								<div className="text-sm font-medium">{data.doneTasks} 个任务已完成</div>
-								<div className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+								<div className="mt-1 text-[0.8125rem] leading-relaxed text-muted-foreground">
 									共 {data.totalTasks} 个任务 · 剩余 {data.totalTasks - data.doneTasks}{" "}
 									个
 								</div>
-								<div className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground/70">
+								<div className="mt-1.5 text-[0.6875rem] leading-relaxed text-muted-foreground/70">
 									已完成 = 位于看板末列的任务
 								</div>
 							</div>
@@ -205,7 +205,7 @@ export default function DashboardPage() {
 					<SurfaceCard className="kanso-panel-card">
 						<PanelTitle
 							action={
-								<div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+								<div className="flex items-center gap-3 text-[0.6875rem] text-muted-foreground">
 									<span className="kanso-trend-range">本周</span>
 									<span className="flex items-center gap-1">
 										<span className="size-2 rounded-full bg-[var(--chart-1)]" />
@@ -245,7 +245,7 @@ export default function DashboardPage() {
 													<button
 														type="button"
 														onClick={() => setDistTemplate(t.id)}
-														className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[13px] transition-colors hover:bg-accent ${
+														className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[0.8125rem] transition-colors hover:bg-accent ${
 															t.id === distTemplate
 																? "font-medium text-[var(--semantic-action-primary)]"
 																: "text-foreground"

@@ -71,10 +71,10 @@ export default function LoginPage() {
 					>
 						簡
 					</span>
-					<span className="text-[17px] font-bold tracking-[-0.01em]">Kanso</span>
+					<span className="text-[1.0625rem] font-bold tracking-[-0.01em]">Kanso</span>
 					{mode ? (
 						<span
-							className="kanso-login-mode rounded-full border px-1.5 py-px text-[10px] leading-none text-muted-foreground"
+							className="kanso-login-mode rounded-full border px-1.5 py-px text-[0.625rem] leading-none text-muted-foreground"
 							title={`当前运行模式：${mode === "team" ? "团队版" : "个人版"}`}
 						>
 							{mode === "team" ? "团队版" : "个人版"}
@@ -85,11 +85,11 @@ export default function LoginPage() {
 				{/* 中部：标语（上，左对齐）→ 插画（下，居中） */}
 				<div className="flex w-full flex-col items-center gap-8">
 					<div className="hidden w-full max-w-[440px] md:block">
-						<p className="text-4xl font-semibold leading-[1.3] tracking-tight animate-[fadeInUp_500ms_100ms_ease_both] md:text-[44px]">
+						<p className="text-4xl font-semibold leading-[1.3] tracking-tight animate-[fadeInUp_500ms_100ms_ease_both] md:text-[2.75rem]">
 							简单，专注。
 						</p>
 						<p
-							className="mt-4 text-[15px] leading-relaxed text-muted-foreground animate-[fadeInUp_500ms_200ms_ease_both]"
+							className="mt-4 text-[0.9375rem] leading-relaxed text-muted-foreground animate-[fadeInUp_500ms_200ms_ease_both]"
 							style={{ animationDelay: "200ms" }}
 						>
 							内网看板 · 自用轻量 · 现代简约
@@ -110,7 +110,7 @@ export default function LoginPage() {
 			<div className="flex w-full items-center justify-center border-l border-border bg-card px-8 py-16 md:w-[420px] md:px-12">
 				<div className="w-full max-w-[320px] animate-[fadeInUp_450ms_150ms_ease_both]">
 					<h1 className="text-xl font-semibold tracking-tight">进入工作区</h1>
-					<p className="mt-1 text-[13px] text-muted-foreground">
+					<p className="mt-1 text-[0.8125rem] text-muted-foreground">
 						输入访问密钥（见{" "}
 						<code className="font-mono text-xs">KANSO_ACCESS_KEY</code> 或
 						<code className="font-mono text-xs"> docker logs</code>）
@@ -119,7 +119,7 @@ export default function LoginPage() {
 						<div>
 							<label
 								htmlFor="access-key"
-								className="mb-2 mt-6 block text-[13px] text-muted-foreground"
+								className="mb-2 mt-6 block text-[0.8125rem] text-muted-foreground"
 							>
 								访问密钥
 							</label>

@@ -30,10 +30,10 @@ export default function ActivityPage() {
 	return (
 		<div className="flex h-full flex-col">
 			<PageHeader>
-				<h1 aria-label="活动" className="text-[17px] font-[650] tracking-tight">
+				<h1 aria-label="活动" className="text-[1.0625rem] font-[650] tracking-tight">
 					活动记录
 				</h1>
-				<span className="text-[13px] text-muted-foreground">
+				<span className="text-[0.8125rem] text-muted-foreground">
 					当前工作区 · 操作轨迹
 				</span>
 			</PageHeader>
