@@ -194,14 +194,20 @@ func TestProjectLifecycle(t *testing.T) {
 	_, body := e.do(t, http.MethodGet, "/api/workspaces", "")
 	workspaceID := decode[[]map[string]any](t, body)[0]["id"].(string)
 
-	// 初始无项目
+	// 首启种子会在工作区里放一个默认项目（见 service.SeedDefaultWorkspace）：先确认它在，
+	// 再删掉它，验证空列表仍返回 []（不是 null）。
 	res, body := e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/projects", "")
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("项目列表应 200，实际 %d", res.StatusCode)
 	}
-	if got := len(decode[[]map[string]any](t, body)); got != 0 {
-		t.Fatalf("初始应无项目，实际 %d", got)
+	seeded := decode[[]map[string]any](t, body)
+	if len(seeded) != 1 || seeded[0]["name"] != seededProjectName {
+		t.Fatalf("首启应带 1 个默认项目，实际 %v", seeded)
 	}
+	if res, _ := e.do(t, http.MethodDelete, "/api/projects/"+seeded[0]["id"].(string), ""); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("删除默认项目应 204，实际 %d", res.StatusCode)
+	}
+	_, body = e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/projects", "")
 	if strings.TrimSpace(string(body)) != "[]" {
 		t.Fatalf("空列表应为 [] 而非 null，实际 %s", body)
 	}
@@ -276,10 +282,13 @@ func TestProjectJSONContract(t *testing.T) {
 		t.Fatalf("项目列表应 200，实际 %d", res.StatusCode)
 	}
 	projects := decode[[]map[string]any](t, body)
-	if len(projects) != 1 {
-		t.Fatalf("应恰有 1 个项目，实际 %d", len(projects))
+	if len(projects) != 2 { // 合约项目 + 首启种子的默认项目
+		t.Fatalf("应恰有 2 个项目（含首启默认项目），实际 %d", len(projects))
 	}
 	p := projects[0]
+	if p["name"] == seededProjectName {
+		p = projects[1]
+	}
 	for _, key := range []string{"id", "workspaceId", "name", "position", "createdAt"} {
 		if _, ok := p[key]; !ok {
 			t.Fatalf("项目 JSON 缺少 %q（应为 camelCase），实际键: %v", key, jsonKeys(p))
@@ -306,6 +315,13 @@ func TestWorkspaceDeleteCascadesProjects(t *testing.T) {
 	workspaceID := workspaces[0]["id"].(string)
 
 	// 新建一个临时工作区；它会自动带默认项目，使默认工作区不再是「最后一个」。
+	// 记下各表当前的行数：级联删除后应回到这个基线（默认工作区里首启种子的项目还在，
+	// 所以不能断言全表为 0）。
+	cascadeTables := []string{"project", "column", "task", "comment", "label", "task_label"}
+	baseline := make(map[string]int, len(cascadeTables))
+	for _, table := range cascadeTables {
+		baseline[table] = countRows(t, e, table)
+	}
 	_, body = e.do(t, http.MethodPost, "/api/workspaces", `{"name":"临时"}`)
 	createdWorkspace := decode[map[string]any](t, body)
 	workspaceID = createdWorkspace["id"].(string)
@@ -329,18 +345,10 @@ func TestWorkspaceDeleteCascadesProjects(t *testing.T) {
 		t.Fatalf("删除工作区应 204，实际 %d", res.StatusCode)
 	}
 
-	// spec 必测：删工作区后项目/任务/评论等全部消失（无孤儿记录）。
-	for _, tc := range []struct {
-		table string
-	}{
-		{"project"}, {"column"}, {"task"}, {"comment"}, {"label"}, {"task_label"},
-	} {
-		var n int
-		if err := e.db.QueryRow(`SELECT COUNT(*) FROM "` + tc.table + `"`).Scan(&n); err != nil {
-			t.Fatalf("统计 %s 失败: %v", tc.table, err)
-		}
-		if n != 0 {
-			t.Fatalf("级联后 %s 应无残留，实际 %d", tc.table, n)
+	// spec 必测：删工作区后它带走的项目/列/任务/评论/标签都不留孤儿（回到删除前的基线）。
+	for _, table := range cascadeTables {
+		if n := countRows(t, e, table); n != baseline[table] {
+			t.Fatalf("级联后 %s 应回到基线 %d，实际 %d", table, baseline[table], n)
 		}
 	}
 	var deletedActivities int
@@ -1571,11 +1579,12 @@ func TestDashboardContract(t *testing.T) {
 		t.Fatalf("trend 每天应含 completed，实际 %v", last)
 	}
 	// 项目速览应带 workspaceId（前端跨工作区跳转用）。
-	projects := d["projects"].([]any)
+	// 工作区里还有首启种子的「默认项目」，这里只看含任务的那个。
+	projects := withoutSeededProjectAny(d["projects"].([]any))
 	if len(projects) != 1 {
-		t.Fatalf("projects 应含 1 个项目，实际 %d", len(projects))
+		t.Fatalf("projects 应含 1 个项目（不含首启默认项目），实际 %d", len(projects))
 	}
-	if ws, ok := projects[0].(map[string]any)["workspaceId"].(string); !ok || ws == "" {
+	if ws, ok := projects[0]["workspaceId"].(string); !ok || ws == "" {
 		t.Fatalf("projects[0].workspaceId 应存在，实际 %v", projects[0])
 	}
 	if focus := d["focus"].([]any); len(focus) != 1 || focus[0].(map[string]any)["title"] != "待办任务" {
@@ -1604,7 +1613,7 @@ func TestDashboardContract(t *testing.T) {
 // TestBackupContract 校验 /api/settings/backup 导出完整性（只导出）。
 func TestBackupContract(t *testing.T) {
 	e := newTestEnv(t)
-	createProject(t, e, "备份项目")
+	projectID := createProject(t, e, "备份项目")
 
 	res, body := e.do(t, http.MethodGet, "/api/settings/backup", "")
 	if res.StatusCode != http.StatusOK {
@@ -1620,14 +1629,19 @@ func TestBackupContract(t *testing.T) {
 			t.Fatalf("backup.%s 应为数组而非 null", key)
 		}
 	}
-	projects := b["projects"].([]any)
-	if len(projects) != 1 {
-		t.Fatalf("backup.projects 应含 1 个项目，实际 %d", len(projects))
+	projects := withoutSeededProjectAny(b["projects"].([]any))
+	if len(projects) != 1 || projects[0]["name"] != "备份项目" {
+		t.Fatalf("backup.projects 应含 1 个项目（不含首启默认项目），实际 %v", projects)
 	}
-	if p := projects[0].(map[string]any); p["name"] != "备份项目" {
+	// 列只能按项目过滤：工作区里还有首启种子的默认项目与它自己的 4 列。
+	ownColumns := 0
+	for _, raw := range b["columns"].([]any) {
+		if m, _ := raw.(map[string]any); m["projectId"] == projectID {
+			ownColumns++
+		}
 	}
-	if columns := b["columns"].([]any); len(columns) != 4 {
-		t.Fatalf("backup.columns 应含 4 个默认列，实际 %d", len(columns))
+	if ownColumns != 4 {
+		t.Fatalf("backup.columns 里该项目应有 4 个默认列，实际 %d", ownColumns)
 	}
 }
 
@@ -1652,9 +1666,9 @@ func TestBackupImportContract(t *testing.T) {
 	_, body = e.do(t, http.MethodGet, "/api/workspaces", "")
 	wsID := decode[[]map[string]any](t, body)[0]["id"].(string)
 	_, body = e.do(t, http.MethodGet, "/api/workspaces/"+wsID+"/projects", "")
-	projects := decode[[]map[string]any](t, body)
+	projects := withoutSeededProject(decode[[]map[string]any](t, body))
 	if len(projects) != 1 || projects[0]["name"] != "备份项目" {
-		t.Fatalf("导入后应还原 1 个项目，实际 %+v", projects)
+		t.Fatalf("导入后应还原 1 个项目（不含首启默认项目），实际 %+v", projects)
 	}
 
 	// 非法快照（缺 workspaces）应 400，且不破坏现有数据。
@@ -1662,8 +1676,8 @@ func TestBackupImportContract(t *testing.T) {
 		t.Fatalf("非法快照应 400，实际 %d", res.StatusCode)
 	}
 	_, body = e.do(t, http.MethodGet, "/api/workspaces/"+wsID+"/projects", "")
-	if projects := decode[[]map[string]any](t, body); len(projects) != 1 {
-		t.Fatalf("非法快照不应破坏数据，实际 %d 个项目", len(projects))
+	if projects := withoutSeededProject(decode[[]map[string]any](t, body)); len(projects) != 1 {
+		t.Fatalf("非法快照不应破坏数据，实际 %d 个项目（不含首启默认项目）", len(projects))
 	}
 }
 
@@ -1692,11 +1706,11 @@ func TestProjectUpdatedAt(t *testing.T) {
 		}
 	}
 
-	// 列表接口返回 updatedAt（前端卡片 meta 依赖）。
+	// 列表接口返回 updatedAt（前端卡片 meta 依赖）。不含首启种子的默认项目。
 	_, body = e.do(t, http.MethodGet, "/api/workspaces/"+workspaceID+"/projects", "")
-	p := decode[[]map[string]any](t, body)
+	p := withoutSeededProject(decode[[]map[string]any](t, body))
 	if len(p) != 1 {
-		t.Fatalf("应恰有 1 个项目，实际 %d", len(p))
+		t.Fatalf("应恰有 1 个项目（不含首启默认项目），实际 %d", len(p))
 	}
 	if _, ok := p[0]["updatedAt"]; !ok {
 		t.Fatalf("列表项目应含 updatedAt，实际键: %v", jsonKeys(p[0]))
@@ -2646,4 +2660,43 @@ func TestAdminTransfer(t *testing.T) {
 	if res, _ := e.do(t, http.MethodGet, "/api/members", ""); res.StatusCode != http.StatusForbidden {
 		t.Fatalf("原管理员降级后列成员应 403，实际 %d", res.StatusCode)
 	}
+}
+
+// seededProjectName 是首启种子在工作区里放下的项目名（见 service.SeedDefaultWorkspace）。
+// 全新安装也带一个项目，所以断言测试自己造的数据时要把它排除掉。
+const seededProjectName = "默认项目"
+
+// withoutSeededProject 丢掉首启种子的默认项目，只留测试造的数据。
+func withoutSeededProject(projects []map[string]any) []map[string]any {
+	out := make([]map[string]any, 0, len(projects))
+	for _, p := range projects {
+		if p["name"] == seededProjectName {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// withoutSeededProjectAny 同上，用于 decode 成 []any 的 JSON 数组。
+func withoutSeededProjectAny(items []any) []map[string]any {
+	out := make([]map[string]any, 0, len(items))
+	for _, raw := range items {
+		m, _ := raw.(map[string]any)
+		if m["name"] == seededProjectName {
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+// countRows 统计一张表的行数（级联删除断言用）。
+func countRows(t *testing.T, e *testEnv, table string) int {
+	t.Helper()
+	var n int
+	if err := e.db.QueryRow(`SELECT COUNT(*) FROM "` + table + `"`).Scan(&n); err != nil {
+		t.Fatalf("统计 %s 失败: %v", table, err)
+	}
+	return n
 }

@@ -47,8 +47,14 @@ func TestGetDashboard(t *testing.T) {
 	if len(data.ByPriority) != 3 {
 		t.Fatalf("ByPriority 应为 3 档，实际 %d", len(data.ByPriority))
 	}
-	// 项目统计。
-	if len(data.Projects) != 1 || data.Projects[0].Total != 3 || data.Projects[0].Done != 1 {
+	// 项目统计（工作区里还有首启种子的「默认项目」，这里只看测试造的那个）。
+	stats := make([]DashboardProjectStat, 0, len(data.Projects))
+	for _, s := range data.Projects {
+		if s.Name != defaultProjectName {
+			stats = append(stats, s)
+		}
+	}
+	if len(stats) != 1 || stats[0].Total != 3 || stats[0].Done != 1 {
 		t.Fatalf("Projects 统计不符: %+v", data.Projects)
 	}
 	// 需要关注：urgent + 到期任务（2 条），末列任务不在内。
@@ -111,11 +117,24 @@ func TestGetBackup(t *testing.T) {
 	if len(backup.Workspaces) != 1 {
 		t.Fatalf("备份工作区应 1 个，实际 %d", len(backup.Workspaces))
 	}
-	if len(backup.Projects) != 1 {
-		t.Fatalf("备份项目应 1 个，实际 %d", len(backup.Projects))
+	// 工作区里还有首启种子的「默认项目」（SeedDefaultWorkspace），这里只看测试造的那份。
+	ownProjects := 0
+	for _, p := range backup.Projects {
+		if p.Name != defaultProjectName {
+			ownProjects++
+		}
 	}
-	if len(backup.Columns) != 4 {
-		t.Fatalf("备份列应 4 个，实际 %d", len(backup.Columns))
+	if ownProjects != 1 {
+		t.Fatalf("备份项目应 1 个（不含首启默认项目），实际 %d", ownProjects)
+	}
+	ownColumns := 0
+	for _, c := range backup.Columns {
+		if c.ProjectID == projectID {
+			ownColumns++
+		}
+	}
+	if ownColumns != 4 {
+		t.Fatalf("备份里该项目应有 4 列，实际 %d（总列数 %d）", ownColumns, len(backup.Columns))
 	}
 	if len(backup.Tasks) != 1 {
 		t.Fatalf("备份任务应 1 个，实际 %d", len(backup.Tasks))

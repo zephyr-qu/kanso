@@ -13,10 +13,17 @@ import (
 // defaultWorkspaceName 是首启自动种子的默认工作区名。
 const defaultWorkspaceName = "默认工作区"
 
-// SeedDefaultWorkspace 在库中没有任何工作区时创建默认工作区（首启自动种子，见 ADR-0002）。
+// SeedDefaultWorkspace 在库中没有任何工作区时创建默认工作区（首启自动种子，见 ADR-0002），
+// 并在同一事务里种一个默认项目——与 CreateWorkspace 的行为一致；否则全新安装打开后工作区
+// 里没有项目，侧边栏和看板都是空的。
+// 只在"一个工作区都没有"时执行，所以用户后来把项目删光了也不会在下次启动被重新塞回来。
 // 时间戳遵循 schema 约定：RFC3339 UTC，由应用层写入。
 func (s *Service) SeedDefaultWorkspace(ctx context.Context) error {
-	q := gen.New(s.db)
+	tx, q, err := beginTx(ctx, s.db)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
 
 	count, err := q.CountWorkspaces(ctx)
 	if err != nil {
@@ -37,7 +44,10 @@ func (s *Service) SeedDefaultWorkspace(ctx context.Context) error {
 	}); err != nil {
 		return fmt.Errorf("创建默认工作区失败: %w", err)
 	}
-	return nil
+	if _, err := createProjectInTx(ctx, q, workspaceID, defaultProjectName); err != nil {
+		return fmt.Errorf("创建默认项目失败: %w", err)
+	}
+	return tx.Commit()
 }
 
 // ListWorkspaces 返回当前成员可访问的工作区；未传成员 ID 仅供启动/内部工具读取全量。
