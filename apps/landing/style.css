@@ -160,6 +160,9 @@ button {
 	text-wrap: balance;
 }
 
+/* 导语行长：46ch ≈ 27 个汉字（1ch 取字体「0」的字宽，CJK 字体里约 0.5–0.59em，本机实测 8.80px）。
+   桌面一行放得下约 26 字；≤720px 时容器只有 100% - 40px，390px 视口下只剩约 23 字。
+   三条导语按 23 字以内写，两边才是单行——24 字时窄屏会断成 23 + 「态。」两个字，比不换行更难看。 */
 .section-lede {
 	max-width: 46ch;
 	margin-top: 18px;
@@ -277,6 +280,16 @@ button:focus-visible {
 	font-weight: 700;
 	letter-spacing: -0.02em;
 	text-decoration: none;
+}
+
+/* 头部署名（学 wisp 落地页的 .mark-by）：字号比品牌名降一档，靠字距拉开。
+   颜色用 --ink-soft：小字要过 WCAG AA，--ink-faint 在纸色上只有 2.50:1，够不上
+   （wisp 那边也把它的 muted 专门压暗过）。 */
+.brand-by {
+	font-size: 12px;
+	font-weight: 400;
+	color: var(--ink-soft);
+	letter-spacing: 0.08em;
 }
 
 .site-nav {

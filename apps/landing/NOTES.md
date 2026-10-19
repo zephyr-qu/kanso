@@ -29,8 +29,19 @@ Cloudflare Workers 静态资源，与 wisp 落地页同一形态（`zephyr_engli
   也被 Go 二进制在自托管实例的 `/` 上提供，那里会沿用这些绝对地址：对外分享的正式地址就是这个
   Cloudflare 页面。
 
+## 署名（照 wisp 落地页的形态）
+
+- 三处同源：顶栏 `<span class="brand-by">by Zephyr</span>`、页脚末行「Go、React、SQLite，单端口运行 · by Zephyr」、
+  以及 `<head>` 里 JSON-LD 的 `author`。wisp 是三处一起做（`.mark-by` / 页脚末段 / 结构化数据），这里对齐。
+- 颜色用 `--ink-soft`，不用 `--ink-faint`：12px 的小字要过 WCAG AA。实测 `--ink-faint`（#a29c93）在纸色
+  #f7f5f0 上只有 2.50:1，`--ink-soft`（#6d675e）是 5.14:1（深色主题 #a9a196 / #1b1917 → 6.87:1）。wisp 做的是
+  同一件事：它的 `--muted` 是从 #9a9084 专门压暗到 #736a5f 才敢用在小字上（`styles.css` 顶部有注明）。
+- 一处有意不照搬：wisp 的 `.mark` 用 `align-items: baseline`，但它的品牌是纯文字；这里的 `.brand` 里有
+  26px 的 mark 方块，保持 `align-items: center`，只让署名垂直居中。
+- 署名是纯文本、不做成链接：本页唯一的对外链接仍是 GitHub 仓库（见下节），指向个人主页会破掉这条。
+- JSON-LD 只写页面真实存在的字段，不写 `softwareVersion` / `fileSize`：页面不显示它们，写了只会在下个版本
+  静默过期（wisp 的 `NOTES.md` 同款口径）。
+
 ## 页面本身没有的路径
 
-页面里唯一的对外链接是 GitHub 仓库；没有应用入口（`/login`）、没有下载按钮。所以 `_redirects`
-里不需要 wisp 那样的 `/download` 中转。页面挂在与应用不同的地址上，任何指向应用的绝对路径在这里
-都会 404——这也是当初去掉「进入工作区」的原因。
+页面里的对外链接只有两个：GitHub 仓库，以及 `https://github.com/zephyr-qu/kanso/releases/latest`（v0.6.0 起有了 Windows 桌面客户端，首屏与底部面板各有一个「下载 Windows 客户端」主按钮）。没有应用入口（`/login`）。下载指向的是 GitHub Releases 的绝对地址，不是本站路径，所以 `_redirects` 里不需要 wisp 那样的 `/download` 中转。页面挂在与应用不同的地址上，任何指向应用的绝对路径在这里都会 404——这也是当初去掉「进入工作区」的原因。
