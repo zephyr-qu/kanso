@@ -127,7 +127,7 @@ function AppShellContent() {
 							簡
 						</span>
 						<span className="kanso-brand-name">Kanso</span>
-						<span className="kanso-brand-mode rounded-full border px-1.5 py-px text-[10px] leading-none text-muted-foreground">
+						<span className="kanso-brand-mode rounded-full border px-1.5 py-px text-[0.625rem] leading-none text-muted-foreground">
 							{meData?.mode === "team" ? "团队版" : "个人版"}
 						</span>
 						<button
@@ -347,7 +347,7 @@ function AppShellContent() {
 								{member ? (
 									<MemberAvatar
 										member={member}
-										className="size-7 text-[11px] font-semibold text-white"
+										className="size-7 text-[0.6875rem] font-semibold text-white"
 									/>
 								) : (
 									<img
@@ -365,7 +365,7 @@ function AppShellContent() {
 								{member ? (
 									<MemberAvatar
 										member={member}
-										className="size-7 text-[11px] font-semibold text-white"
+										className="size-7 text-[0.6875rem] font-semibold text-white"
 									/>
 								) : (
 									<img

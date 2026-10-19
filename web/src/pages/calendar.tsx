@@ -94,7 +94,7 @@ export default function CalendarPage() {
 		<div className="flex h-full flex-col">
 			<PageHeader>
 				<div className="flex items-center gap-3">
-					<h1 className="text-[17px] font-[650] tracking-tight">日历视图</h1>
+					<h1 className="text-[1.0625rem] font-[650] tracking-tight">日历视图</h1>
 					<span className="hidden text-xs text-muted-foreground sm:inline">
 						拖拽任务调整截止日期
 					</span>
@@ -156,13 +156,13 @@ export default function CalendarPage() {
 													<span className="truncate">{task.title}</span>
 												</button>
 											))}
-											{tasks.length > 3 ? <span className="px-1 text-[10px] text-muted-foreground">+{tasks.length - 3} 项任务</span> : null}
+											{tasks.length > 3 ? <span className="px-1 text-[0.625rem] text-muted-foreground">+{tasks.length - 3} 项任务</span> : null}
 										</div>
 									</div>
 								);
 							})}
 						</div>
-						<p className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground/70"><CalendarDaysIcon className="size-3" /> 点击任务查看详情 · 拖动任务改期</p>
+						<p className="mt-2 flex items-center gap-1.5 text-[0.6875rem] text-muted-foreground/70"><CalendarDaysIcon className="size-3" /> 点击任务查看详情 · 拖动任务改期</p>
 					</>
 				) : null}
 			</PageContent>

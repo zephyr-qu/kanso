@@ -294,3 +294,32 @@ func TestLoadCorruptedFile(t *testing.T) {
 		t.Fatalf("损坏配置应回退默认: %+v", cfg)
 	}
 }
+
+// TestLoadWithDefaultDataDir 覆盖宿主集成入口的数据目录优先级：
+// 环境变量 > 配置文件 > 宿主默认值 > ./data。
+func TestLoadWithDefaultDataDir(t *testing.T) {
+	t.Setenv("KANSO_DATA_DIR", "")
+	t.Setenv("KANSO_CONFIG_FILE", filepath.Join(t.TempDir(), "absent.json"))
+
+	if got := LoadWithDefaultDataDir("/host/user-data/kanso"); got.DataDir != "/host/user-data/kanso" {
+		t.Fatalf("DataDir 应取宿主默认值，实际 %q", got.DataDir)
+	}
+	if got := LoadWithDefaultDataDir(""); got.DataDir != "./data" {
+		t.Fatalf("宿主默认值为空时应回退 ./data，实际 %q", got.DataDir)
+	}
+
+	t.Setenv("KANSO_DATA_DIR", "/tmp/env-data")
+	if got := LoadWithDefaultDataDir("/host/user-data/kanso"); got.DataDir != "/tmp/env-data" {
+		t.Fatalf("env 应优先于宿主默认值，实际 %q", got.DataDir)
+	}
+
+	cfgFile := filepath.Join(t.TempDir(), "kanso-config.json")
+	if err := os.WriteFile(cfgFile, []byte(`{"dataDir":"/from/file"}`), 0o600); err != nil {
+		t.Fatalf("写入配置文件失败: %v", err)
+	}
+	t.Setenv("KANSO_DATA_DIR", "")
+	t.Setenv("KANSO_CONFIG_FILE", cfgFile)
+	if got := LoadWithDefaultDataDir("/host/user-data/kanso"); got.DataDir != "/from/file" {
+		t.Fatalf("配置文件应优先于宿主默认值，实际 %q", got.DataDir)
+	}
+}

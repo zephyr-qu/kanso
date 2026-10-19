@@ -132,7 +132,7 @@ export default function TeamPage() {
 		return (
 			<div className="flex h-full flex-col">
 				<PageHeader>
-					<h1 className="text-[17px] font-[650]">团队</h1>
+					<h1 className="text-[1.0625rem] font-[650]">团队</h1>
 				</PageHeader>
 				<PageContent className="px-[30px] pt-[26px]">
 					<div className="flex justify-center py-16">
@@ -147,8 +147,8 @@ export default function TeamPage() {
 	return (
 		<div className="flex h-full flex-col">
 			<PageHeader>
-				<h1 className="text-[17px] font-[650] tracking-tight">团队</h1>
-				<span className="text-[13px] text-muted-foreground">
+				<h1 className="text-[1.0625rem] font-[650] tracking-tight">团队</h1>
+				<span className="text-[0.8125rem] text-muted-foreground">
 					{workspaceName ?? "当前工作区"} · 成员与访问权限
 				</span>
 			</PageHeader>
@@ -156,7 +156,7 @@ export default function TeamPage() {
 				<div className="w-full space-y-4">
 					<SurfaceCard className="flex items-start gap-3 border-primary/20 bg-primary/[0.03] p-4">
 						<ShieldCheckIcon className="mt-0.5 size-5 shrink-0 text-primary" />
-						<div className="text-[13px] leading-relaxed text-muted-foreground">
+						<div className="text-[0.8125rem] leading-relaxed text-muted-foreground">
 							<strong className="font-semibold text-foreground">权限说明</strong>
 							<p>
 								管理员自动拥有全部工作区权限；实例最多 2
@@ -167,7 +167,7 @@ export default function TeamPage() {
 					<SurfaceCard className="p-5">
 						<div className="mb-4 flex items-center justify-between gap-3">
 							<div>
-								<h2 className="text-[13px] font-semibold">当前工作区成员</h2>
+								<h2 className="text-[0.8125rem] font-semibold">当前工作区成员</h2>
 								<p className="mt-1 text-xs text-muted-foreground">
 									{members?.length ?? 0} 人 · 管理员 {adminCount}/2 · 实例最多 6 个身份 ·
 									密钥仅在轮换成功后显示一次
@@ -220,7 +220,7 @@ export default function TeamPage() {
 											<div className="flex items-center gap-2">
 												<span className="truncate text-sm font-medium">{item.name}</span>
 												{isSelf ? (
-													<span className="text-[11px] text-muted-foreground">你</span>
+													<span className="text-[0.6875rem] text-muted-foreground">你</span>
 												) : null}
 											</div>
 											<div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">

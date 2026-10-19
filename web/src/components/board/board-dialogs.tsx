@@ -233,7 +233,7 @@ export function BoardDialogs(props: BoardDialogsProps) {
 												<span className="min-w-0 flex-1 truncate text-sm">{milestone.name}</span>
 											)}
 											<span className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-muted"><span className="block h-full rounded-full bg-primary" style={{ width: `${pct}%` }} /></span>
-											<span className="w-9 shrink-0 text-right font-mono text-[11px] text-muted-foreground">{milestone.progress ? `${pct}%` : "—"}</span>
+											<span className="w-9 shrink-0 text-right font-mono text-[0.6875rem] text-muted-foreground">{milestone.progress ? `${pct}%` : "—"}</span>
 											<DatePicker value={milestone.dueDate ?? ""} onChange={(date) => void onUpdateMilestoneDueDate(milestone.id, date)} ariaLabel="里程碑截止日期" placeholder="设置日期" />
 											<button type="button" aria-label={`重命名 ${milestone.name}`} title="重命名" className="text-muted-foreground hover:text-foreground" onClick={() => setEditingMilestone({ id: milestone.id, name: milestone.name })}><PencilIcon className="size-3.5" /></button>
 											<MilestoneDeleteButton milestone={milestone} onDelete={onDeleteMilestone} className="text-muted-foreground hover:text-destructive" />

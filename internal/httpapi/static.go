@@ -26,6 +26,7 @@ func staticHandler(spa fs.FS) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
+		setSecurityHeaders(w.Header())
 
 		name := strings.TrimPrefix(r.URL.Path, "/")
 		if name == "" {
@@ -46,4 +47,25 @@ func staticHandler(spa fs.FS) http.Handler {
 		}
 		http.NotFound(w, r)
 	})
+}
+
+// contentSecurityPolicy 是应用页面的安全基线（M6-4），取值依据是 web/src 的实际依赖：
+//   - script-src 'self'：脚本全是构建产物，没有内联脚本；
+//   - style-src 'self' 'unsafe-inline'：React 的内联 style 属性与 dnd-kit 的 transform；
+//   - img-src 'self' data: blob:：头像用 data URL，导出与分享卡用 blob/data URL；
+//   - font-src 'self'：字体自托管（web/src/index.css 的 @font-face）；
+//   - connect-src 'self' ws: wss:：同源 API 与 WebSocket（'self' 在部分内核不覆盖 ws:）；
+//   - object-src/base-uri/form-action/frame-ancestors：收紧其余入口。
+const contentSecurityPolicy = "default-src 'self'; script-src 'self'; " +
+	"style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; " +
+	"connect-src 'self' ws: wss:; object-src 'none'; base-uri 'self'; " +
+	"form-action 'self'; frame-ancestors 'none'"
+
+// setSecurityHeaders 给应用页面加安全基线。只覆盖非 /api 的静态响应：
+// API 返回 JSON，CSP 对它没有意义。
+func setSecurityHeaders(h http.Header) {
+	h.Set("Content-Security-Policy", contentSecurityPolicy)
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Referrer-Policy", "no-referrer")
+	h.Set("X-Frame-Options", "DENY")
 }

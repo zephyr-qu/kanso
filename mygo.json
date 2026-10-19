@@ -1,0 +1,11 @@
+{
+  "name": "Kanso",
+  "identifier": "top.zephyrqu.kanso",
+  "version": "0.6.0",
+  "copyright": "© 2026 Zephyr",
+  "main": "./cmd/kanso-desktop",
+  "buildCommand": "pnpm --dir web build",
+  "bindings": "build/mygo.ts",
+  "icon": "resources/icon.png",
+  "out": "build"
+}

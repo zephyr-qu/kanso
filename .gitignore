@@ -63,3 +63,6 @@ kanso-config.json
 *-cover.html
 *-cover.out
 coverage.out
+
+# MyGo 打包产物（`mygo build` 的 out 目录，见 mygo.json）
+/build/

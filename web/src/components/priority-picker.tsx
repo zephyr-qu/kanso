@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
 export function PriorityPicker({
 	value,
 	onChange,
-	size = "px-2 py-1 text-[11px]",
+	size = "px-2 py-1 text-[0.6875rem]",
 	titlePrefix,
 	preventFocusLoss,
 	className,

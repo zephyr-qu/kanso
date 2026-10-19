@@ -285,7 +285,7 @@ export function QuickCapture({
 				>
 					<div className="flex items-center justify-between border-b px-5 py-4">
 						<div>
-							<div className="text-[17px] font-semibold tracking-tight">
+							<div className="text-[1.0625rem] font-semibold tracking-tight">
 								快速捕获
 							</div>
 							<div className="mt-0.5 text-xs text-muted-foreground">
@@ -334,14 +334,14 @@ export function QuickCapture({
 								/>
 
 								<div className="space-y-1.5">
-									<span className="text-[11px] font-medium text-muted-foreground">
+									<span className="text-[0.6875rem] font-medium text-muted-foreground">
 										当前工作区
 									</span>
 									<div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
 										{workspaceName || "未选择工作区"}
 									</div>
 									<div className="space-y-1.5">
-										<span className="text-[11px] font-medium text-muted-foreground">
+										<span className="text-[0.6875rem] font-medium text-muted-foreground">
 											项目
 											<span className="ml-0.5 text-destructive">*</span>
 										</span>
@@ -374,7 +374,7 @@ export function QuickCapture({
 								</div>
 
 								<div className="flex items-center justify-between gap-2">
-									<span className="text-[11px] font-medium text-muted-foreground">
+									<span className="text-[0.6875rem] font-medium text-muted-foreground">
 										优先级
 									</span>
 									<div className="flex flex-wrap justify-end gap-1.5">
@@ -397,7 +397,7 @@ export function QuickCapture({
 								</div>
 
 								<div className="flex items-center justify-between gap-2">
-									<span className="text-[11px] font-medium text-muted-foreground">
+									<span className="text-[0.6875rem] font-medium text-muted-foreground">
 										截止日期
 									</span>
 									<DatePicker
@@ -409,7 +409,7 @@ export function QuickCapture({
 								</div>
 
 								<div className="flex items-center justify-between gap-2">
-									<span className="text-[11px] font-medium text-muted-foreground">
+									<span className="text-[0.6875rem] font-medium text-muted-foreground">
 										标签
 									</span>
 									<QuickCaptureLabelPicker
@@ -453,7 +453,7 @@ export function QuickCapture({
 											rows={8}
 											className="w-full resize-y rounded-lg border bg-background px-3 py-2 text-sm text-foreground outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground/60 focus:border-primary focus:ring-2 focus:ring-primary/20"
 										/>
-										<p className="text-[11px] text-muted-foreground">
+										<p className="text-[0.6875rem] text-muted-foreground">
 											分析使用服务端配置的 OpenAI 兼容接口；密钥不会下发到浏览器。
 										</p>
 									</>
@@ -584,7 +584,7 @@ function AIDraftEditor({
 
 			<div className="grid grid-cols-2 gap-2">
 				<div className="space-y-1">
-					<span className="text-[11px] text-muted-foreground">项目</span>
+					<span className="text-[0.6875rem] text-muted-foreground">项目</span>
 					<Select
 						value={draft.projectId}
 						onValueChange={(value) => {
@@ -621,7 +621,7 @@ function AIDraftEditor({
 					</Select>
 				</div>
 				<div className="space-y-1">
-					<span className="text-[11px] text-muted-foreground">列</span>
+					<span className="text-[0.6875rem] text-muted-foreground">列</span>
 					<Select
 						value={draft.columnId}
 						onValueChange={(value) =>
@@ -676,7 +676,7 @@ function AIDraftEditor({
 			</div>
 
 			<div className="flex items-center justify-between gap-2">
-				<span className="text-[11px] text-muted-foreground">标签</span>
+				<span className="text-[0.6875rem] text-muted-foreground">标签</span>
 				<QuickCaptureLabelPicker
 					labels={board?.labels ?? []}
 					selected={draft.labelIds}

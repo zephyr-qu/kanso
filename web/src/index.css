@@ -184,6 +184,9 @@ input:-webkit-autofill:active {
     /* 覆盖 Tailwind preflight 的 1.5：原型（浏览器默认 normal）行高更紧凑，
        全局对齐后再按原型显式覆盖个别元素（如任务卡 1.5、描述 1.7）。 */
     line-height: 1.3;
+    /* 桌面壳（MyGo）注入的系统文字缩放：100% 保留浏览器/系统默认字号，只乘外壳给的系数；
+       浏览器里 --mygo-text-scale 不存在，乘 1，行为与改动前一致。 */
+    font-size: calc(100% * var(--mygo-text-scale, 1));
   }
   * {
     @apply border-border outline-ring/50;

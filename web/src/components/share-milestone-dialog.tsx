@@ -15,6 +15,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import type { Milestone } from "@/types/board";
+import { saveDataUrlInDesktop } from "@/lib/desktop-save";
 
 const ORANGE = "#c2410c";
 const INK = "#37352f";
@@ -351,9 +352,16 @@ export default function ShareMilestoneDialog(props: {
 			backgroundColor: PAPER,
 			pixelRatio: 2,
 		});
+		const name = `kanso-进度-${projectName}.png`;
+		// 桌面壳里由 Go 弹「另存为」并写盘；浏览器里走原来的下载链接。
+		try {
+			if (await saveDataUrlInDesktop(name, dataUrl)) return;
+		} catch (error) {
+			console.error("桌面壳保存失败，改用浏览器下载", error);
+		}
 		const a = document.createElement("a");
 		a.href = dataUrl;
-		a.download = `kanso-进度-${projectName}.png`;
+		a.download = name;
 		document.body.appendChild(a);
 		a.click();
 		a.remove();

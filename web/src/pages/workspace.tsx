@@ -163,7 +163,7 @@ export default function WorkspacePage() {
 		<div className="kanso-workspace-page flex h-full flex-col">
 			<PageHeader>
 				<div className="flex min-w-0 items-center gap-2">
-					<h1 className="truncate text-[17px] font-[650] tracking-tight">
+					<h1 className="truncate text-[1.0625rem] font-[650] tracking-tight">
 						{workspaceName}
 					</h1>
 					<Button
@@ -289,7 +289,7 @@ export default function WorkspacePage() {
 													onClick={() => setArchivedOpen(false)}
 												>
 													<p className="truncate text-sm font-medium">{project.name}</p>
-													<p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+													<p className="mt-1 flex items-center gap-1 text-[0.6875rem] text-muted-foreground">
 														<ClockIcon className="size-3 shrink-0" />
 														{project.archivedAt
 															? formatUpdated(

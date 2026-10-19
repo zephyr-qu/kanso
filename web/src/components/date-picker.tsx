@@ -113,7 +113,7 @@ export default function DatePicker(props: {
 						<ChevronRightIcon className="size-4" />
 					</button>
 				</div>
-				<div className="grid grid-cols-7 border-b pb-1 text-center text-[11px] text-muted-foreground">
+				<div className="grid grid-cols-7 border-b pb-1 text-center text-[0.6875rem] text-muted-foreground">
 					{WEEKDAY_LABELS.map((w) => (
 						<span key={w} className="py-0.5">
 							{w}
@@ -130,7 +130,7 @@ export default function DatePicker(props: {
 							<button
 								key={index}
 								type="button"
-								className={`size-7 rounded-md text-[12px] transition-colors hover:bg-accent ${
+								className={`size-7 rounded-md text-[0.75rem] transition-colors hover:bg-accent ${
 									isSelected
 										? "bg-primary font-semibold text-primary-foreground hover:bg-primary"
 										: isToday

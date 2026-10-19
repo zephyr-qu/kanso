@@ -19,7 +19,7 @@ docker-compose.yml  Compose 部署配置
 
 ## 本地开发
 
-环境要求：Go 1.26、Node.js 和 pnpm。
+环境要求：Go 1.27.1、Node.js 和 pnpm。
 
 启动后端：
 
@@ -45,6 +45,8 @@ go run ./cmd/landing   # http://127.0.0.1:4173
 应用本身不提供落地页：打开 `/` 就是应用，未登录时由前端路由送到登录页（落地页只存在于独立站点）。
 
 页面里的产品截图取自真实应用：先 `pnpm --dir web build` 并起后端，再跑 `pnpm --dir web exec node tools/capture-landing-shots.mjs`，产物写入 `apps/landing/media/`。分享图另由 `pnpm --dir web exec node tools/build-og-card.mjs` 生成。
+
+桌面客户端的应用图标由 `pnpm --dir web exec node tools/build-app-icon.mjs` 生成（`resources/icon.png`，1024×1024，见 `mygo.json`）。
 
 ## 本地构建
 
@@ -76,6 +78,29 @@ VERSION=1.2.0 ./build.sh
 - `KANSO_LOG_LEVEL`：日志级别，`debug` / `info`（默认）/ `warn` / `error`
 
 运行模式仅由 `KANSO_MODE` 环境变量决定。二进制支持 `kanso --version`，健康检查接口为 `GET /api/health`。启动服务使用 `kanso serve`。AI 捕获在 Quick Capture 的 **AI** 页签中使用；需先配置 API Key。
+
+## 桌面客户端（Windows）
+
+应用也可以作为桌面客户端运行（MyGo 壳 + 系统 WebView2，代码在 `cmd/kanso-desktop`）。它是可选入口：`kanso serve`、CLI、MCP 与 Docker 部署都不受影响。
+
+```sh
+# 开发运行（先构建前端：桌面壳内嵌的是 web/dist）
+pnpm --dir web build
+go run ./cmd/kanso-desktop
+
+# 出安装包（配置见 mygo.json；首次会自动下载 NSIS，之后约 20 秒）
+go run github.com/egoist/mygo/cmd/mygo@v0.5.5 build
+# → build/windows-amd64/Kanso.exe
+# → build/windows-amd64/Kanso Setup <版本> amd64.exe
+```
+
+- **安装**：`Kanso Setup <版本> amd64.exe` 装到 `%LOCALAPPDATA%\Programs\Kanso`，不需要管理员；卸载用系统设置的「应用」或安装目录里的 `Uninstall.exe`。
+- **数据**：`%LOCALAPPDATA%\kanso`（可用 `KANSO_DATA_DIR` 覆盖）。卸载**不删**数据目录。
+- **登录**：桌面版只生成一次访问密钥，存进 Windows 凭据管理器（服务 `kanso`、键 `access-key`），所以打开即用、没有登录页。
+- **更新**：安装包尚未签名，所以是「设置 → 关于 → 检查更新」打开 GitHub Releases，手动下载新安装包覆盖安装；覆盖安装不影响数据目录。
+- **WebView2**：Windows 11 自带；Windows 10 需装一次 Microsoft Edge WebView2 运行时，缺了会弹出说明窗口而不是空白窗。
+- **注意**：`mygo build` 会跑 `pnpm --dir web build`，从而覆盖被跟踪的占位文件 `web/dist/index.html`（`go:embed` 需要它存在）。打包后还原它：`git checkout -- web/dist/index.html`。
+- **验收清单**（含无人值守探针与手动项）：[`cmd/kanso-desktop/SMOKE.md`](cmd/kanso-desktop/SMOKE.md)。
 
 ## 命令行（kanso）
 

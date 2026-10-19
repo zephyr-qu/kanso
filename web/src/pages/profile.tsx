@@ -103,7 +103,7 @@ function ActivityHeatmap({ activities }: { activities: Activity[] }) {
 				{monthLabels.map((label, index) => (
 					<span
 						key={index}
-						className="min-w-0 flex-1 overflow-visible whitespace-nowrap text-[9px] leading-none text-muted-foreground/70"
+						className="min-w-0 flex-1 overflow-visible whitespace-nowrap text-[0.5625rem] leading-none text-muted-foreground/70"
 					>
 						{label ?? ""}
 					</span>
@@ -115,7 +115,7 @@ function ActivityHeatmap({ activities }: { activities: Activity[] }) {
 					{Array.from({ length: 7 }, (_, dow) => (
 						<span
 							key={dow}
-							className={`flex flex-1 items-center text-[9px] leading-none text-muted-foreground/70 ${dow === 1 || dow === 3 || dow === 5 ? "" : "invisible"}`}
+							className={`flex flex-1 items-center text-[0.5625rem] leading-none text-muted-foreground/70 ${dow === 1 || dow === 3 || dow === 5 ? "" : "invisible"}`}
 						>
 							{WEEKDAY_LABELS[dow]}
 						</span>
@@ -147,7 +147,7 @@ function ActivityHeatmap({ activities }: { activities: Activity[] }) {
 				</div>
 			</div>
 			{/* 图例 */}
-			<div className="mt-1.5 flex items-center justify-end gap-1 text-[10px] text-muted-foreground/70">
+			<div className="mt-1.5 flex items-center justify-end gap-1 text-[0.625rem] text-muted-foreground/70">
 				<span>少</span>
 				{[0.08, 0.35, 0.6, 0.85].map((ratio) => (
 					<span
@@ -258,8 +258,8 @@ export default function ProfilePage() {
 	return (
 		<div className="flex h-full flex-col">
 			<PageHeader>
-				<h1 className="text-[17px] font-[650] tracking-tight">个人中心</h1>
-				<span className="text-[13px] text-muted-foreground">
+				<h1 className="text-[1.0625rem] font-[650] tracking-tight">个人中心</h1>
+				<span className="text-[0.8125rem] text-muted-foreground">
 					当前成员 · 资料、活动与安全
 				</span>
 			</PageHeader>
@@ -308,7 +308,7 @@ export default function ProfilePage() {
 										}
 									/>
 									<PopoverPopup className="w-fit p-2.5" align="start">
-										<p className="mb-2 px-0.5 text-[11px] text-muted-foreground">
+										<p className="mb-2 px-0.5 text-[0.6875rem] text-muted-foreground">
 											头像颜色
 										</p>
 										<div className="flex gap-2">
@@ -355,19 +355,19 @@ export default function ProfilePage() {
 													setEditing(false);
 												}
 											}}
-											className="h-7 w-40 rounded-md border border-primary px-2 text-[16px] font-[650] tracking-tight outline-none"
+											className="h-7 w-40 rounded-md border border-primary px-2 text-[1rem] font-[650] tracking-tight outline-none"
 											aria-label="编辑名称"
 										/>
 									) : (
-										<span className="text-[16px] font-[650] tracking-tight">
+										<span className="text-[1rem] font-[650] tracking-tight">
 											{member.name}
 										</span>
 									)}
-									<span className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">
+									<span className="rounded-full border px-2 py-0.5 text-[0.6875rem] text-muted-foreground">
 										{ROLE_LABEL[member.role]}
 									</span>
 								</div>
-								<p className="mt-0.5 text-[13px] text-muted-foreground">
+								<p className="mt-0.5 text-[0.8125rem] text-muted-foreground">
 									{workspaceName}
 								</p>
 								{editing ? (
@@ -417,7 +417,7 @@ export default function ProfilePage() {
 						{/* 工作区概览：任务没有分配人，因此这里明确标注为工作区数据。 */}
 						<div>
 							<div className="mb-2 flex items-center justify-between">
-								<span className="text-[13px] font-semibold">工作区概览</span>
+								<span className="text-[0.8125rem] font-semibold">工作区概览</span>
 								<span className="text-xs text-muted-foreground/70">当前工作区</span>
 							</div>
 							<div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -451,7 +451,7 @@ export default function ProfilePage() {
 							<SurfaceCard className="p-5">
 								<div className="mb-3 flex items-center justify-between">
 									<div>
-										<h2 className="text-[13px] font-semibold">我的最近活动</h2>
+										<h2 className="text-[0.8125rem] font-semibold">我的最近活动</h2>
 										<p className="mt-1 text-xs text-muted-foreground/70">
 											最近参与的项目操作
 										</p>
@@ -476,9 +476,9 @@ export default function ProfilePage() {
 															action={activity.action}
 															data={activity.data}
 															actor="你"
-															className="block text-[13px]"
+															className="block text-[0.8125rem]"
 														/>
-														<p className="mt-1 text-[11px] text-muted-foreground/70">
+														<p className="mt-1 text-[0.6875rem] text-muted-foreground/70">
 															{formatActivityAge(activity.createdAt)}
 														</p>
 													</div>
@@ -501,7 +501,7 @@ export default function ProfilePage() {
 								<SurfaceCard className="p-5">
 									<div className="flex items-start justify-between gap-3">
 										<div>
-											<h2 className="text-[13px] font-semibold">账号与安全</h2>
+											<h2 className="text-[0.8125rem] font-semibold">账号与安全</h2>
 											<p className="mt-1 text-xs text-muted-foreground/70">
 												管理当前成员的访问凭证
 											</p>
@@ -555,7 +555,7 @@ export default function ProfilePage() {
 						<SurfaceCard className="p-5">
 							<div className="mb-3 flex items-center justify-between">
 								<div>
-									<h2 className="text-[13px] font-semibold">个人活跃</h2>
+									<h2 className="text-[0.8125rem] font-semibold">个人活跃</h2>
 									<p className="mt-1 text-xs text-muted-foreground/70">
 										只统计你的操作记录
 									</p>

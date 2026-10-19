@@ -182,7 +182,13 @@ func validateDataDir(path string) error {
 	}
 }
 
-func Load() Config {
+// Load 读取运行配置：环境变量 > 配置文件 > 内置默认。
+func Load() Config { return LoadWithDefaultDataDir("") }
+
+// LoadWithDefaultDataDir 是 Load 的宿主集成入口：环境变量与配置文件都没有给出数据目录时，
+// dataDirFallback 非空则用它，否则仍是 ./data。
+// 桌面壳（cmd/kanso-desktop）用它把数据目录默认到系统用户数据目录；kanso serve 走 Load，口径不变。
+func LoadWithDefaultDataDir(dataDirFallback string) Config {
 	fileCfg := FileConfig{}
 	if fc, err := ReadFile(ConfigFilePath()); err != nil {
 		// 配置文件缺失/损坏不阻断启动：回退内置默认，并打警告便于发现。
@@ -201,7 +207,7 @@ func Load() Config {
 	return Config{
 		Addr:                 firstNonEmpty(os.Getenv("KANSO_ADDR"), fileCfg.Addr, ":8080"),
 		AccessKey:            firstNonEmpty(os.Getenv("KANSO_ACCESS_KEY"), fileCfg.AccessKey),
-		DataDir:              firstNonEmpty(os.Getenv("KANSO_DATA_DIR"), fileCfg.DataDir, "./data"),
+		DataDir:              firstNonEmpty(os.Getenv("KANSO_DATA_DIR"), fileCfg.DataDir, dataDirFallback, "./data"),
 		Mode:                 ParseMode(os.Getenv("KANSO_MODE")),
 		WSOrigins:            parseOrigins(firstNonEmpty(os.Getenv("KANSO_WS_ORIGINS"), fileCfg.WSOrigins)),
 		AutoArchiveEnabled:   autoArchiveEnabled,
