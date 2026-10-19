@@ -265,11 +265,6 @@ const setupPageHTML = `<!doctype html>
     color: var(--semantic-content-secondary, #6b675f);
   }
 
-  .wizard__lede code {
-    font-family: var(--semantic-font-mono, ui-monospace, monospace);
-    font-size: 12px;
-  }
-
   .wizard__group { margin: 0 0 22px; }
 
   .wizard__label {
@@ -467,8 +462,7 @@ const setupPageHTML = `<!doctype html>
 
   <h1 class="wizard__title">欢迎使用 Kanso</h1>
   <p class="wizard__lede">
-    先定两件事：自己用，还是和同事一起用；访问密钥用哪一把。之后想改，删掉数据目录里的
-    <code>desktop.json</code> 重新打开即可。
+    轻量的内网看板项目管理工具，单机即可运行，数据都在本机。
   </p>
 
   <form id="setup-form" novalidate>
