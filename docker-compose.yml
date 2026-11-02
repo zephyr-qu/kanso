@@ -4,7 +4,8 @@ services:
       context: .
       args:
         VERSION: ${VERSION:-dev}
-    image: kanso:local
+    # 构建模式下用本地 kanso:local；升级脚本会通过 KANSO_IMAGE 指定已发布镜像
+    image: ${KANSO_IMAGE:-kanso:local}
     container_name: kanso
     restart: unless-stopped
     ports:
