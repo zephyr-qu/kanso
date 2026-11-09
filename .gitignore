@@ -25,6 +25,7 @@ web/dist/*
 .e2e-*/
 .vscode/
 .idea/
+.cursor/
 .DS_Store
 Thumbs.db
 /kanso
