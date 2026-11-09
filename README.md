@@ -38,7 +38,7 @@ VERSION=1.2.0 just build   # 指定版本；否则取 Git tag 或短哈希
 | `KANSO_LOG_FORMAT` | `text`（默认）或 `json` |
 | `KANSO_LOG_LEVEL` | `debug` / `info`（默认）/ `warn` / `error` |
 
-AI 捕获在 Quick Capture 的 AI 页签使用，需先配置 API Key。健康检查：`GET /api/health`。
+健康检查：`GET /api/health`。
 
 ## 命令行与 MCP
 
@@ -49,8 +49,6 @@ go build -o kanso ./cmd/kanso
 ./kanso login --key mock-key
 ./kanso workspace list
 ```
-
-成员管理、备份与设置仍需在 Web 中操作。
 
 ## Docker
 
@@ -71,16 +69,9 @@ just upgrade --tag v0.6.1 --yes   # 升级到已发布镜像（ghcr.io/zephyr-qu
 
 备份写到 `./backups/`（默认保留最近 5 份，可用 `--keep` / `--backup-dir` 调整）。
 
-也可以直接用 Docker：
-
-```sh
-docker build -t kanso .
-docker run --rm -p 8080:8080 -v kanso-data:/data -e KANSO_ACCESS_KEY=change-me kanso
-```
-
 ## 桌面客户端（Windows）
 
-可选入口（MyGo 壳 + WebView2，代码在 `cmd/kanso-desktop`），不影响 `serve`、CLI、MCP 与 Docker。
+桌面入口：MyGo 壳 + WebView2，代码在 `cmd/kanso-desktop`。
 
 ```sh
 pnpm --dir web build                # 桌面壳内嵌 web/dist
@@ -91,7 +82,6 @@ go run github.com/egoist/mygo/cmd/mygo@v0.5.5 build   # 出安装包，产物在
 - **安装/数据**：装到 `%LOCALAPPDATA%\Programs\Kanso`（无需管理员，卸载用系统「应用」或 `Uninstall.exe`）；数据在 `%LOCALAPPDATA%\kanso`，卸载不删。
 - **首次启动**：向导选个人/团队并确认密钥（存 Windows 凭据管理器，选择记在 `desktop.json`，删掉可重来）。
 - **环境/更新**：Windows 11 自带 WebView2，Windows 10 需先装一次；安装包未签名，从 GitHub Releases 下载覆盖安装。
-- `mygo build` 会覆盖被跟踪的 `web/dist/index.html`，打包后 `git checkout -- web/dist/index.html` 还原；验收清单见 [`cmd/kanso-desktop/SMOKE.md`](cmd/kanso-desktop/SMOKE.md)。
 
 ## 测试与检查
 
@@ -122,4 +112,4 @@ deploy/             docker-compose.yml
 justfile            命令入口（`just --list`）
 ```
 
-落地页可独立预览：`go run ./cmd/landing`（http://127.0.0.1:4173）。截图与分享图由 `web/tools/` 下的脚本生成：`capture-landing-shots.mjs`、`build-og-card.mjs`、`build-app-icon.mjs`。
+落地页可独立预览：`go run ./cmd/landing`（http://127.0.0.1:4173）。
