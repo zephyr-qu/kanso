@@ -1,27 +1,13 @@
-// Command kanso-desktop 是 kanso 的桌面客户端入口（0.6.0 / M6）。
+// Command kanso-desktop 是 kanso 的桌面客户端入口（MyGo 壳 + 系统 WebView2）。
 //
-// 形态（路线 A，ADR-0021；设计文档在本地 docs/，按仓库约定不入版本管理）：进程内装配现有 kanso
-// 应用（internal/app + web 内嵌 SPA），把 HTTP 服务绑在回环地址，再让 MyGo 的窗口
-// 直接加载该地址。前端零改动：/api 天然同源、WebSocket 握手同源自动放行。
+// 形态（路线 A，ADR-0021）：进程内装配 internal/app 与内嵌 SPA，HTTP 绑回环地址，窗口直接加载该地址；
+// /api 与 WebSocket 天然同源，前端零改动。kanso serve / CLI / mcp / Docker 行为不变。
 //
-// 现有入口不受影响：kanso serve / CLI / mcp / Docker 仍是原样。
+// 实现分散在 setup.go（首启流程）、wizard.go（向导页面）、menu.go / exporter.go（导出）、
+// drop.go（备份导入）、links.go（外链）、smoke.go（冒烟探针）。
 //
-// 已实现（规格 0010 的 M6-1 ~ M6-9）：
-//   - 数据目录默认到系统用户数据目录（KANSO_DATA_DIR、配置文件仍优先）；
-//   - 首次启动先弹向导（setup.go 的流程 + wizard.go 的页面）：选个人/团队、确认或改写访问密钥。
-//     向导是 HTML 页面，样式表直接复用 app 编译出的那一份，所以外观与主界面一致。选择落数据目录下的
-//     desktop.json，密钥进系统凭据存储（macOS 钥匙串 / Windows 凭据管理器 / Linux libsecret），
-//     没有凭据存储时落 access-key 文件（0600）；
-//   - 之后每次启动由 preload 把密钥交给页面，桌面版不弹登录页；
-//   - 端口沿用配置，被占用则回落到空闲端口并打警告；
-//   - 导出交给 Go 弹系统「另存为」对话框（exporter.go），菜单可导出当前页 PDF（menu.go），
-//     拖入 .json 备份即导入（drop.go），外链交给系统浏览器（links.go），
-//     静态层带 CSP（internal/httpapi/static.go）；
-//   - 窗口大小/位置/最大化按 DIP 记住（StateKey），单实例：第二次启动转交给已运行实例（M6-2、M6-8）；
-//   - KANSO_DESKTOP_SMOKE=<目录> 时注入无人值守冒烟探针（smoke.go）。
-//
-// 打包：`mygo build`（配置见 mygo.json，图标 resources/icon.png），产物在 build/windows-amd64。
-// 尚未实现：自动更新（只有「检查更新」跳 GitHub Releases）与代码签名。
+// 打包：`mygo build`（mygo.json，图标 resources/icon.png），产物在 build/windows-amd64。
+// 未实现：自动更新（只跳 GitHub Releases）与代码签名。
 package main
 
 import (
