@@ -31,13 +31,25 @@ Cloudflare Workers 静态资源，与 wisp 落地页同一形态（`zephyr_engli
 
 ## 署名（照 wisp 落地页的形态）
 
-- 三处同源：顶栏 `<span class="brand-by">by Zephyr</span>`、页脚末行「Go、React、SQLite，单端口运行 · by Zephyr」、
-  以及 `<head>` 里 JSON-LD 的 `author`。wisp 是三处一起做（`.mark-by` / 页脚末段 / 结构化数据），这里对齐。
-- 颜色用 `--ink-soft`，不用 `--ink-faint`：12px 的小字要过 WCAG AA。实测 `--ink-faint`（#a29c93）在纸色
-  #f7f5f0 上只有 2.50:1，`--ink-soft`（#6d675e）是 5.14:1（深色主题 #a9a196 / #1b1917 → 6.87:1）。wisp 做的是
-  同一件事：它的 `--muted` 是从 #9a9084 专门压暗到 #736a5f 才敢用在小字上（`styles.css` 顶部有注明）。
+- 三处同源：顶栏 `<span class="brand-by">by Zephyr</span>`、页脚末行「Go、React、SQLite 单端口运行 by Zephyr」
+  （署名是 `.footer-by` 的内联 span，不另起一行小字），以及 `<head>` 里 JSON-LD 的 `author`。
+- 颜色整套与应用本体同源（`web/src/styles/_primitives.scss`）：暖纸底 #f7f5f0、卡面 #fdfcf9、内嵌
+  #f3f0ea、正文 #37352f、次要文字 #6f6b64、边框用应用的 alpha 值（0.1 / 0.2）；深色各有一组深暖值
+  （#1d1b18 / #272420 / #211f1c / #e8e3da / #aaa39a）。次要文字在纸底上 4.86:1，小字也过 AA。
+- 品牌橙同样是应用的值：coral-600（#c2410c / 深色 #e0601f）做实心，coral-700 做 hover，white-warm
+  （#fff8f0）做实心按钮上的字（4.92:1），与应用内按钮一致。深色那档橙偏亮，暖白只有 3.4:1，实心按钮
+  上的字改用底色深棕 #1d1b18（4.79:1）——这是与应用唯一有意不同的地方。
+- 落地页是独立静态站，读不到应用的 SCSS，所以数值是抄的一份：改配色时 `_primitives.scss` 与
+  `apps/landing/style.css` 顶部的 token 块一起改。
+- 代码区块里的变量名用品牌橙高亮：浅色 4.96:1、深色（coral-700）5.5:1，小字也过 AA。
+- 文案与结构上砍掉的「界面在解释自己」：各节导语只留 h2（原来每节下方一句都是重复标题）、代码面板去掉
+  「docker compose」这种终端标题栏只留一行脚注、首屏不再放第三个「自部署」按钮（导航与部署节已有入口）。
+- 标题从「Kanso · 私有化的轻量看板工作台」改为「Kanso：自托管的轻量看板工作台」：中点不做分隔符，
+  「私有化」是采购话术，这页的读者是自己动手部署的人。
 - 一处有意不照搬：wisp 的 `.mark` 用 `align-items: baseline`，但它的品牌是纯文字；这里的 `.brand` 里有
-  26px 的 mark 方块，保持 `align-items: center`，只让署名垂直居中。
+  24px 的 mark 方块，保持 `align-items: center`，只让署名垂直居中。
+- 线条全部写成 0.5px。Chromium 的 `getComputedStyle` 会把它报成 1px（边框宽度按设备像素取整），
+  但样式表里写的确是 0.5px：验收时看声明值，不要相信计算值。
 - 署名是纯文本、不做成链接：本页唯一的对外链接仍是 GitHub 仓库（见下节），指向个人主页会破掉这条。
 - JSON-LD 只写页面真实存在的字段，不写 `softwareVersion` / `fileSize`：页面不显示它们，写了只会在下个版本
   静默过期（wisp 的 `NOTES.md` 同款口径）。

@@ -1,8 +1,12 @@
-/* Kanso 落地页样式：自包含单文件，不引用 SPA 的任何 token。改版说明见 apps/landing/README 注释区块。
+/* Kanso 落地页样式：自包含单文件，不引用 SPA 的任何 token。
  *
- * 形状规则（唯一一套，别处不再出现第三种圆角）：控件 8px，容器与图片框 16px。
- * 主题：默认暖纸浅色，prefers-color-scheme: dark 时切到石墨深色，同页不翻主题。
- * 字体：展示字用系统无衬线（PingFang / 微软雅黑 / Noto Sans），等宽用自托管 IBM Plex Mono。 */
+ * 颜色：与应用本体同一套值（web/src/styles/_primitives.scss）——暖纸底 #f7f5f0、卡面 #fdfcf9、
+ *   正文 #37352f、次要文字 #6f6b64、alpha 边框、品牌橙 coral-600 / 700 与暖白；深色另有一组值。
+ * 字号：正文三档 12 / 14 / 16；标题用 clamp 的展示级字号，层级靠字重、颜色与间距，不靠加档。
+ * 圆角：控件 8px，容器 12px；嵌套按「外圆角 = 内圆角 + 间距」同心（12 = 4 + 8）。
+ * 线条：统一 0.5px。
+ * 动效：只保留颜色与边框的变化，250ms ease-out。
+ */
 @font-face {
 	font-family: "IBM Plex Mono";
 	src: url("./fonts/ibm-plex-mono-400.woff2") format("woff2");
@@ -26,13 +30,15 @@ html {
 
 body {
 	margin: 0;
-	/* 变量定义在 .landing-page 上，body 取不到，这里给纸色兜底（含深色）。 */
+	/* 变量定义在 .landing-page 上，body 取不到，这里按应用页底色兜底（含深色）。 */
 	background: #f7f5f0;
+	color: #37352f;
 }
 
 @media (prefers-color-scheme: dark) {
 	body {
-		background: #1b1917;
+		background: #1d1b18;
+		color: #e8e3da;
 	}
 }
 
@@ -80,54 +86,76 @@ button {
 	--font-mono:
 		"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-	--paper: #f7f5f0;
-	--surface: #fffdf9;
-	--surface-soft: #f2efe7;
-	--ink: #292722;
-	--ink-soft: #6d675e;
-	--ink-faint: #a29c93;
-	--line: rgba(55, 53, 47, 0.14);
-	--line-strong: rgba(55, 53, 47, 0.24);
-	--accent: #c2410c;
-	--accent-soft: rgba(194, 65, 12, 0.1);
-	--accent-ink: #fff8f0;
-	--code-bg: #2a2724;
-	--code-ink: #efe8dd;
-	--code-line: rgba(255, 255, 255, 0.12);
-	--shadow: 0 18px 40px rgba(55, 53, 47, 0.1);
-	--shadow-lift: 0 10px 24px rgba(55, 53, 47, 0.12);
-	--grain-opacity: 0.035;
-	--ease: cubic-bezier(0.23, 1, 0.32, 1);
+	/* 配色与应用本体同源：web/src/styles/_primitives.scss 的 primitive 层。
+	   落地页是独立静态站，读不到应用的 SCSS，所以数值抄一份；改配色时两边一起改。 */
+	--app-bg: #f7f5f0; /* primitive-color-bg */
+	--app-card: #fdfcf9; /* primitive-color-card */
+	--app-card-muted: #f3f0ea; /* primitive-color-card-muted */
+	--app-text: #37352f; /* primitive-color-text */
+	--app-text-soft: #6f6b64; /* primitive-color-text-soft */
+	--app-border: rgba(55, 53, 47, 0.1); /* primitive-alpha-border */
+	--app-border-strong: rgba(55, 53, 47, 0.2); /* primitive-alpha-border-strong */
+
+	--brand-600: #c2410c; /* coral-600 */
+	--brand-700: #9a3412; /* coral-700 */
+	--brand-on: #fff8f0; /* white-warm */
+
+	--page: var(--app-bg);
+	--surface: var(--app-card);
+	--surface-inset: var(--app-card-muted);
+	--border: var(--app-border);
+	--border-strong: var(--app-border-strong);
+	--text: var(--app-text);
+	--text-muted: var(--app-text-soft);
+	--accent-solid: var(--brand-600);
+	--accent-solid-hover: var(--brand-700);
+	/* 实底上的字与应用按钮一致用暖白：4.92:1，过 AA。 */
+	--accent-on-solid: var(--brand-on);
+	--accent-text: var(--brand-600);
+	--focus: var(--brand-600);
+
+	--text-xs: 12px;
+	--text-sm: 14px;
+	--text-base: 16px;
+	--font-h1: clamp(32px, 4vw, 52px);
+	--font-h2: clamp(22px, 2.4vw, 30px);
+
+	--radius-control: 8px;
+	--radius-panel: 12px;
+
+	--grain-opacity: 0.03;
 
 	position: relative;
 	min-height: 100vh;
 	overflow-x: clip; /* 不能用 hidden：会给 sticky 顶栏造出滚动容器 */
-	background: var(--paper);
-	color: var(--ink);
+	background: var(--page);
+	color: var(--text);
 	font-family: var(--font-sans);
-	font-size: 15px;
-	line-height: 1.75;
+	font-size: var(--text-base);
+	line-height: 1.7;
 }
 
 @media (prefers-color-scheme: dark) {
 	.landing-page {
-		--paper: #1b1917;
-		--surface: #232019;
-		--surface-soft: #2a2620;
-		--ink: #f1ece3;
-		--ink-soft: #a9a196;
-		--ink-faint: #7d766c;
-		--line: rgba(241, 236, 227, 0.14);
-		--line-strong: rgba(241, 236, 227, 0.26);
-		--accent: #ef7130;
-		--accent-soft: rgba(239, 113, 48, 0.14);
-		--accent-ink: #1d1611;
-		--code-bg: #100f0e;
-		--code-ink: #e8e1d6;
-		--code-line: rgba(255, 255, 255, 0.1);
-		--shadow: 0 20px 44px rgba(0, 0, 0, 0.46);
-		--shadow-lift: 0 12px 26px rgba(0, 0, 0, 0.5);
-		--grain-opacity: 0.024;
+		/* 深色：应用 primitive 层的深色值（暖棕黑底 + 暖白文字）。 */
+		--app-bg: #1d1b18;
+		--app-card: #272420;
+		--app-card-muted: #211f1c;
+		--app-text: #e8e3da;
+		--app-text-soft: #aaa39a;
+		--app-border: rgba(232, 227, 218, 0.12);
+		--app-border-strong: rgba(232, 227, 218, 0.22);
+
+		--brand-600: #e0601f;
+		--brand-700: #f07a35;
+
+		/* 这档橙偏亮：暖白只有 3.4:1，实底上的字改用底色深棕（4.79:1）；强调文字用 brand-700
+		   （卡面 5.5:1），与应用 accent-foreground 取 coral-700 是同一个做法。 */
+		--accent-on-solid: var(--app-bg);
+		--accent-text: var(--brand-700);
+		--focus: var(--brand-600);
+
+		--grain-opacity: 0.02;
 	}
 }
 
@@ -148,41 +176,30 @@ button {
 }
 
 .section {
-	padding-block: 104px;
-	border-top: 1px solid var(--line);
+	padding-block: 96px;
+	border-top: 0.5px solid var(--border);
 }
 
 .section-head h2 {
-	font-size: clamp(28px, 3.1vw, 44px);
-	font-weight: 700;
-	letter-spacing: -0.022em;
-	line-height: 1.2;
+	font-size: var(--font-h2);
+	font-weight: 600;
+	letter-spacing: -0.02em;
+	line-height: 1.3;
 	text-wrap: balance;
 }
-
-/* 导语行长：46ch ≈ 27 个汉字（1ch 取字体「0」的字宽，CJK 字体里约 0.5–0.59em，本机实测 8.80px）。
-   桌面一行放得下约 26 字；≤720px 时容器只有 100% - 40px，390px 视口下只剩约 23 字。
-   三条导语按 23 字以内写，两边才是单行——24 字时窄屏会断成 23 + 「态。」两个字，比不换行更难看。 */
-.section-lede {
-	max-width: 46ch;
-	margin-top: 18px;
-	color: var(--ink-soft);
-}
-
 
 .landing-mark {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 26px;
-	height: 26px;
+	width: 24px;
+	height: 24px;
 	/* 「簡」是内联轮廓路径（见 index.html 的 <symbol id="kanso-mark">），不是文字：
-	   轮廓取自 Noto Serif SC，与应用字体里合并进去的是同一套，所以不再依赖字体回退，
-	   在任何平台都是同一个字形。圆角与应用内 mark（5/22）和 favicon（14/64）同比例。 */
+	   轮廓取自 Noto Serif SC，与应用字体里合并进去的是同一套，所以不依赖字体回退。
+	   圆角与应用内 mark（5/22）同比例。 */
 	border-radius: 6px;
-	background: var(--accent);
-	color: var(--accent-ink);
-	box-shadow: 0 1px 3px color-mix(in srgb, var(--accent) 40%, transparent);
+	background: var(--accent-solid);
+	color: var(--accent-on-solid);
 }
 
 /* 品牌轮廓的 <symbol> 容器：只做定义，不占版面。 */
@@ -195,67 +212,58 @@ button {
 
 /* 图形与 mark 同大：路径已按 64 格定位居中，fill 跟随 mark 的文字色。 */
 .landing-mark-glyph {
-	width: 26px;
-	height: 26px;
+	width: 24px;
+	height: 24px;
 	fill: currentColor;
 }
 
-/* 按钮：primary 用品牌橙、quiet 用描边；两处对比度都过 AA。 */
+/* 按钮：primary 用实心橙配深字，quiet 用 0.5px 描边；两处文字都过 AA。 */
 .btn {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	gap: 8px;
-	min-height: 44px;
-	padding-inline: 18px;
-	border-radius: 8px;
-	font-size: 14px;
+	min-height: 40px;
+	padding-inline: 16px;
+	border-radius: var(--radius-control);
+	font-size: var(--text-sm);
 	font-weight: 500;
 	text-decoration: none;
 	white-space: nowrap;
 	transition:
-		transform 180ms var(--ease),
-		box-shadow 180ms var(--ease),
-		background-color 180ms var(--ease),
-		border-color 180ms var(--ease),
-		color 180ms var(--ease);
+		background-color 250ms ease-out,
+		border-color 250ms ease-out,
+		color 250ms ease-out;
 }
 
 .btn-primary {
-	background: var(--accent);
-	color: var(--accent-ink);
-	box-shadow: 0 4px 0 rgba(154, 52, 18, 0.16);
+	background: var(--accent-solid);
+	color: var(--accent-on-solid);
 }
 
 .btn-primary:hover {
-	transform: translateY(-2px);
-	box-shadow: 0 7px 16px rgba(154, 52, 18, 0.26);
+	background: var(--accent-solid-hover);
 }
 
 .btn-quiet {
-	border: 1px solid var(--line);
+	border: 0.5px solid var(--border-strong);
 	background: var(--surface);
-	color: var(--ink);
+	color: var(--text);
 }
 
 .btn-quiet:hover {
-	border-color: var(--accent);
-	color: var(--accent);
-	transform: translateY(-2px);
-}
-
-.btn:active {
-	transform: translateY(0);
+	border-color: var(--border-strong);
+	background: var(--surface-inset);
 }
 
 .btn:focus-visible,
 a:focus-visible,
 button:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--focus);
 	outline-offset: 2px;
 }
 
-/* 顶栏：单行，高度 68px。 */
+/* 顶栏：单行，高度 64px。 */
 .site-header {
 	position: sticky;
 	top: 0;
@@ -264,10 +272,10 @@ button:focus-visible {
 	align-items: center;
 	justify-content: space-between;
 	gap: 24px;
-	height: 68px;
+	height: 64px;
 	padding-inline: 48px;
-	border-bottom: 1px solid var(--line);
-	background: color-mix(in srgb, var(--paper) 88%, transparent);
+	border-bottom: 0.5px solid var(--border);
+	background: color-mix(in srgb, var(--page) 88%, transparent);
 	backdrop-filter: blur(10px);
 }
 
@@ -275,39 +283,36 @@ button:focus-visible {
 	display: inline-flex;
 	align-items: center;
 	gap: 10px;
-	color: var(--ink);
-	font-size: 16px;
-	font-weight: 700;
-	letter-spacing: -0.02em;
+	color: var(--text);
+	font-size: var(--text-base);
+	font-weight: 600;
+	letter-spacing: -0.01em;
 	text-decoration: none;
 }
 
-/* 头部署名（学 wisp 落地页的 .mark-by）：字号比品牌名降一档，靠字距拉开。
-   颜色用 --ink-soft：小字要过 WCAG AA，--ink-faint 在纸色上只有 2.50:1，够不上
-   （wisp 那边也把它的 muted 专门压暗过）。 */
+/* 头部署名：比品牌名降一档，颜色走 11 号，小字也过 AA。 */
 .brand-by {
-	font-size: 12px;
+	font-size: var(--text-xs);
 	font-weight: 400;
-	color: var(--ink-soft);
-	letter-spacing: 0.08em;
+	color: var(--text-muted);
 }
 
 .site-nav {
 	display: flex;
 	align-items: center;
-	gap: 28px;
+	gap: 24px;
 	margin-left: auto;
 }
 
 .site-nav a {
-	color: var(--ink-soft);
-	font-size: 13px;
+	color: var(--text-muted);
+	font-size: var(--text-sm);
 	text-decoration: none;
-	transition: color 160ms var(--ease);
+	transition: color 250ms ease-out;
 }
 
 .site-nav a:hover {
-	color: var(--accent);
+	color: var(--text);
 }
 
 .nav-github,
@@ -321,36 +326,35 @@ button:focus-visible {
 	display: inline-flex;
 	align-items: center;
 	gap: 7px;
-	min-height: 38px;
+	min-height: 36px;
 	padding-inline: 14px;
-	border: 1px solid var(--line);
-	border-radius: 8px;
-	background: var(--surface);
-	font-size: 13px;
+	border: 0.5px solid var(--border-strong);
+	border-radius: var(--radius-control);
+	font-size: var(--text-sm);
 	font-weight: 500;
 	text-decoration: none;
 	transition:
-		border-color 160ms var(--ease),
-		color 160ms var(--ease),
-		transform 160ms var(--ease);
+		background-color 250ms ease-out,
+		border-color 250ms ease-out,
+		color 250ms ease-out;
 }
 
 .nav-cta:hover {
-	border-color: var(--accent);
-	color: var(--accent);
-	transform: translateY(-1px);
+	background: var(--surface);
+	border-color: var(--border-strong);
+	color: var(--text);
 }
 
 .nav-toggle {
 	display: none;
 	align-items: center;
 	justify-content: center;
-	width: 38px;
-	height: 38px;
-	border: 1px solid var(--line);
-	border-radius: 8px;
+	width: 36px;
+	height: 36px;
+	border: 0.5px solid var(--border-strong);
+	border-radius: var(--radius-control);
+	color: var(--text-muted);
 }
-
 
 /* Hero：非对称分栏，无眉标、无信任条、无假数据。 */
 .hero {
@@ -358,144 +362,126 @@ button:focus-visible {
 	grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
 	align-items: center;
 	gap: 56px;
-	padding-block: 72px 88px;
-}
-
-.hero-copy {
-	animation: landing-rise 640ms var(--ease) both;
+	padding-block: 72px 96px;
 }
 
 .hero h1 {
 	max-width: 22ch;
-	font-size: clamp(36px, 4.4vw, 58px);
+	font-size: var(--font-h1);
 	font-weight: 700;
-	letter-spacing: -0.028em;
-	line-height: 1.16;
+	letter-spacing: -0.03em;
+	line-height: 1.15;
 	text-wrap: balance;
 }
 
 .hero-lede {
-	max-width: 32ch;
-	margin-top: 22px;
-	color: var(--ink-soft);
-	font-size: 16px;
-	line-height: 1.8;
+	max-width: 34ch;
+	margin-top: 20px;
+	color: var(--text-muted);
+	line-height: 1.75;
 }
 
 .hero-actions {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 12px;
+	gap: 10px;
 	margin-top: 32px;
 }
 
-/* 产品截图外框：容器 16px 圆角，浅色截图在深色主题里保持“纸面内嵌”的观感。 */
+/* 产品截图外框：容器 12px 圆角，0.5px 线，无阴影。 */
 .shot {
 	overflow: hidden;
-	border: 1px solid var(--line);
-	border-radius: 16px;
+	border: 0.5px solid var(--border);
+	border-radius: var(--radius-panel);
 	background: var(--surface);
-	box-shadow: var(--shadow);
-}
-
-.shot-hero {
-	animation: landing-shot-in 720ms 80ms var(--ease) both;
 }
 
 /* 事实条：真事、无编造数字、无客户 logo 墙（没有真实客户就不放）。 */
 .facts {
-	border-top: 1px solid var(--line);
-	/* 上下对称：这块文案夹在两条分隔线之间，之前 40/8 让它贴死在下面那条线上。 */
-	padding-block: 36px;
+	border-top: 0.5px solid var(--border);
+	padding-block: 28px;
 }
 
 .facts ul {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-	gap: 28px 40px;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 24px 40px;
 }
 
 .facts li {
-	font-size: 13px;
-	line-height: 1.7;
-	color: var(--ink-soft);
+	font-size: var(--text-sm);
+	line-height: 1.65;
+	color: var(--text-muted);
 }
 
+/* 标签降一档字号、提一档颜色——层级靠对比，不靠加字号档位。 */
 .facts b {
 	display: block;
-	margin-bottom: 6px;
-	color: var(--ink);
-	font-size: 13px;
-	font-weight: 600;
+	margin-bottom: 4px;
+	color: var(--text);
+	font-size: var(--text-xs);
+	font-weight: 500;
 }
 
 /* 工作方式：非对称 bento（大格 4 列 2 行 + 右侧上下两格），不是三张等宽卡片。 */
 .bento {
 	display: grid;
 	grid-template-columns: repeat(6, minmax(0, 1fr));
-	gap: 14px;
-	margin-top: 44px;
+	gap: 12px;
+	margin-top: 40px;
 }
 
 .cell {
 	display: flex;
 	flex-direction: column;
-	gap: 12px;
+	gap: 10px;
 	padding: 24px;
-	border: 1px solid var(--line);
-	border-radius: 16px;
+	border: 0.5px solid var(--border);
+	border-radius: var(--radius-panel);
 	background: var(--surface);
-	transition:
-		border-color 200ms var(--ease),
-		transform 200ms var(--ease),
-		box-shadow 200ms var(--ease);
+	transition: border-color 250ms ease-out;
 }
 
 .cell:hover {
-	border-color: var(--line-strong);
-	transform: translateY(-3px);
-	box-shadow: var(--shadow-lift);
+	border-color: var(--border-strong);
 }
 
 .cell h3 {
-	font-size: 19px;
+	font-size: var(--text-base);
 	font-weight: 600;
-	letter-spacing: -0.015em;
+	letter-spacing: -0.01em;
+	line-height: 1.5;
 }
 
 .cell p {
-	color: var(--ink-soft);
-	font-size: 13.5px;
-	line-height: 1.8;
+	color: var(--text-muted);
+	font-size: var(--text-sm);
+	line-height: 1.7;
 }
 
+/* 内嵌截图：外圆角 12 = 内圆角 4 + 间距 8，同心。 */
 .cell-shot {
 	grid-column: span 4;
 	grid-row: span 2;
-	padding: 14px;
-	gap: 18px;
+	padding: 8px;
+	gap: 14px;
 }
 
 .cell-shot .shot {
-	box-shadow: none;
-	border-radius: 12px;
+	border-radius: 4px;
 }
 
+/* 文案左边缘 = 8px 内距 + 16px 文本距 = 与其它格子的 24px 内距对齐。 */
 .cell-shot-body {
-	/* 文案与截图左边缘对齐（此前多缩进 10px，与右侧两格的文字对齐方式不一致），
-	   下边距收到与上边距同量级（图→文案 20px，文案→容器底 22px）。 */
-	padding: 2px 0 8px;
+	padding: 0 16px 14px;
 }
 
 .cell-swim {
 	grid-column: span 2;
-	background: var(--surface-soft);
 }
 
 .cell-live {
 	grid-column: span 2;
-	background: var(--accent-soft);
-	border-color: color-mix(in srgb, var(--accent) 26%, transparent);
 }
 
 /* 右侧两格比大格矮，把文字沉到底部，让多出来的空白看着是刻意的。 */
@@ -504,16 +490,10 @@ button:focus-visible {
 	margin-top: auto;
 }
 
+/* 图标不带底板：省掉一层圆角和描边，颜色交给 11 号中性色。 */
 .cell-icon {
 	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 34px;
-	height: 34px;
-	border-radius: 8px;
-	background: var(--surface);
-	border: 1px solid var(--line);
-	color: var(--accent);
+	color: var(--text-muted);
 }
 
 /* 自部署：左侧说明 + 右侧代码面板（等宽、真实命令，没有假终端窗口装饰）。 */
@@ -521,60 +501,43 @@ button:focus-visible {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
 	align-items: start;
-	gap: 56px;
-	margin-top: 40px;
+	gap: 48px;
+	margin-top: 32px;
 }
 
 .points {
-	margin-top: 26px;
 	display: grid;
 	gap: 12px;
 }
 
 .points li {
-	display: flex;
-	gap: 10px;
-	color: var(--ink-soft);
-	font-size: 14px;
+	color: var(--text-muted);
+	font-size: var(--text-sm);
+	line-height: 1.7;
 }
 
-.points svg {
-	flex: 0 0 auto;
-	margin-top: 5px;
-	color: var(--accent);
-}
-
+/* 代码面板跟页面同一套纸色，不额外引入一块反色。 */
 .code-panel {
 	overflow: hidden;
-	border: 1px solid var(--line);
-	border-radius: 16px;
-	background: var(--code-bg);
-	color: var(--code-ink);
+	border: 0.5px solid var(--border);
+	border-radius: var(--radius-panel);
+	background: var(--surface);
+	color: var(--text);
 }
 
-.code-panel-title {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding: 12px 18px;
-	border-bottom: 1px solid var(--code-line);
-	color: rgba(232, 225, 214, 0.62);
-	font-family: var(--font-mono);
-	font-size: 11px;
-	letter-spacing: 0.04em;
-}
-
-/* 末行是脚注，分隔线画在上方，避免与面板底边叠成双线。 */
-.code-panel-title:last-child {
-	border-bottom: 0;
-	border-top: 1px solid var(--code-line);
+/* 面板脚注：一行说明，不做终端标题栏。 */
+.code-panel-note {
+	padding: 10px 16px;
+	border-top: 0.5px solid var(--border);
+	color: var(--text-muted);
+	font-size: var(--text-xs);
 }
 
 .code-panel pre {
 	overflow-x: auto;
-	padding: 20px 18px;
+	padding: 16px;
 	font-family: var(--font-mono);
-	font-size: 12.5px;
+	font-size: var(--text-xs);
 	line-height: 1.9;
 }
 
@@ -582,12 +545,8 @@ button:focus-visible {
 	white-space: pre;
 }
 
-.code-panel .code-note {
-	color: rgba(232, 225, 214, 0.6);
-}
-
 .code-panel .code-key {
-	color: #f0a06a;
+	color: var(--accent-text);
 }
 
 /* 能力清单：三组带软分隔的短列表，不做长表格。 */
@@ -595,59 +554,59 @@ button:focus-visible {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: 40px;
-	margin-top: 40px;
+	margin-top: 32px;
 }
 
 .cap-group {
-	padding-top: 20px;
-	border-top: 1px solid var(--line);
+	padding-top: 18px;
+	border-top: 0.5px solid var(--border);
 }
 
 .cap-group h3 {
-	margin-bottom: 14px;
-	color: var(--ink);
-	font-family: var(--font-mono);
-	font-size: 12px;
-	font-weight: 400;
-	letter-spacing: 0.06em;
+	margin-bottom: 10px;
+	color: var(--text);
+	font-size: var(--text-sm);
+	font-weight: 600;
 }
 
 .cap-group li {
-	padding-block: 5px;
-	color: var(--ink-soft);
-	font-size: 13.5px;
+	padding-block: 4px;
+	color: var(--text-muted);
+	font-size: var(--text-sm);
 }
 
-/* 收尾：品牌色浅底面板，不整节反色（同页不翻主题）。 */
+/* 收尾：留白居中，主按钮承担强调，容器本身只用一条 0.5px 线。 */
 .closing-panel {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 14px;
-	padding: 56px 32px;
-	border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
-	border-radius: 16px;
-	background: var(--accent-soft);
+	gap: 12px;
+	padding: 48px 24px;
+	border: 0.5px solid var(--border);
+	border-radius: var(--radius-panel);
+	background: var(--surface);
 	text-align: center;
 }
 
 .closing-panel h2 {
-	font-size: clamp(26px, 3vw, 40px);
-	font-weight: 700;
-	letter-spacing: -0.022em;
+	font-size: var(--font-h2);
+	font-weight: 600;
+	letter-spacing: -0.02em;
 	text-wrap: balance;
 }
 
 .closing-panel p {
-	color: var(--ink-soft);
+	max-width: 44ch;
+	color: var(--text-muted);
+	font-size: var(--text-sm);
 }
 
 .closing-actions {
 	display: flex;
 	flex-wrap: wrap;
 	justify-content: center;
-	gap: 12px;
-	margin-top: 12px;
+	gap: 10px;
+	margin-top: 8px;
 }
 
 .site-footer {
@@ -655,78 +614,46 @@ button:focus-visible {
 	flex-wrap: wrap;
 	align-items: center;
 	justify-content: space-between;
-	gap: 18px;
-	padding-block: 36px 44px;
-	border-top: 1px solid var(--line);
-	color: var(--ink-soft);
-	font-size: 12.5px;
+	gap: 16px;
+	padding-block: 32px 40px;
+	border-top: 0.5px solid var(--border);
+	color: var(--text-muted);
+	font-size: var(--text-xs);
 }
 
 .footer-brand {
 	display: inline-flex;
 	align-items: center;
 	gap: 10px;
-	color: var(--ink);
-	font-size: 15px;
-	font-weight: 700;
+	color: var(--text);
+	font-size: var(--text-sm);
+	font-weight: 600;
+}
+
+/* 页脚署名：与正文同一行，靠间距分开，不另起一行小字。 */
+.footer-by {
+	margin-left: 10px;
 }
 
 .footer-tagline {
-	color: var(--ink-soft);
-	font-size: 12px;
+	color: var(--text-muted);
+	font-size: var(--text-xs);
 	font-weight: 400;
 }
 
 .footer-links {
 	display: flex;
-	gap: 22px;
+	gap: 20px;
 }
 
 .footer-links a {
-	color: var(--ink-soft);
+	color: var(--text-muted);
 	text-decoration: none;
-	transition: color 160ms var(--ease);
+	transition: color 250ms ease-out;
 }
 
 .footer-links a:hover {
-	color: var(--accent);
-}
-
-/* 滚动进场：只在 JS 可用时先隐藏，脚本失效则内容照常可见。 */
-.js [data-reveal] {
-	opacity: 0;
-	transform: translateY(14px);
-}
-
-.js [data-reveal].is-visible {
-	opacity: 1;
-	transform: none;
-	/* --d 让同一块里的多个元素依次亮起，而不是一次全跳出来。 */
-	transition:
-		opacity 560ms var(--ease) calc(var(--d, 0) * 70ms),
-		transform 560ms var(--ease) calc(var(--d, 0) * 70ms);
-}
-
-@keyframes landing-rise {
-	from {
-		opacity: 0;
-		transform: translateY(14px);
-	}
-	to {
-		opacity: 1;
-		transform: none;
-	}
-}
-
-@keyframes landing-shot-in {
-	from {
-		opacity: 0;
-		transform: translateY(18px);
-	}
-	to {
-		opacity: 1;
-		transform: none;
-	}
+	color: var(--text);
 }
 
 @media (max-width: 1080px) {
@@ -797,11 +724,10 @@ button:focus-visible {
 		align-items: stretch;
 		gap: 0;
 		margin: 0;
-		padding: 8px;
-		border: 1px solid var(--line);
-		border-radius: 16px;
+		padding: 6px;
+		border: 0.5px solid var(--border);
+		border-radius: var(--radius-panel);
 		background: var(--surface);
-		box-shadow: var(--shadow);
 	}
 
 	.site-nav.is-open {
@@ -809,8 +735,8 @@ button:focus-visible {
 	}
 
 	.site-nav a {
-		padding: 13px 10px;
-		border-bottom: 1px solid var(--line);
+		padding: 12px 10px;
+		border-bottom: 0.5px solid var(--border);
 	}
 
 	.site-nav a:last-child {
@@ -819,15 +745,11 @@ button:focus-visible {
 
 	.nav-cta {
 		border: 0;
-		background: var(--accent-soft);
-		color: var(--accent);
 	}
-
 
 	.hero-actions .btn {
 		flex: 1 1 auto;
 	}
-
 
 	.bento {
 		grid-template-columns: minmax(0, 1fr);
@@ -845,26 +767,13 @@ button:focus-visible {
 	}
 
 	.closing-panel {
-		padding: 40px 20px;
+		padding: 36px 20px;
 	}
 }
-
 
 @media (prefers-reduced-motion: reduce) {
 	html {
 		scroll-behavior: auto;
-	}
-
-	.hero-copy,
-	.shot-hero {
-		animation: none;
-	}
-
-	.js [data-reveal],
-	.js [data-reveal].is-visible {
-		opacity: 1;
-		transform: none;
-		transition: none;
 	}
 
 	.btn,
@@ -873,11 +782,5 @@ button:focus-visible {
 	.site-nav a,
 	.footer-links a {
 		transition: none;
-	}
-
-	.btn:hover,
-	.cell:hover,
-	.nav-cta:hover {
-		transform: none;
 	}
 }

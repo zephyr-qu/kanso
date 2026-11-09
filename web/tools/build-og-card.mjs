@@ -20,7 +20,9 @@ const html = (board, mark) => `<!doctype html>
 	.card {
 		position: relative; display: flex; flex-direction: column; justify-content: center; gap: 24px;
 		width: 1200px; height: 630px; padding: 0 76px; overflow: hidden;
-		background: #f7f5f0; color: #292722;
+		/* 配色与 apps/landing/style.css / web/src/styles/_primitives.scss 同一套：暖纸底 #f7f5f0
+		   与应用文字色（正文 #37352f、次要 #6f6b64、弱化 #a29d95）。改配色时三处一起改。 */
+		background: #f7f5f0; color: #37352f;
 		font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
 	}
 	.card::after { content: ""; position: absolute; inset: 0; opacity: 0.045; background-image: ${NOISE}; }
@@ -28,8 +30,8 @@ const html = (board, mark) => `<!doctype html>
 	/* 直接复用 favicon（应用图标）本身：卡上的 mark 与应用图标是同一份矢量，不再用字体画字。 */
 	.mark { display: block; width: 46px; height: 46px; }
 	h1 { max-width: 640px; font-size: 70px; font-weight: 700; letter-spacing: -0.035em; line-height: 1.14; }
-	.lede { max-width: 470px; color: #6d675e; font-size: 22px; line-height: 1.6; }
-	.repo { color: #a29c93; font-family: ui-monospace, Consolas, monospace; font-size: 18px; letter-spacing: 0.02em; }
+	.lede { max-width: 470px; color: #6f6b64; font-size: 22px; line-height: 1.6; }
+	.repo { color: #a29d95; font-family: ui-monospace, Consolas, monospace; font-size: 18px; letter-spacing: 0.02em; }
 	.shot {
 		position: absolute; right: -84px; bottom: -76px; width: 690px;
 		border: 1px solid rgba(55, 53, 47, 0.16); border-radius: 16px;
@@ -40,7 +42,7 @@ const html = (board, mark) => `<!doctype html>
 	<div class="card">
 		<div class="brand"><img class="mark" src="data:image/svg+xml;base64,${mark}" alt="" /><span>Kanso</span></div>
 		<h1>把事情，放回<br />它该在的位置</h1>
-		<p class="lede">安静、克制的看板工作台 · 单机部署，数据留在自己手里</p>
+		<p class="lede">安静、克制的看板工作台。单机部署，数据留在自己手里。</p>
 		<p class="repo">github.com/zephyr-qu/kanso</p>
 		<img class="shot" src="data:image/png;base64,${board}" alt="" />
 	</div>
