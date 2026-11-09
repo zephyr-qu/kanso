@@ -24,22 +24,22 @@ test("看板标签弹窗：打开可见创建区与标签库", async ({ page }) 
 	const dialog = page.getByRole("dialog");
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByText("标签管理")).toBeVisible();
-	await expect(dialog.getByText(/当前项目/)).toBeVisible();
+	await expect(dialog.getByPlaceholder("新标签名称")).toBeVisible();
 });
 
 test("settings 服务配置：可编辑保存，数据卡含备份导入导出", async ({ page }) => {
 	await loginToApp(page);
 	await page.waitForSelector('a[href*="/p/"]');
 
-	await page.getByRole("link", { name: "系统设置", exact: true }).click();
-	// 页头副标题含「外观 · 服务配置 · 数据 · 关于」，用 exact 命中卡片标题。
+	await page.getByRole("link", { name: "设置", exact: true }).click();
+	// 页头只留标题，用 exact 命中卡片标题。
 	await expect(page.getByText("服务配置", { exact: true })).toBeVisible();
 	// 字段说明展示（保存到配置文件）。
-	await expect(page.getByText("KANSO_ADDR · :8080")).toBeVisible();
-	await expect(page.getByText("KANSO_DATA_DIR · ./data")).toBeVisible();
+	await expect(page.getByText("KANSO_ADDR，默认 :8080")).toBeVisible();
+	await expect(page.getByText("KANSO_DATA_DIR，默认 ./data")).toBeVisible();
 	await expect(page.getByText("自动归档", { exact: true })).toBeVisible();
-	await expect(page.getByText("完成任务保留 7 天后自动归档。", { exact: true })).toBeVisible();
-	await expect(page.getByText("跨域部署时填写前端地址，多个用逗号分隔；同源访问留空即可。", { exact: true })).toBeVisible();
+	await expect(page.getByText("完成后保留天数", { exact: true })).toBeVisible();
+	await expect(page.getByText("跨域部署时填写前端地址，多个用逗号分隔", { exact: true })).toBeVisible();
 	// 可编辑保存（保存到配置文件；自动归档开关只在配置文件中控制）。
 	await expect(page.getByRole("button", { name: "保存配置" })).toBeVisible();
 	// 数据卡：备份导出/导入入口。

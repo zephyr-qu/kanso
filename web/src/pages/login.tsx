@@ -92,7 +92,7 @@ export default function LoginPage() {
 							className="mt-4 text-[0.9375rem] leading-relaxed text-muted-foreground animate-[fadeInUp_500ms_200ms_ease_both]"
 							style={{ animationDelay: "200ms" }}
 						>
-							内网看板 · 自用轻量 · 现代简约
+							自托管的轻量看板。
 						</p>
 					</div>
 					<img
@@ -103,7 +103,6 @@ export default function LoginPage() {
 					/>
 				</div>
 
-				<p className="text-xs text-muted-foreground/70">Kanban · 单机部署</p>
 			</div>
 
 			{/* 右：密钥入口 */}
@@ -111,9 +110,7 @@ export default function LoginPage() {
 				<div className="w-full max-w-[320px] animate-[fadeInUp_450ms_150ms_ease_both]">
 					<h1 className="text-xl font-semibold tracking-tight">进入工作区</h1>
 					<p className="mt-1 text-[0.8125rem] text-muted-foreground">
-						输入访问密钥（见{" "}
-						<code className="font-mono text-xs">KANSO_ACCESS_KEY</code> 或
-						<code className="font-mono text-xs"> docker logs</code>）
+						访问密钥见 <code className="font-mono text-xs">KANSO_ACCESS_KEY</code> 或容器启动日志
 					</p>
 					<form onSubmit={handleSubmit} className="mt-8 space-y-5">
 						<div>

@@ -33,9 +33,6 @@ export default function ActivityPage() {
 				<h1 aria-label="活动" className="text-[1.0625rem] font-[650] tracking-tight">
 					活动记录
 				</h1>
-				<span className="text-[0.8125rem] text-muted-foreground">
-					当前工作区 · 操作轨迹
-				</span>
 			</PageHeader>
 
 			<PageContent className="px-[30px] pb-11 pt-[26px]">

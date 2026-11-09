@@ -130,7 +130,7 @@ function ActivityHeatmap({ activities }: { activities: Activity[] }) {
 								return cell ? (
 									<span
 										key={di}
-										title={`${localDateKey(cell.date)} · ${cell.count} 次活动`}
+										title={`${localDateKey(cell.date)}，${cell.count} 次活动`}
 										className="aspect-square w-full rounded-[2px]"
 										style={{ backgroundColor: cellColor(cell.count) }}
 									/>
@@ -159,7 +159,7 @@ function ActivityHeatmap({ activities }: { activities: Activity[] }) {
 					/>
 				))}
 				<span>多</span>
-				<span className="ml-3">近一年 · {total} 次活动</span>
+				<span className="ml-3">近一年 {total} 次活动</span>
 			</div>
 		</div>
 	);
@@ -259,9 +259,6 @@ export default function ProfilePage() {
 		<div className="flex h-full flex-col">
 			<PageHeader>
 				<h1 className="text-[1.0625rem] font-[650] tracking-tight">个人中心</h1>
-				<span className="text-[0.8125rem] text-muted-foreground">
-					当前成员 · 资料、活动与安全
-				</span>
 			</PageHeader>
 			<PageContent className="px-[30px] pb-11 pt-[26px]">
 				{isLoading || !member ? (
@@ -418,7 +415,6 @@ export default function ProfilePage() {
 						<div>
 							<div className="mb-2 flex items-center justify-between">
 								<span className="text-[0.8125rem] font-semibold">工作区概览</span>
-								<span className="text-xs text-muted-foreground/70">当前工作区</span>
 							</div>
 							<div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
 								<ProfileStat
@@ -433,7 +429,7 @@ export default function ProfilePage() {
 								/>
 								<ProfileStat
 									icon={AlertTriangleIcon}
-									label="需关注"
+									label="紧急"
 									value={dashboard?.urgent ?? null}
 								/>
 								<ProfileStat
@@ -452,9 +448,6 @@ export default function ProfilePage() {
 								<div className="mb-3 flex items-center justify-between">
 									<div>
 										<h2 className="text-[0.8125rem] font-semibold">我的最近活动</h2>
-										<p className="mt-1 text-xs text-muted-foreground/70">
-											最近参与的项目操作
-										</p>
 									</div>
 									<HistoryIcon className="size-4 text-muted-foreground/55" />
 								</div>
@@ -490,9 +483,6 @@ export default function ProfilePage() {
 									<div className="flex flex-col items-center justify-center py-8 text-center">
 										<HistoryIcon className="size-5 text-muted-foreground/45" />
 										<p className="mt-2 text-sm text-muted-foreground">还没有个人活动</p>
-										<p className="mt-1 text-xs text-muted-foreground/70">
-											开始编辑任务后，这里会显示你的操作。
-										</p>
 									</div>
 								)}
 							</SurfaceCard>
@@ -502,9 +492,6 @@ export default function ProfilePage() {
 									<div className="flex items-start justify-between gap-3">
 										<div>
 											<h2 className="text-[0.8125rem] font-semibold">账号与安全</h2>
-											<p className="mt-1 text-xs text-muted-foreground/70">
-												管理当前成员的访问凭证
-											</p>
 										</div>
 										<ShieldCheckIcon className="size-4 text-primary" />
 									</div>
@@ -516,7 +503,7 @@ export default function ProfilePage() {
 										<SecurityMeta label="团队角色" value={ROLE_LABEL[member.role]} />
 										<SecurityMeta
 											label="团队成员"
-											value={`${teamMembers?.length ?? "—"} / 5 人`}
+											value={`${teamMembers?.length ?? "—"} / 6 人`}
 										/>
 										<div className="flex items-center justify-between gap-3 border-t pt-3">
 											<div className="min-w-0">
@@ -524,7 +511,7 @@ export default function ProfilePage() {
 												<p
 													className={`mt-1 text-xs ${member.hasKey ? "text-emerald-600" : "text-amber-600"}`}
 												>
-													{member.hasKey ? "已授权，可正常登录" : "未授权，需要生成密钥"}
+												{member.hasKey ? "已启用" : "未启用"}
 												</p>
 											</div>
 											<MemberKeyButton
@@ -539,7 +526,7 @@ export default function ProfilePage() {
 										</div>
 									</div>
 									<div className="mt-4 rounded-lg bg-muted/55 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-										密钥只在生成时显示一次；轮换后，旧密钥会立即失效。
+										密钥只在生成时显示一次。
 									</div>
 									<Link
 										to="/team"
@@ -556,9 +543,6 @@ export default function ProfilePage() {
 							<div className="mb-3 flex items-center justify-between">
 								<div>
 									<h2 className="text-[0.8125rem] font-semibold">个人活跃</h2>
-									<p className="mt-1 text-xs text-muted-foreground/70">
-										只统计你的操作记录
-									</p>
 								</div>
 								<ActivityIcon className="size-4 text-muted-foreground/55" />
 							</div>

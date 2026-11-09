@@ -118,7 +118,6 @@ export function BoardDialogs(props: BoardDialogsProps) {
 				open={createOpen}
 				onOpenChange={setCreateOpen}
 				title="新建列"
-				description="新列将追加到看板末尾。"
 				submitLabel="创建"
 				onSubmit={onCreateColumn}
 			/>
@@ -128,7 +127,7 @@ export function BoardDialogs(props: BoardDialogsProps) {
 					if (!open) setDeleting(null);
 				}}
 				title="删除列"
-				description={`确定删除列"${deleting?.name ?? ""}"吗？其下任务将一并删除，此操作不可撤销。`}
+				description={`确定删除列「${deleting?.name ?? ""}」吗？其下任务将一并删除，此操作不可撤销。`}
 				onConfirm={onDeleteColumn}
 			/>
 			<NameDialog
@@ -137,7 +136,6 @@ export function BoardDialogs(props: BoardDialogsProps) {
 					if (!open) setEditingTask(null);
 				}}
 				title="编辑任务"
-				description="修改任务标题。"
 				submitLabel="保存"
 				initialValue={editingTask?.title ?? ""}
 				onSubmit={onUpdateTask}
@@ -160,7 +158,7 @@ export function BoardDialogs(props: BoardDialogsProps) {
 					<DialogPopup>
 						<DialogHeader>
 							<DialogTitle>归档任务</DialogTitle>
-							<DialogDescription>归档任务从看板隐藏，但仍可搜索和恢复。</DialogDescription>
+							<DialogDescription>归档后从看板隐藏，可随时恢复。</DialogDescription>
 						</DialogHeader>
 						<DialogPanel>
 							{archivedLoading ? <p className="kanso-loading py-8 text-center text-xs">加载归档任务…</p> : null}
@@ -190,7 +188,6 @@ export function BoardDialogs(props: BoardDialogsProps) {
 					<DialogPopup>
 						<DialogHeader>
 							<DialogTitle>里程碑</DialogTitle>
-							<DialogDescription>项目阶段节点 · 进度按任务位置推导</DialogDescription>
 						</DialogHeader>
 						<DialogPanel>
 							<form

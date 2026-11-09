@@ -136,7 +136,7 @@ export default function TaskDetailPage() {
 					open={deleteOpen}
 					onOpenChange={setDeleteOpen}
 					title="永久删除任务"
-					description={`确定永久删除任务"${data?.task.title ?? ""}"吗？此操作不可撤销。`}
+					description={`确定删除「${data?.task.title ?? ""}」吗？此操作不可撤销。`}
 					onConfirm={async () => {
 						await taskOps.deleteTask.mutateAsync(taskId);
 						navigate(`/w/${workspaceId}/p/${projectId}`);

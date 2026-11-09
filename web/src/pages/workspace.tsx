@@ -230,7 +230,7 @@ export default function WorkspacePage() {
 						<EmptyHeader>
 							<EmptyTitle>还没有项目</EmptyTitle>
 							<EmptyDescription>
-								点击右上角"新建项目"，系统会自动创建默认列（待办/进行中/已阻塞/已完成）。
+								点击右上角「新建项目」开始。
 							</EmptyDescription>
 						</EmptyHeader>
 					</Empty>
@@ -298,7 +298,6 @@ export default function WorkspacePage() {
 																	"归档于",
 																)
 															: "已归档"}
-														<span>·</span>
 														<span>{project.taskCount ?? 0} 任务</span>
 													</p>
 												</Link>
@@ -357,7 +356,6 @@ export default function WorkspacePage() {
 					if (!open) setRenaming(null);
 				}}
 				title="重命名项目"
-				description="修改项目名称。"
 				submitLabel="保存"
 				initialValue={renaming?.name ?? ""}
 				onSubmit={async (name) => {
@@ -370,7 +368,7 @@ export default function WorkspacePage() {
 					if (!open) setArchiving(null);
 				}}
 				title="归档项目"
-				description={`确定归档「${archiving?.name ?? ""}」吗？需先完成或归档所有未完成任务；归档后项目只读，可随时恢复。`}
+				description={`确定归档「${archiving?.name ?? ""}」吗？归档后项目只读，可随时恢复。`}
 				confirmLabel="归档"
 				destructive={false}
 				onConfirm={async () => {
@@ -396,7 +394,7 @@ export default function WorkspacePage() {
 					if (!open) setDeleting(null);
 				}}
 				title="删除项目"
-				description={`确定删除"${deleting?.name ?? ""}"吗？其下列与任务将一并删除，此操作不可撤销。`}
+				description={`确定删除「${deleting?.name ?? ""}」吗？其下列与任务将一并删除，此操作不可撤销。`}
 				onConfirm={async () => {
 					if (deleting) await deleteMutation.mutateAsync(deleting.id);
 				}}
@@ -405,7 +403,6 @@ export default function WorkspacePage() {
 				open={wsRenaming}
 				onOpenChange={setWsRenaming}
 				title="重命名工作区"
-				description="修改工作区名称。"
 				submitLabel="保存"
 				initialValue={workspaceName}
 				onSubmit={async (name) => {
@@ -416,7 +413,7 @@ export default function WorkspacePage() {
 				open={wsDeleting}
 				onOpenChange={setWsDeleting}
 				title="删除工作区"
-				description={`确定删除"${workspaceName}"吗？其下所有项目、列与任务将一并删除，此操作不可撤销。`}
+				description={`确定删除「${workspaceName}」吗？其下所有项目、列与任务将一并删除，此操作不可撤销。`}
 				onConfirm={async () => {
 					await wsDeleteMutation.mutateAsync();
 				}}

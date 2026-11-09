@@ -10,7 +10,7 @@ type TaskDetailDescriptionProps = {
 };
 
 function DescriptionContent({ value }: { value: string | null }) {
-	const paragraphs = value?.trim() ? value.split(/\n\s*\n/) : ["暂无描述，点击编辑添加。"];
+	const paragraphs = value?.trim() ? value.split(/\n\s*\n/) : ["暂无描述"];
 
 	return (
 		<div className="kanso-task-detail__description">

@@ -13,6 +13,9 @@ import {
   CardTitle,
 } from "./card";
 
+// 部署与配置说明在仓库 README（Docker / 环境变量），不另设站点。
+const DEPLOY_GUIDE_URL = "https://github.com/zephyr-qu/kanso#readme";
+
 type ErrorDisplayProps = {
   error: unknown;
   onRetry?: () => void;
@@ -88,7 +91,7 @@ export function ErrorDisplay({
 
             {parsedError.type === "cors" && (
               <Button
-                onClick={() => window.open("https://kaneo.app/docs", "_blank")}
+                onClick={() => window.open(DEPLOY_GUIDE_URL, "_blank", "noopener,noreferrer")}
                 variant="outline"
                 size="icon"
                 className="w-full"

@@ -50,6 +50,7 @@ function AppShellContent() {
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 	const workspaceContext = useWorkspaceContext();
 	useRoutePerf(location.pathname);
+	const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 	// 快捷键：⌘K/Ctrl+K 命令面板；Q 快速捕获（非输入场景，避免与打字冲突）。
 	useEffect(() => {
 		function onKey(e: KeyboardEvent) {
@@ -330,7 +331,7 @@ function AppShellContent() {
 								<p className="kanso-sidebar-group-label">管理</p>
 								<NavLink to="/settings" className="kanso-sidebar-item">
 									<SettingsIcon />
-									<span className="kanso-sidebar-label">系统设置</span>
+									<span className="kanso-sidebar-label">设置</span>
 								</NavLink>
 							</section>
 						) : null}
@@ -409,7 +410,6 @@ function AppShellContent() {
 				open={createOpen}
 				onOpenChange={setCreateOpen}
 				title="新建工作区"
-				description="为不同业务域建立独立工作区。"
 				submitLabel="创建"
 				onSubmit={async (name) => {
 					await createMutation.mutateAsync(name);
@@ -426,7 +426,7 @@ function AppShellContent() {
 			>
 				<span>
 					<b className="mr-1 rounded-[4px] border bg-muted px-1.5 py-0.5 font-semibold text-foreground">
-						⌘K
+						{isMac ? "⌘K" : "Ctrl K"}
 					</b>
 					搜索
 				</span>
@@ -434,7 +434,7 @@ function AppShellContent() {
 					<b className="mr-1 rounded-[4px] border bg-muted px-1.5 py-0.5 font-semibold text-foreground">
 						Q
 					</b>
-					快速捕获
+					快速记录
 				</span>
 			</div>
 
@@ -450,7 +450,6 @@ function AppShellContent() {
 					onClose={() => setQcOpen(false)}
 					defaultProjectId={currentProjectId}
 					workspaceId={currentWorkspaceId}
-					workspaceName={currentWorkspace?.name}
 				/>
 			) : null}
 		</>

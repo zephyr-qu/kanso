@@ -171,7 +171,7 @@ export function TaskDetailSummary({
 								})}
 							</ul>
 						) : (
-							<p className="px-1 py-2 text-xs text-muted-foreground">暂无标签，可在项目看板创建</p>
+							<p className="px-1 py-2 text-xs text-muted-foreground">暂无标签</p>
 						)}
 					</PopoverPopup>
 				</Popover>
@@ -208,7 +208,7 @@ export function TaskDetailSummary({
 								})}
 							</ul>
 						) : (
-							<p className="px-1 py-2 text-xs text-muted-foreground">暂无里程碑，可在项目看板创建</p>
+							<p className="px-1 py-2 text-xs text-muted-foreground">暂无里程碑</p>
 						)}
 					</PopoverPopup>
 				</Popover>

@@ -146,7 +146,6 @@ export default function DashboardPage() {
 		<div className="kanso-dashboard flex h-full flex-col">
 			<PageHeader>
 				<h1 className="text-[1.0625rem] font-[650] tracking-tight">仪表盘</h1>
-				<span className="text-[0.8125rem] text-muted-foreground">当前工作区 · 汇总</span>
 			</PageHeader>
 
 			<PageContent className="px-[30px] pb-7 pt-[26px]">
@@ -159,12 +158,11 @@ export default function DashboardPage() {
 					/>
 					<StatCard
 						num={data.newThisWeek}
-						label="本周新增"
-						trend="过去 7 天"
+						label="近 7 天新增"
 						accent
 					/>
-					<StatCard num={data.urgent} label="紧急" trend="需要关注" warn />
-					<StatCard num={data.projects.length} label="项目" trend="当前工作区" />
+					<StatCard num={data.urgent} label="紧急" warn />
+					<StatCard num={data.projects.length} label="项目" />
 				</div>
 
 				{/* 面板网格 */}
@@ -175,6 +173,7 @@ export default function DashboardPage() {
 						<div className="flex items-center gap-5">
 							<div
 								className="relative size-[120px] shrink-0 rounded-full"
+								title="已完成指位于看板末列的任务"
 								style={{
 									background: `conic-gradient(var(--chart-1) ${data.completionPercent * 3.6}deg, color-mix(in srgb, var(--foreground) 6%, transparent) 0)`,
 								}}
@@ -190,13 +189,6 @@ export default function DashboardPage() {
 							</div>
 							<div>
 								<div className="text-sm font-medium">{data.doneTasks} 个任务已完成</div>
-								<div className="mt-1 text-[0.8125rem] leading-relaxed text-muted-foreground">
-									共 {data.totalTasks} 个任务 · 剩余 {data.totalTasks - data.doneTasks}{" "}
-									个
-								</div>
-								<div className="mt-1.5 text-[0.6875rem] leading-relaxed text-muted-foreground/70">
-									已完成 = 位于看板末列的任务
-								</div>
 							</div>
 						</div>
 					</SurfaceCard>
@@ -206,7 +198,7 @@ export default function DashboardPage() {
 						<PanelTitle
 							action={
 								<div className="flex items-center gap-3 text-[0.6875rem] text-muted-foreground">
-									<span className="kanso-trend-range">本周</span>
+									<span className="kanso-trend-range">近 7 天</span>
 									<span className="flex items-center gap-1">
 										<span className="size-2 rounded-full bg-[var(--chart-1)]" />
 										新增
@@ -337,7 +329,7 @@ export default function DashboardPage() {
 						<PanelTitle>项目速览</PanelTitle>
 						{recentProjects.length === 0 ? (
 							<p className="py-6 text-center text-xs text-muted-foreground">
-								打开过项目后会显示在这里
+								打开项目后会显示在这里
 							</p>
 						) : (
 							recentProjects.slice(0, rowBudget.project ?? 5).map((p, index) => {
@@ -354,8 +346,9 @@ export default function DashboardPage() {
 										<span className="min-w-0 flex-1 truncate text-sm font-medium">
 											{p.name}
 										</span>
-										<span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-											{p.done}/{p.total} · {pct}%
+										<span className="flex shrink-0 items-center gap-1.5 text-xs tabular-nums text-muted-foreground">
+											<span>{p.done}/{p.total}</span>
+											<span>{pct}%</span>
 										</span>
 									</Link>
 								);
@@ -403,7 +396,7 @@ export default function DashboardPage() {
 	);
 }
 
-// TrendChart 显示本周新增/完成双线折线图（手写 SVG，零依赖）。
+// TrendChart 显示近 7 天新增/完成双线折线图（手写 SVG，零依赖）。
 function TrendChart({ points }: { points: DashboardData["trend"] }) {
 	const W = 520;
 	const H = 148;
@@ -440,7 +433,7 @@ function TrendChart({ points }: { points: DashboardData["trend"] }) {
 			viewBox={`0 0 ${W} ${H}`}
 			className="h-36 w-full text-foreground"
 			role="img"
-			aria-label="本周任务趋势"
+			aria-label="近 7 天任务趋势"
 		>
 			<defs>
 				<linearGradient id="trend-created" x1="0" y1="0" x2="0" y2="1">
@@ -520,7 +513,7 @@ function PanelTitle({
 function StatCard(props: {
 	num: number;
 	label: string;
-	trend: string;
+	trend?: string;
 	accent?: boolean;
 	warn?: boolean;
 }) {
@@ -535,7 +528,7 @@ function StatCard(props: {
 				{num}
 			</div>
 			<div className="kanso-stat-card__label">{label}</div>
-			<div className="kanso-stat-card__trend">{trend}</div>
+			{trend ? <div className="kanso-stat-card__trend">{trend}</div> : null}
 		</div>
 	);
 }

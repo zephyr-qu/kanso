@@ -76,7 +76,7 @@ test("任务标题与描述编辑生效", async ({ page }) => {
 	// 描述编辑：点击描述区（空描述提示文案），输入后保存。
 	await page
 		.locator('[data-testid="task-detail-drawer"]')
-		.getByText(/暂无描述，点击编辑添加。/)
+		.getByText(/暂无描述/)
 		.click();
 	const descInput = page
 		.locator('[data-testid="task-detail-drawer"] textarea')

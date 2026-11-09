@@ -88,7 +88,7 @@ test("全部计划页面逐一渲染（无 console error）", async ({ page }) =
 	expect(errors, `页面渲染出现 console 错误:\n${errors.join("\n")}`).toEqual([]);
 });
 
-test("系统设置入口保持全局语义", async ({ page }) => {
+test("设置入口保持全局语义", async ({ page }) => {
 	await page.goto("/login");
 	await page.fill("#access-key", KEY);
 	await page.getByRole("button", { name: "进入" }).click();
@@ -96,7 +96,7 @@ test("系统设置入口保持全局语义", async ({ page }) => {
 
 	await page.goto("/settings");
 
-	const settingsLink = page.getByRole("link", { name: "系统设置", exact: true });
+	const settingsLink = page.getByRole("link", { name: "设置", exact: true });
 	await expect(settingsLink).toHaveAttribute("href", "/settings");
 	await settingsLink.click();
 	await expect(page).toHaveURL(/\/settings$/);

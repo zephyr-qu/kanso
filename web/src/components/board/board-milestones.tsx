@@ -85,7 +85,7 @@ export function BoardMilestones({
 				</div>
 			) : milestones ? (
 				<div className="mb-3 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-					暂无里程碑，点击右上角「里程碑」创建。
+					暂无里程碑
 				</div>
 			) : null}
 			{milestoneLink

@@ -13,19 +13,19 @@ async function openBoard(page: import("@playwright/test").Page) {
 	await page.waitForURL((url) => url.pathname.includes("/p/"));
 }
 
-test("看板视图：列视图与泳道视图可以切换", async ({ page }) => {
+test("看板视图：列与泳道两种视图可以切换", async ({ page }) => {
 	await openBoard(page);
 
 	const viewToggle = page.getByRole("group", { name: "看板视图" });
-	await expect(viewToggle.getByRole("button", { name: "列" })).toHaveAttribute("aria-pressed", "true");
+	await expect(viewToggle.getByRole("button", { name: "看板" })).toHaveAttribute("aria-pressed", "true");
 	await expect(page.locator(".kanso-board-row")).toBeVisible();
 
-	await viewToggle.getByRole("button", { name: "泳" }).click();
-	await expect(viewToggle.getByRole("button", { name: "泳" })).toHaveAttribute("aria-pressed", "true");
+	await viewToggle.getByRole("button", { name: "泳道" }).click();
+	await expect(viewToggle.getByRole("button", { name: "泳道" })).toHaveAttribute("aria-pressed", "true");
 	await expect(page.locator(".kanso-swimlanes")).toBeVisible();
 	await expect(page.locator(".kanso-board-row")).toHaveCount(0);
 
-	await viewToggle.getByRole("button", { name: "列" }).click();
+	await viewToggle.getByRole("button", { name: "看板" }).click();
 	await expect(page.locator(".kanso-board-row")).toBeVisible();
 });
 

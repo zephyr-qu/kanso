@@ -118,7 +118,7 @@ export const ACTION_LABELS: Record<string, string> = {
 	[EVENT_TYPES.labelCreated]: "创建了标签",
 	[EVENT_TYPES.labelUpdated]: "重命名了标签",
 	[EVENT_TYPES.labelDeleted]: "删除了标签",
-	[EVENT_TYPES.labelAttached]: "贴了标签",
+	[EVENT_TYPES.labelAttached]: "添加了标签",
 	[EVENT_TYPES.labelDetached]: "移除了标签",
 	[EVENT_TYPES.commentCreated]: "发表了评论",
 	[EVENT_TYPES.commentUpdated]: "编辑了评论",
@@ -135,7 +135,7 @@ export const ACTION_LABELS: Record<string, string> = {
 	[EVENT_TYPES.projectUpdated]: "重命名了项目",
 	[EVENT_TYPES.projectDeleted]: "删除了项目",
 	[EVENT_TYPES.projectPinned]: "置顶了项目",
-	[EVENT_TYPES.projectUnpinned]: "取消置顶项目",
+	[EVENT_TYPES.projectUnpinned]: "取消置顶了项目",
 	[EVENT_TYPES.projectArchived]: "归档了项目",
 	[EVENT_TYPES.projectRestored]: "恢复了项目",
 };

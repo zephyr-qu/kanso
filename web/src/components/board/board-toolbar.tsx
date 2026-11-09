@@ -113,10 +113,10 @@ export function BoardToolbar({
 							</QuietButton>
 							<div className="kanso-view-toggle" role="group" aria-label="看板视图">
 								<button type="button" aria-pressed={viewMode === "columns"} onClick={() => setViewMode("columns")}>
-									列
+									看板
 								</button>
 								<button type="button" aria-pressed={viewMode === "swimlane"} onClick={() => setViewMode("swimlane")}>
-									泳
+									泳道
 								</button>
 							</div>
 							<PrimaryButton onClick={() => setCreateOpen(true)}>
@@ -128,7 +128,7 @@ export function BoardToolbar({
 			</PageHeader>
 			{archived ? (
 				<div className="border-b bg-muted/40 px-[30px] py-2 text-xs text-muted-foreground">
-					项目已归档，看板只读。恢复后可继续编辑任务。
+				项目已归档，看板只读。
 				</div>
 			) : null}
 		</>

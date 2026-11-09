@@ -78,8 +78,7 @@ export default function MilestoneDetailDialog(props: {
 					<DialogHeader>
 						<DialogTitle>{milestone?.name ?? "里程碑"}</DialogTitle>
 						<DialogDescription>
-							{milestone?.dueDate ? `截止 ${milestone.dueDate}` : "未设截止"} · 进度{" "}
-							{pct}%
+							{milestone?.dueDate ? `截止 ${milestone.dueDate}` : "未设截止"}，进度 {pct}%
 						</DialogDescription>
 					</DialogHeader>
 					<DialogPanel className="space-y-4">

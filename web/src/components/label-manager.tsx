@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import {
 	Dialog,
 	DialogBackdrop,
-	DialogDescription,
 	DialogHeader,
 	DialogPortal,
 	DialogPopup,
@@ -37,9 +36,6 @@ export default function LabelManagerDialog(props: {
 				<DialogPopup className="w-full max-w-md">
 					<DialogHeader>
 						<DialogTitle>标签管理</DialogTitle>
-						<DialogDescription>
-							标签库属于当前项目，项目间互不影响。
-						</DialogDescription>
 					</DialogHeader>
 					<div className="space-y-4 p-4">
 						{/* 新建 */}

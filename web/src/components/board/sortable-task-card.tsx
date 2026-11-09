@@ -193,7 +193,7 @@ const TaskCardViewBase = forwardRef<HTMLDivElement, TaskCardViewProps>(
 							</PopoverTitle>
 							{labels.length === 0 ? (
 								<p className="px-1 py-2 text-xs text-muted-foreground">
-									暂无标签，可先在看板右上角创建
+									暂无标签
 								</p>
 							) : (
 								<ul className="space-y-0.5">

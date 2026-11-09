@@ -21,7 +21,7 @@ export default function NameDialog(props: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	title: string;
-	description: string;
+	description?: string;
 	submitLabel: string;
 	initialValue?: string;
 	/** 额外表单内容（如模板选择），渲染在名称输入之后。 */
@@ -43,7 +43,7 @@ export default function NameDialog(props: {
 				<DialogPopup>
 					<DialogHeader>
 						<DialogTitle>{props.title}</DialogTitle>
-						<DialogDescription>{props.description}</DialogDescription>
+						{props.description ? <DialogDescription>{props.description}</DialogDescription> : null}
 					</DialogHeader>
 					<form
 						className="space-y-4 p-4"

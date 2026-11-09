@@ -340,7 +340,7 @@ export default function BoardPage() {
 					<EmptyHeader>
 						<EmptyTitle>看板还没有列</EmptyTitle>
 						<EmptyDescription>
-							点击右上角"新建列"开始组织你的工作流。
+							点击右上角「新建列」开始。
 						</EmptyDescription>
 					</EmptyHeader>
 				</Empty>

@@ -1,4 +1,4 @@
-// Quick Capture（快速捕获）：右下 FAB + Q 键打开。
+// Quick Capture（快速记录）：右下 FAB + Q 键打开。
 // 快速模式：标题 → 项目 → 优先级 → 建任务（落入首列）。
 // AI 模式：粘贴文本 → 后端分析候选 → 预览编辑 → 批量创建。
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -59,8 +59,8 @@ export function QuickCaptureFab({ onClick }: { onClick: () => void }) {
 	return (
 		<button
 			type="button"
-			title="快速捕获（Q）"
-			aria-label="快速捕获（Q）"
+			title="快速记录（Q）"
+			aria-label="快速记录（Q）"
 			onClick={onClick}
 			className="kanso-quick-capture fixed bottom-7 right-7 z-[90] flex size-[50px] items-center justify-center transition-transform duration-150 hover:-translate-y-0.5 hover:scale-[1.04]"
 		>
@@ -74,14 +74,12 @@ export function QuickCapture({
 	onClose,
 	defaultProjectId,
 	workspaceId: currentWorkspaceId,
-	workspaceName,
 }: {
 	open: boolean;
 	onClose: () => void;
 	/** 从当前看板带入默认项目。 */
 	defaultProjectId?: string | null;
 	workspaceId: string;
-	workspaceName?: string;
 }) {
 	const [mode, setMode] = useState<CaptureMode>("quick");
 	const [title, setTitle] = useState("");
@@ -284,15 +282,8 @@ export function QuickCapture({
 					className={dialogWide ? "sm:max-w-[560px]" : "sm:max-w-[440px]"}
 				>
 					<div className="flex items-center justify-between border-b px-5 py-4">
-						<div>
-							<div className="text-[1.0625rem] font-semibold tracking-tight">
-								快速捕获
-							</div>
-							<div className="mt-0.5 text-xs text-muted-foreground">
-								{mode === "quick"
-									? "Q 键任意页面一键创建任务，先记下来，稍后安排。"
-									: "粘贴一段文字，AI 拆成多条候选任务，确认后再创建。"}
-							</div>
+						<div className="text-[1.0625rem] font-semibold tracking-tight">
+							快速记录
 						</div>
 						<DialogClose />
 					</div>
@@ -335,42 +326,34 @@ export function QuickCapture({
 
 								<div className="space-y-1.5">
 									<span className="text-[0.6875rem] font-medium text-muted-foreground">
-										当前工作区
+										项目
+										<span className="ml-0.5 text-destructive">*</span>
 									</span>
-									<div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
-										{workspaceName || "未选择工作区"}
-									</div>
-									<div className="space-y-1.5">
-										<span className="text-[0.6875rem] font-medium text-muted-foreground">
-											项目
-											<span className="ml-0.5 text-destructive">*</span>
-										</span>
-										<Select
-											value={projectId}
-											onValueChange={(value) => value && setProjectId(value)}
+									<Select
+										value={projectId}
+										onValueChange={(value) => value && setProjectId(value)}
+									>
+										<SelectTrigger
+											className="kanso-quick-capture-select-trigger"
+											aria-label="项目"
 										>
-											<SelectTrigger
-												className="kanso-quick-capture-select-trigger"
-												aria-label="项目"
-											>
-												<SelectValue>
-													{projects?.find((p) => p.id === projectId)?.name ??
-														"选择项目"}
-												</SelectValue>
-											</SelectTrigger>
-											<SelectPopup className="kanso-quick-capture-select-popup">
-												{(projects ?? []).map((p) => (
-													<SelectItem
-														key={p.id}
-														value={p.id}
-														className="kanso-quick-capture-select-item"
-													>
-														{p.name}
-													</SelectItem>
-												))}
-											</SelectPopup>
-										</Select>
-									</div>
+											<SelectValue>
+												{projects?.find((p) => p.id === projectId)?.name ??
+													"选择项目"}
+											</SelectValue>
+										</SelectTrigger>
+										<SelectPopup className="kanso-quick-capture-select-popup">
+											{(projects ?? []).map((p) => (
+												<SelectItem
+													key={p.id}
+													value={p.id}
+													className="kanso-quick-capture-select-item"
+												>
+													{p.name}
+												</SelectItem>
+											))}
+										</SelectPopup>
+									</Select>
 								</div>
 
 								<div className="flex items-center justify-between gap-2">
@@ -453,9 +436,6 @@ export function QuickCapture({
 											rows={8}
 											className="w-full resize-y rounded-lg border bg-background px-3 py-2 text-sm text-foreground outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground/60 focus:border-primary focus:ring-2 focus:ring-primary/20"
 										/>
-										<p className="text-[0.6875rem] text-muted-foreground">
-											分析使用服务端配置的 OpenAI 兼容接口；密钥不会下发到浏览器。
-										</p>
 									</>
 								) : (
 									<div className="max-h-[min(60vh,480px)] space-y-3 overflow-y-auto pr-0.5">
@@ -719,7 +699,7 @@ function QuickCaptureLabelPicker(props: {
 			<PopoverPopup className="w-52 p-2" align="end">
 				{labels.length === 0 ? (
 					<p className="px-1 py-2 text-xs text-muted-foreground">
-						暂无标签，可先在看板创建
+						暂无标签
 					</p>
 				) : (
 					<ul className="space-y-0.5">

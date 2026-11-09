@@ -113,7 +113,7 @@ export default function SettingsPage() {
 			}
 			toastManager.add({
 				title: "已保存",
-				description: `已写入 ${res.configFile}；监听地址、数据目录与 WS 白名单将在重启服务后生效；AI 配置立即生效。`,
+				description: `已写入 ${res.configFile}。监听地址、数据目录与 WS 白名单重启后生效，其余立即生效。`,
 				type: "success",
 			});
 		} catch (error) {
@@ -211,18 +211,12 @@ export default function SettingsPage() {
 		<div className="flex h-full flex-col">
 			<PageHeader>
 				<h1 className="text-[1.0625rem] font-[650] tracking-tight">设置</h1>
-				<span className="text-[0.8125rem] text-muted-foreground">
-					外观 · 服务配置 · AI · 数据 · 关于
-				</span>
 			</PageHeader>
 
 			<PageContent className="px-[30px] pb-11 pt-[26px]">
 				{/* 外观：主题（纯前端偏好，localStorage） */}
 				<SurfaceCard className="kanso-settings-card p-5">
 					<div className="text-sm font-semibold">外观</div>
-					<div className="mb-2 mt-1 text-xs text-muted-foreground/70">
-						界面明暗主题
-					</div>
 					<div className="flex gap-1.5">
 						{THEMES.map((t) => (
 							<Button
@@ -251,7 +245,7 @@ export default function SettingsPage() {
 						<div className="min-w-0">
 							<SettingField
 								label="监听地址"
-								description="KANSO_ADDR · :8080"
+							description="KANSO_ADDR，默认 :8080"
 								value={addr}
 								onChange={setAddr}
 							/>
@@ -259,7 +253,7 @@ export default function SettingsPage() {
 							<div className="setting-field">
 								<div className="text-sm font-semibold">自动归档</div>
 								<div className="mt-1 text-xs text-muted-foreground/70">
-									完成任务保留 {autoArchiveAfterDays} 天后自动归档。
+								完成后保留天数
 								</div>
 								<div className="mt-3">
 									<Select
@@ -287,14 +281,14 @@ export default function SettingsPage() {
 						<div className="min-w-0">
 							<SettingField
 							label="数据目录"
-							description="KANSO_DATA_DIR · ./data"
+							description="KANSO_DATA_DIR，默认 ./data"
 							value={dataDir}
 							onChange={setDataDir}
 							/>
 							<div className="setting-field">
 								<div className="text-sm font-semibold">WebSocket 白名单</div>
 								<div className="mb-2 mt-1 text-xs text-muted-foreground/70">
-								跨域部署时填写前端地址，多个用逗号分隔；同源访问留空即可。
+								跨域部署时填写前端地址，多个用逗号分隔
 								</div>
 								<Input
 									value={wsOrigins}
@@ -311,29 +305,27 @@ export default function SettingsPage() {
 							保存配置
 						</Button>
 					</div>
-					<p className="mt-3 text-xs text-muted-foreground/70">
-						重启后生效：监听地址、数据目录、WS 白名单；自动归档与 AI 配置立即生效。
-					</p>
 				</SurfaceCard>
 
-				{/* AI 捕获：OpenAI 兼容接口（密钥不回传） */}
+				{/* AI 拆任务：OpenAI 兼容接口（密钥不回传） */}
 				<SurfaceCard className="kanso-settings-card mt-3.5 p-5">
-					<div className="text-sm font-semibold">AI 捕获</div>
-					<div className="mb-3 mt-1 text-xs text-muted-foreground/70">
-						粘贴文本拆任务时调用的 OpenAI 兼容接口；密钥仅保存在服务端。
-						{aiConfigured ? " · 已配置密钥" : " · 尚未配置密钥"}
+					<div className="mb-3 flex items-center justify-between">
+						<div className="text-sm font-semibold">AI 拆任务</div>
+						<span className="text-xs text-muted-foreground/70">
+							{aiConfigured ? "已配置密钥" : "未配置密钥"}
+						</span>
 					</div>
 					<div className="grid gap-x-6 sm:grid-cols-2">
 						<div className="min-w-0">
 							<SettingField
 								label="API Base URL"
-								description="KANSO_AI_BASE_URL · https://api.openai.com/v1"
+								description="KANSO_AI_BASE_URL，默认 https://api.openai.com/v1"
 								value={aiBaseURL}
 								onChange={setAiBaseURL}
 							/>
 							<SettingField
 								label="模型"
-								description="KANSO_AI_MODEL · gpt-4o-mini"
+								description="KANSO_AI_MODEL，默认 gpt-4o-mini"
 								value={aiModel}
 								onChange={setAiModel}
 							/>
@@ -342,7 +334,7 @@ export default function SettingsPage() {
 							<div className="setting-field">
 								<div className="text-sm font-semibold">API Key</div>
 								<div className="mb-2 mt-1 text-xs text-muted-foreground/70">
-									KANSO_AI_API_KEY · 留空则保持已有密钥不变
+									KANSO_AI_API_KEY，留空则保持原密钥
 								</div>
 								<Input
 									type="password"
@@ -360,9 +352,6 @@ export default function SettingsPage() {
 				{/* 数据：导出备份 */}
 				<SurfaceCard className="kanso-settings-card mt-3.5 p-5">
 					<div className="text-sm font-semibold">数据</div>
-					<div className="mb-2 mt-1 text-xs text-muted-foreground/70">
-						导出全量数据快照（JSON），用于备份与迁移。
-					</div>
 					<div className="mt-1 flex items-center gap-2">
 						<Button variant="outline" onClick={exportBackup} loading={backingUp}>
 							<DownloadIcon className="size-4" />
@@ -395,9 +384,6 @@ export default function SettingsPage() {
 					<div className="mt-1 text-xs text-muted-foreground/70">
 						{version && version !== "dev" ? `Kanso ${version}` : "Kanso"}
 					</div>
-					<div className="mt-2 text-xs text-muted-foreground/70">
-						轻量、可自托管的看板与任务管理工具。
-					</div>
 					<div className="mt-1 text-xs text-muted-foreground/70">
 						作者：Zephyr
 					</div>
@@ -410,7 +396,6 @@ export default function SettingsPage() {
 						>
 							检查更新
 						</a>
-						<span className="ml-1">（打开 GitHub Releases 下载新安装包）</span>
 					</div>
 				</SurfaceCard>
 			</PageContent>

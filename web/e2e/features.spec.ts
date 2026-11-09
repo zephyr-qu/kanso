@@ -35,10 +35,10 @@ test("⌘K 命令面板：搜索任务并跳转详情", async ({ page }) => {
 
 test("Quick Capture：FAB 创建任务停留原页 + toast 反馈", async ({ page }) => {
 	await loginToApp(page);
-	await page.getByTitle("快速捕获（Q）").click();
-	// 注意：toast 也是 role="dialog"（Base UI），须用 hasText 限定快速捕获对话框。
-	const dialog = page.getByRole("dialog").filter({ hasText: "快速捕获" });
-	await expect(dialog.getByText("快速捕获")).toBeVisible();
+	await page.getByTitle("快速记录（Q）").click();
+	// 注意：toast 也是 role="dialog"（Base UI），须用 hasText 限定快速记录对话框。
+	const dialog = page.getByRole("dialog").filter({ hasText: "快速记录" });
+	await expect(dialog.getByText("快速记录")).toBeVisible();
 	const title = `快捕任务${Date.now() % 100000}`;
 	await dialog.getByPlaceholder("任务标题…").fill(title);
 	// 从仪表盘发起快捷创建时必须先明确任务归属项目。

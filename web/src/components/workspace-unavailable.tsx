@@ -31,9 +31,9 @@ export function WorkspaceUnavailable({
 				<p className="mt-2 text-sm leading-6 text-muted-foreground">
 					{empty
 						? canCreate
-							? "创建一个工作区开始协作，系统会自动准备一个默认项目。"
-							: "当前成员还没有被授权加入工作区，请联系管理员。"
-						: "这个工作区不存在，或当前成员没有访问权限。请重新选择工作区。"}
+							? "创建工作区后即可开始管理项目。"
+							: "你还没有被授权加入任何工作区，请联系管理员。"
+						: "这个工作区不存在，或你没有访问权限。"}
 				</p>
 				<div className="mt-5 flex justify-center gap-2">
 					{!empty ? (

@@ -1,7 +1,7 @@
 // 日历视图：把所有工作区任务按截止日期聚合到月历中，并支持拖拽改期。
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDaysIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
@@ -150,7 +150,7 @@ export default function CalendarPage() {
 													onDragStart={(event) => { event.dataTransfer.setData("text/plain", task.id); event.dataTransfer.effectAllowed = "move"; }}
 													onClick={() => navigate(`/w/${task.workspaceId}/p/${task.projectId}/t/${task.id}`)}
 													className="calendar-task"
-													title={`${task.projectName} · ${task.title}`}
+													title={`${task.projectName}：${task.title}`}
 												>
 													<span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: priorityColor(normalizePriority(task.priority)) }} />
 													<span className="truncate">{task.title}</span>
@@ -162,7 +162,6 @@ export default function CalendarPage() {
 								);
 							})}
 						</div>
-						<p className="mt-2 flex items-center gap-1.5 text-[0.6875rem] text-muted-foreground/70"><CalendarDaysIcon className="size-3" /> 点击任务查看详情 · 拖动任务改期</p>
 					</>
 				) : null}
 			</PageContent>

@@ -160,7 +160,8 @@ function Journey({ milestones }: { milestones: Milestone[] }) {
 								letterSpacing: ".05em",
 							}}
 						>
-							{progressPct(m)}% {m.dueDate ? `· ${m.dueDate}` : ""}
+							<span>{progressPct(m)}%</span>
+							{m.dueDate ? <span style={{ marginLeft: 6 }}>{m.dueDate}</span> : null}
 						</div>
 					</div>
 				);
@@ -231,8 +232,8 @@ function CardVisual({
 						</span>
 					</div>
 					<span style={{ fontFamily: MONO, fontSize: 10, color: FAINT }}>
-						{generatedAt.getFullYear()}·
-						{String(generatedAt.getMonth() + 1).padStart(2, "0")}·
+						{generatedAt.getFullYear()}.
+						{String(generatedAt.getMonth() + 1).padStart(2, "0")}.
 						{String(generatedAt.getDate()).padStart(2, "0")}
 					</span>
 				</div>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Navigate, useParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ShieldCheckIcon, TrashIcon, UserPlusIcon } from "lucide-react";
+import { TrashIcon, UserPlusIcon } from "lucide-react";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { MemberAvatar } from "@/components/member-avatar";
 import { MemberKeyButton } from "@/components/member-key-button";
@@ -13,7 +13,6 @@ import { api } from "@/lib/api";
 import { buildPath } from "@/lib/endpoints";
 import { invalidateWorkspaceMembers, queryKeys } from "@/hooks/query-keys";
 import { useRealtime } from "@/hooks/use-realtime";
-import { useWorkspaceContext } from "@/hooks/use-workspace-context";
 import type { Member, MemberRole } from "@/types/member";
 import type { MeResponse } from "@/types/me";
 
@@ -24,7 +23,6 @@ const ROLE_LABEL: Record<MemberRole, string> = {
 
 export default function TeamPage() {
 	const { workspaceId = "" } = useParams();
-	const { currentWorkspace: workspace } = useWorkspaceContext();
 	const queryClient = useQueryClient();
 	const [addOpen, setAddOpen] = useState(false);
 	const [grantTarget, setGrantTarget] = useState("");
@@ -49,7 +47,6 @@ export default function TeamPage() {
 		queryFn: () => api<Member[]>(buildPath("members")),
 		enabled: isAdmin,
 	});
-	const workspaceName = workspace?.name;
 	const currentMemberIDs = new Set((members ?? []).map((item) => item.id));
 	const availableMembers = (globalMembers ?? []).filter(
 		(item) => !currentMemberIDs.has(item.id),
@@ -148,29 +145,15 @@ export default function TeamPage() {
 		<div className="flex h-full flex-col">
 			<PageHeader>
 				<h1 className="text-[1.0625rem] font-[650] tracking-tight">团队</h1>
-				<span className="text-[0.8125rem] text-muted-foreground">
-					{workspaceName ?? "当前工作区"} · 成员与访问权限
-				</span>
 			</PageHeader>
 			<PageContent className="px-[30px] pb-11 pt-[26px]">
 				<div className="w-full space-y-4">
-					<SurfaceCard className="flex items-start gap-3 border-primary/20 bg-primary/[0.03] p-4">
-						<ShieldCheckIcon className="mt-0.5 size-5 shrink-0 text-primary" />
-						<div className="text-[0.8125rem] leading-relaxed text-muted-foreground">
-							<strong className="font-semibold text-foreground">权限说明</strong>
-							<p>
-								管理员自动拥有全部工作区权限；实例最多 2
-								名管理员；普通成员只有被授权的工作区可见，当前列表仅展示本工作区成员。
-							</p>
-						</div>
-					</SurfaceCard>
 					<SurfaceCard className="p-5">
 						<div className="mb-4 flex items-center justify-between gap-3">
 							<div>
 								<h2 className="text-[0.8125rem] font-semibold">当前工作区成员</h2>
 								<p className="mt-1 text-xs text-muted-foreground">
-									{members?.length ?? 0} 人 · 管理员 {adminCount}/2 · 实例最多 6 个身份 ·
-									密钥仅在轮换成功后显示一次
+									{members?.length ?? 0}/6 人，管理员 {adminCount}/2
 								</p>
 							</div>
 							{isAdmin ? (
@@ -189,7 +172,7 @@ export default function TeamPage() {
 									<option value="">授权已有成员进入当前工作区…</option>
 									{availableMembers.map((item) => (
 										<option key={item.id} value={item.id}>
-											{item.name} · {ROLE_LABEL[item.role]}
+									{item.name}（{ROLE_LABEL[item.role]}）
 										</option>
 									))}
 								</select>
@@ -301,7 +284,7 @@ export default function TeamPage() {
 				open={addOpen}
 				onOpenChange={setAddOpen}
 				title="添加成员"
-				description="创建一个全局成员身份，并授权其进入当前工作区。"
+				description="创建成员身份并加入当前工作区。"
 				submitLabel="添加"
 				onSubmit={async (name) => {
 					await createMember.mutateAsync(name);
