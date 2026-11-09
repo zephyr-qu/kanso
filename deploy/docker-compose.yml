@@ -1,7 +1,12 @@
+# Compose 文件在 deploy/ 下，项目名必须显式钉住：否则 compose 按目录名推导，
+# 现网会从 kanso 变成 deploy，数据卷名跟着变（kanso_kanso-data → deploy_kanso-data），
+# 升级脚本就会认为没有既有部署。
+name: kanso
+
 services:
   kanso:
     build:
-      context: .
+      context: ..
       args:
         VERSION: ${VERSION:-dev}
     # 构建模式下用本地 kanso:local；升级脚本会通过 KANSO_IMAGE 指定已发布镜像

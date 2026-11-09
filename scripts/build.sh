@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-project_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
 # Vite replaces the tracked go:embed placeholder with the production index.
 # Keep the generated index in the binary, then restore the placeholder so a

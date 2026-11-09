@@ -13,12 +13,16 @@ pnpm --dir web install && pnpm --dir web dev    # 前端另开终端，经 Vite 
 
 未设置 `KANSO_ACCESS_KEY` 时，访问密钥会打印在后端日志中。
 
+装了 [just](https://github.com/casey/just) 的话，`just serve`、`just web`、`just build`、`just e2e`、`just upgrade` 是这些命令的简写，`just --list` 看全部。
+
 ## 构建
 
 ```sh
-./build.sh                 # 构建内嵌前端的 kanso 二进制
-VERSION=1.2.0 ./build.sh   # 指定版本；否则取 Git tag 或短哈希
+just build                 # 构建内嵌前端的 kanso 二进制
+VERSION=1.2.0 just build   # 指定版本；否则取 Git tag 或短哈希
 ```
+
+脚本本体是 `scripts/build.sh`，`just` 只做转发；没装 just 可以直接 `sh scripts/build.sh`。
 
 ## 配置
 
@@ -53,16 +57,18 @@ go build -o kanso ./cmd/kanso
 ## Docker
 
 ```sh
-KANSO_ACCESS_KEY=your-secret-key docker compose up --build -d   # 数据在 kanso-data volume
-docker compose logs -f kanso
+KANSO_ACCESS_KEY=your-secret-key docker compose -f deploy/docker-compose.yml up --build -d
+docker compose -f deploy/docker-compose.yml logs -f kanso
 ```
 
-升级用 `upgrade.sh`：先准备镜像（本地构建或拉已发布镜像），再停服务、备份数据卷、启动并等 `/api/ready`，失败时打印回滚与恢复命令。
+compose 文件在 `deploy/`，`build.context` 指回仓库根；项目名在文件里固定为 `kanso`，数据卷仍是 `kanso_kanso-data`，既有部署不受影响。若 `.env` 放在仓库根，命令再加 `--env-file .env`（compose 默认只在 compose 文件所在目录找 `.env`）。
+
+升级用 `just upgrade`（脚本本体 `scripts/upgrade.sh`）：先准备镜像（本地构建或拉已发布镜像），再停服务、备份数据卷、启动并等 `/api/ready`，失败时打印回滚与恢复命令。
 
 ```sh
-sh ./upgrade.sh --dry-run            # 先看会做什么
-sh ./upgrade.sh --yes                # 从当前源码重建并重启
-sh ./upgrade.sh --tag v0.6.1 --yes   # 升级到已发布镜像（ghcr.io/zephyr-qu/kanso）
+just upgrade --dry-run            # 先看会做什么
+just upgrade --yes                # 从当前源码重建并重启
+just upgrade --tag v0.6.1 --yes   # 升级到已发布镜像（ghcr.io/zephyr-qu/kanso）
 ```
 
 备份写到 `./backups/`（默认保留最近 5 份，可用 `--keep` / `--backup-dir` 调整）。
@@ -113,6 +119,9 @@ cmd/                入口：kanso（serve/CLI/mcp）、kanso-desktop、landing
 internal/           后端业务代码与测试
 web/src/            React 前端；web/e2e 为 Playwright 测试
 apps/landing/       独立静态落地页（Cloudflare 部署，应用本身不提供）
+scripts/            构建、E2E 与升级脚本（入口统一走根目录 justfile）
+deploy/             docker-compose.yml（项目名固定 kanso，context 指回仓库根）
+justfile            开发与运维命令入口，`just --list` 看全部
 ```
 
 落地页可独立预览：`go run ./cmd/landing`（http://127.0.0.1:4173）。截图与分享图由 `web/tools/` 下的脚本生成：`capture-landing-shots.mjs`、`build-og-card.mjs`、`build-app-icon.mjs`。

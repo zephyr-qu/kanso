@@ -138,7 +138,7 @@ $start.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Inv
 
 - `mygo build` 的 `buildCommand` 会跑 `pnpm --dir web build`，从而改写被跟踪的占位文件
   `web/dist/index.html`（`go:embed` 需要它存在）。打包后请还原：
-  `git checkout -- web/dist/index.html`（或 `build.sh` 那样先备份再恢复）。
+  `git checkout -- web/dist/index.html`（或 `scripts/build.sh` 那样先备份再恢复）。
 - 安装包未签名：首次运行会有 SmartScreen 提示；签名需要代码签名证书（`mygo.json` 的
   `windows.certificate` + `MYGO_WINDOWS_CERTIFICATE_PASSWORD`）。
 - 首启向导会把密钥写进 Windows 凭据管理器（服务 `kanso`、键 `access-key`）。想彻底重置：

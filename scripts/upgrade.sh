@@ -5,16 +5,22 @@
 # 先准备镜像再停服务，尽量缩短不可用时间。数据库迁移只前进不回退，所以升级前一定先备份；
 # 失败时脚本会打印完整的回滚命令（镜像和资料一起退回升级前的状态）。
 #
-# 用法：./upgrade.sh --help
+# 用法：just upgrade --help（或 scripts/upgrade.sh --help）
 set -eu
 
-project_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
-compose_file=${COMPOSE_FILE:-docker-compose.yml}
+compose_file=${COMPOSE_FILE:-deploy/docker-compose.yml}
 case $compose_file in
 /*) ;;
 *) compose_file=$project_root/$compose_file ;;
 esac
+# compose 文件在 deploy/ 下，compose 默认只在该目录找 .env；项目的 .env 在仓库根，
+# 这里显式指过去，否则变量替换会退回默认值（比如访问密钥变成 change-me）。
+env_file=
+if [ -f "$project_root/.env" ]; then env_file=$project_root/.env; fi
+compose_hint="docker compose -f $compose_file${env_file:+ --env-file $env_file}"
+
 
 service=${KANSO_SERVICE:-kanso}
 container=${KANSO_CONTAINER:-kanso}
@@ -36,13 +42,13 @@ usage() {
 	cat <<'EOF'
 升级 Docker 部署的 Kanso（默认从当前源码构建；给 --tag/--image 则改用已发布镜像）。
 
-用法：./upgrade.sh [选项]
+用法：just upgrade [选项]（直接调用：scripts/upgrade.sh [选项]）
 
   -b, --build              从当前源码构建镜像（默认）
   -t, --tag <tag>          拉取已发布镜像 ghcr.io/zephyr-qu/kanso:<tag>，如 v0.6.1
   -i, --image <ref>        拉取指定镜像引用，如 ghcr.io/zephyr-qu/kanso:sha-abc1234
       --no-backup          跳过升级前的数据卷备份（不推荐）
-      --backup-dir <dir>   备份目录，默认 ./backups
+      --backup-dir <dir>   备份目录，默认 <项目根>/backups
       --keep <n>           保留最近 n 份备份，0 表示不清理，默认 5
       --timeout <秒>       等待 /api/ready 就绪的秒数，默认 120
   -y, --yes                不询问确认（非交互环境必需）
@@ -58,9 +64,9 @@ usage() {
   VERSION                  构建注入的版本号，默认取 git tag 或短哈希
 
 示例：
-  sh ./upgrade.sh                      # 拉最新代码后本地重建并重启
-  sh ./upgrade.sh --tag v0.6.1 --yes   # 升级到已发布的 v0.6.1
-  sh ./upgrade.sh --dry-run            # 先看会做什么
+  just upgrade                         # 拉最新代码后本地重建并重启
+  just upgrade --tag v0.6.1 --yes      # 升级到已发布的 v0.6.1
+  just upgrade --dry-run               # 先看会做什么
 EOF
 }
 
@@ -177,7 +183,7 @@ run() {
 	if [ "$dry_run" -eq 1 ]; then
 		if [ "$1" = compose ]; then
 			shift
-			printf '[dry-run] docker compose -f %s %s\n' "$compose_file" "$*"
+			printf '[dry-run] %s %s\n' "$compose_hint" "$*"
 		else
 			printf '[dry-run] %s\n' "$*"
 		fi
@@ -187,7 +193,11 @@ run() {
 }
 
 compose() {
-	docker compose -f "$compose_file" "$@"
+	if [ -n "$env_file" ]; then
+		docker compose -f "$compose_file" --env-file "$env_file" "$@"
+	else
+		docker compose -f "$compose_file" "$@"
+	fi
 }
 
 have_container() {
@@ -376,20 +386,20 @@ if [ "$ready" -eq 1 ]; then
 	printf '  版本    %s → %s\n' "${old_version:-首次部署}" "${new_version:-$version}"
 	printf '  地址    http://127.0.0.1:%s\n' "$port"
 	[ -n "$backup_file" ] && printf '  备份    %s\n' "$backup_file"
-	printf '  日志    docker compose -f %s logs -f %s\n' "$compose_file" "$service"
+	printf '  日志    %s logs -f %s\n' "$compose_hint" "$service"
 	exit 0
 fi
 
 status=$(docker inspect -f '{{.State.Status}}' "$container" 2>/dev/null || echo missing)
 printf '\n升级失败：容器状态 %s，%s 始终未返回 ok。\n' "$status" "$url" >&2
-printf '\n先看日志：\n  docker compose -f %s logs --tail=100 %s\n' "$compose_file" "$service" >&2
+printf '\n先看日志：\n  %s logs --tail=100 %s\n' "$compose_hint" "$service" >&2
 printf '\n只回滚镜像（数据不动，适用于新版未改数据库的情况）：\n' >&2
-printf '  KANSO_IMAGE=%s docker compose -f %s up -d --no-build\n' "${old_image:-$image}" "$compose_file" >&2
+printf '  KANSO_IMAGE=%s %s up -d --no-build\n' "${old_image:-$image}" "$compose_hint" >&2
 if [ -n "$backup_file" ]; then
 	printf '\n连数据一起回到升级前（新版已跑过迁移时用这个）：\n' >&2
 	printf '  docker stop %s\n' "$container" >&2
 	printf '  docker run --rm -v "%s:/data" --entrypoint sh %s -c "find /data -mindepth 1 -delete && tar xzf - -C /data" < "%s"\n' \
 		"$volume" "${source_image:-$old_image}" "$backup_file" >&2
-	printf '  KANSO_IMAGE=%s docker compose -f %s up -d --no-build\n' "${old_image:-$image}" "$compose_file" >&2
+	printf '  KANSO_IMAGE=%s %s up -d --no-build\n' "${old_image:-$image}" "$compose_hint" >&2
 fi
 exit 1
