@@ -13,7 +13,7 @@ description: >-
 
 If the `kanso` MCP server is configured, call its tools (`kanso_health`, `kanso_show_board`, `kanso_create_task`, `kanso_label`, `kanso_milestone`, …).
 
-If MCP is unavailable, run `kanso --json …` instead. Command surface: [tutorial/cli/README.md](../../../tutorial/cli/README.md).
+If MCP is unavailable, run `kanso --json …` instead. Command surface: `kanso --help` plus per-command `--help`.
 
 ## Auth
 

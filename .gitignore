@@ -18,17 +18,22 @@ web/dist/*
 !.env.example
 !**/.env.example
 .pi-subagents/
+.pi/
 .agents/
 .impeccable/
 .scratch/
 .e2e-*/
 .vscode/
+.idea/
+.DS_Store
+Thumbs.db
 /kanso
 /*.exe
 
 # 本地文档（不入版本管理）
 docs/
 CONTEXT.md
+tutorial/
 
 # 本地产物与临时文件
 .audit/

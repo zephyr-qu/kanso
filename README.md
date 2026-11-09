@@ -48,7 +48,7 @@ go build -o kanso ./cmd/kanso
 ./kanso workspace list
 ```
 
-成员管理、备份与设置仍需在 Web 中操作。逐步教程见 [tutorial/cli](tutorial/cli/README.md)，项目 Skill 见 [`.cursor/skills/kanso`](.cursor/skills/kanso/SKILL.md)，MCP 配置示例见 [`.cursor/mcp.json.example`](.cursor/mcp.json.example)。
+成员管理、备份与设置仍需在 Web 中操作。项目 Skill 见 [`.cursor/skills/kanso`](.cursor/skills/kanso/SKILL.md)，MCP 配置示例见 [`.cursor/mcp.json.example`](.cursor/mcp.json.example)。
 
 ## Docker
 
@@ -113,7 +113,6 @@ cmd/                入口：kanso（serve/CLI/mcp）、kanso-desktop、landing
 internal/           后端业务代码与测试
 web/src/            React 前端；web/e2e 为 Playwright 测试
 apps/landing/       独立静态落地页（Cloudflare 部署，应用本身不提供）
-tutorial/cli/       命令行入门教程
 ```
 
 落地页可独立预览：`go run ./cmd/landing`（http://127.0.0.1:4173）。截图与分享图由 `web/tools/` 下的脚本生成：`capture-landing-shots.mjs`、`build-og-card.mjs`、`build-app-icon.mjs`。

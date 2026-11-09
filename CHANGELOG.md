@@ -95,7 +95,7 @@ AI 捕获：
 - `kanso mcp`：stdio MCP（官方 go-sdk），工具复用同一 HTTP Client；项目 Skill `.cursor/skills/kanso`
 - 任务支持 update、archive/restore、archived 列表与 delete；标签与里程碑支持 CRUD 及与任务的关联
 - 移除独立 `kansoctl`；Docker `ENTRYPOINT` 改为 `["/app/kanso", "serve"]`
-- 入门教程见 [tutorial/cli](tutorial/cli/README.md)
+- 入门教程在本地 `tutorial/cli`（个人笔记，不入版本管理）
 
 **升级注意**：
 
